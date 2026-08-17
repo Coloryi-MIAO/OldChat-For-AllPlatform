@@ -1,0 +1,40 @@
+# Dart, Flutter, and build output
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub/
+.pub-cache/
+build/
+coverage/
+**/ephemeral/
+**/GeneratedPluginRegistrant.java
+**/GeneratedPluginRegistrant.h
+**/GeneratedPluginRegistrant.m
+**/GeneratedPluginRegistrant.swift
+**/generated_plugin_registrant.cc
+**/generated_plugin_registrant.h
+**/generated_plugins.cmake
+**/ios/Flutter/.last_build_id
+android/local.properties
+
+# IDE and local files
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.DS_Store
+*.swp
+*.log
+*.class
+*.pyc
+
+# Platform-specific build output
+android/app/debug/
+android/app/profile/
+android/app/release/
+windows/x64/
+windows/x86/
+linux/x64/
+macos/Pods/
+ios/Pods/
