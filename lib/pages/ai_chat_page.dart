@@ -27,7 +27,8 @@ class _AIChatPageState extends State<AIChatPage> with WidgetsBindingObserver {
   String _aiBaseUrl = '';
   final TextEditingController _modelController = TextEditingController();
   bool _aiSettingsReady = false;
-  bool get _hasPersonalAI => _aiApiKey.trim().isNotEmpty && _aiBaseUrl.trim().isNotEmpty;
+  bool get _hasPersonalAI =>
+      _aiApiKey.trim().isNotEmpty && _aiBaseUrl.trim().isNotEmpty;
 
   @override
   void initState() {
@@ -49,9 +50,14 @@ class _AIChatPageState extends State<AIChatPage> with WidgetsBindingObserver {
         await AccountStorage.instance.remove('ai_sessions');
       }
     }
-    final sessions = saved.whereType<Map>().map((item) => Map<String, dynamic>.from(item)).toList();
+    final sessions = saved
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
     if (!mounted) return;
-    final sessionId = sessions.isNotEmpty ? sessions.first['id'].toString() : _newSessionId();
+    final sessionId = sessions.isNotEmpty
+        ? sessions.first['id'].toString()
+        : _newSessionId();
     if (sessions.isEmpty) {
       sessions.add({'id': sessionId, 'title': '新会话', 'messages': []});
     }
@@ -66,7 +72,10 @@ class _AIChatPageState extends State<AIChatPage> with WidgetsBindingObserver {
   String _newSessionId() => DateTime.now().microsecondsSinceEpoch.toString();
 
   Future<void> _persistSessions() async {
-    await AccountStorage.instance.setString('ai_sessions', jsonEncode(_sessions));
+    await AccountStorage.instance.setString(
+      'ai_sessions',
+      jsonEncode(_sessions),
+    );
   }
 
   void _restoreSession(String id) {
@@ -76,7 +85,11 @@ class _AIChatPageState extends State<AIChatPage> with WidgetsBindingObserver {
     );
     _messages
       ..clear()
-      ..addAll((session?['messages'] as List<dynamic>? ?? const []).whereType<Map>().map((item) => Map<String, dynamic>.from(item)));
+      ..addAll(
+        (session?['messages'] as List<dynamic>? ?? const [])
+            .whereType<Map>()
+            .map((item) => Map<String, dynamic>.from(item)),
+      );
   }
 
   Future<void> _selectSession(String id) async {
@@ -106,11 +119,15 @@ class _AIChatPageState extends State<AIChatPage> with WidgetsBindingObserver {
     final value = {
       'id': _sessionId,
       'title': title.length > 24 ? '${title.substring(0, 24)}…' : title,
-      'messages': _messages.map((message) => Map<String, dynamic>.from(message)).toList(),
+      'messages': _messages
+          .map((message) => Map<String, dynamic>.from(message))
+          .toList(),
     };
     if (!mounted) return;
     setState(() {
-      final index = _sessions.indexWhere((item) => item['id']?.toString() == _sessionId);
+      final index = _sessions.indexWhere(
+        (item) => item['id']?.toString() == _sessionId,
+      );
       if (index < 0) {
         _sessions.insert(0, value);
       } else {
@@ -143,17 +160,23 @@ class _AIChatPageState extends State<AIChatPage> with WidgetsBindingObserver {
         ? '${base.substring(0, base.length - '/chat/completions'.length)}/models'
         : '$base/models';
     try {
-      final response = await Dio(BaseOptions(
-        connectTimeout: const Duration(seconds: 10),
-        receiveTimeout: const Duration(seconds: 15),
-        headers: {
-          'Authorization': 'Bearer ${settings.apiKey.trim()}',
-          'Accept': 'application/json',
-        },
-      )).get(modelsUrl);
+      final response = await Dio(
+        BaseOptions(
+          connectTimeout: const Duration(seconds: 10),
+          receiveTimeout: const Duration(seconds: 15),
+          headers: {
+            'Authorization': 'Bearer ${settings.apiKey.trim()}',
+            'Accept': 'application/json',
+          },
+        ),
+      ).get(modelsUrl);
       final raw = response.data is Map ? response.data['data'] : null;
       final discovered = raw is List
-          ? raw.whereType<Map>().map((item) => item['id']?.toString() ?? '').where((id) => id.isNotEmpty).toList()
+          ? raw
+                .whereType<Map>()
+                .map((item) => item['id']?.toString() ?? '')
+                .where((id) => id.isNotEmpty)
+                .toList()
           : <String>[];
       if (!mounted || discovered.isEmpty) return;
       setState(() {
@@ -170,7 +193,8 @@ class _AIChatPageState extends State<AIChatPage> with WidgetsBindingObserver {
 
   List<String> _modelsForUrl(String url) {
     if (url.contains('deepseek')) return ['deepseek-chat', 'deepseek-reasoner'];
-    if (url.contains('openrouter')) return ['openai/gpt-4o-mini', 'deepseek/deepseek-chat'];
+    if (url.contains('openrouter'))
+      return ['openai/gpt-4o-mini', 'deepseek/deepseek-chat'];
     if (url.contains('openai')) return ['gpt-4o-mini', 'gpt-4.1-mini'];
     return ['自定义模型'];
   }
@@ -186,7 +210,10 @@ class _AIChatPageState extends State<AIChatPage> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed && mounted && !_loading && _aiSettingsReady) {
+    if (state == AppLifecycleState.resumed &&
+        mounted &&
+        !_loading &&
+        _aiSettingsReady) {
       _loadQuota();
     }
   }
@@ -199,7 +226,10 @@ class _AIChatPageState extends State<AIChatPage> with WidgetsBindingObserver {
     try {
       final api = ApiService();
       final data = await api.getAIQuota();
-      if (mounted) setState(() { _quota = data['quota'] ?? 0; });
+      if (mounted)
+        setState(() {
+          _quota = data['quota'] ?? 0;
+        });
     } catch (_) {}
   }
 
@@ -214,7 +244,8 @@ class _AIChatPageState extends State<AIChatPage> with WidgetsBindingObserver {
         }
       }
     }
-    final content = response['content'] ??
+    final content =
+        response['content'] ??
         response['text'] ??
         response['answer'] ??
         response['reply'];
@@ -236,7 +267,9 @@ class _AIChatPageState extends State<AIChatPage> with WidgetsBindingObserver {
     final text = _inputController.text.trim();
     if (text.isEmpty || _loading) return;
     if (!_hasPersonalAI && _quota <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppLocalizations.current.t('今日配额已用完，请明天再试'))));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(AppLocalizations.current.t('今日配额已用完，请明天再试'))),
+      );
       return;
     }
     final settings = await AISettingsService.load();
@@ -268,7 +301,11 @@ class _AIChatPageState extends State<AIChatPage> with WidgetsBindingObserver {
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _messages.add({'role': 'assistant', 'content': '错误: $e', 'isUser': false});
+        _messages.add({
+          'role': 'assistant',
+          'content': '错误: $e',
+          'isUser': false,
+        });
         _loading = false;
       });
       await _saveCurrentSession();
@@ -290,27 +327,36 @@ class _AIChatPageState extends State<AIChatPage> with WidgetsBindingObserver {
               controller: urlController,
               decoration: InputDecoration(
                 labelText: AppLocalizations.current.t('API URL'),
-                hintText: AppLocalizations.current.t('https://api.openai.com/v1'),
+                hintText: AppLocalizations.current.t(
+                  'https://api.openai.com/v1',
+                ),
               ),
             ),
             TextField(
               controller: _modelController,
-              decoration: InputDecoration(labelText: AppLocalizations.current.t('模型名称'), hintText: AppLocalizations.current.t('例如：deepseek-chat')),
+              decoration: InputDecoration(
+                labelText: AppLocalizations.current.t('模型名称'),
+                hintText: AppLocalizations.current.t('例如：deepseek-chat'),
+              ),
             ),
             TextField(
               controller: keyController,
               obscureText: true,
-              decoration: InputDecoration(labelText: AppLocalizations.current.t('API Key')),
+              decoration: InputDecoration(
+                labelText: AppLocalizations.current.t('API Key'),
+              ),
             ),
           ],
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: Text(AppLocalizations.current.t('取消'))),
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(AppLocalizations.current.t('取消')),
+          ),
           FilledButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: Text(AppLocalizations.current.t('保存'))),
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(AppLocalizations.current.t('保存')),
+          ),
         ],
       ),
     );
@@ -357,13 +403,25 @@ class _AIChatPageState extends State<AIChatPage> with WidgetsBindingObserver {
           if (_hasPersonalAI && _models.isNotEmpty)
             DropdownButton<String>(
               value: _models.contains(_selectedModel) ? _selectedModel : null,
-              hint: Text(AppLocalizations.current.t('模型'), style: TextStyle(color: Colors.white)),
+              hint: Text(
+                AppLocalizations.current.t('模型'),
+                style: TextStyle(color: Colors.white),
+              ),
               dropdownColor: primaryColor,
               style: const TextStyle(color: Colors.white),
               underline: const SizedBox.shrink(),
-              items: _models.map((model) => DropdownMenuItem(value: model, child: Text(model))).toList(),
+              items: _models
+                  .map(
+                    (model) =>
+                        DropdownMenuItem(value: model, child: Text(model)),
+                  )
+                  .toList(),
               onChanged: (value) {
-                if (value != null) setState(() { _selectedModel = value; _modelController.text = value; });
+                if (value != null)
+                  setState(() {
+                    _selectedModel = value;
+                    _modelController.text = value;
+                  });
               },
             ),
           IconButton(
@@ -395,21 +453,47 @@ class _AIChatPageState extends State<AIChatPage> with WidgetsBindingObserver {
             child: Material(
               color: primaryColor.withValues(alpha: 0.08),
               child: DecoratedBox(
-                decoration: BoxDecoration(border: Border(right: BorderSide(color: primaryColor.withValues(alpha: 0.18)))),
-                child: Column(
-                children: [
-                  ListTile(title: Text(AppLocalizations.current.t('AI 会话')), trailing: IconButton(icon: Icon(Icons.add), onPressed: _newSession)),
-                  Expanded(
-                    child: ListView.builder(
-                      itemCount: _sessions.length,
-                      itemBuilder: (context, index) {
-                        final session = _sessions[index];
-                        final id = session['id'].toString();
-                        return ListTile(selected: id == _sessionId, title: Text(session['title']?.toString() ?? '新会话', maxLines: 1, overflow: TextOverflow.ellipsis), onTap: () => _selectSession(id));
-                      },
+                decoration: BoxDecoration(
+                  border: Border(
+                    right: BorderSide(
+                      color: primaryColor.withValues(alpha: 0.18),
                     ),
                   ),
-                ],
+                ),
+                child: Column(
+                  children: [
+                    Material(
+                      color: Colors.transparent,
+                      child: ListTile(
+                        title: Text(AppLocalizations.current.t('AI 会话')),
+                        trailing: IconButton(
+                          icon: Icon(Icons.add),
+                          onPressed: _newSession,
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: ListView.builder(
+                        itemCount: _sessions.length,
+                        itemBuilder: (context, index) {
+                          final session = _sessions[index];
+                          final id = session['id'].toString();
+                          return Material(
+                            color: Colors.transparent,
+                            child: ListTile(
+                              selected: id == _sessionId,
+                              title: Text(
+                                session['title']?.toString() ?? '新会话',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              onTap: () => _selectSession(id),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -419,100 +503,113 @@ class _AIChatPageState extends State<AIChatPage> with WidgetsBindingObserver {
               children: [
                 Expanded(
                   child: _messages.isEmpty
-                ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.smart_toy,
-                            size: 64, color: Colors.grey[400]),
-                        SizedBox(height: 16),
-                        Text(AppLocalizations.current.t('问AI任何问题'),
-                            style: TextStyle(color: Colors.grey[600])),
-                      ],
-                    ),
-                  )
-                : ListView.builder(
-                    controller: _scrollController,
-                    padding: const EdgeInsets.all(12),
-                    itemCount: _messages.length,
-                    itemBuilder: (context, index) {
-                      final msg = _messages[index];
-                      final isUser = msg['isUser'] == true;
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 4),
-                        child: Row(
-                          mainAxisAlignment: isUser
-                              ? MainAxisAlignment.end
-                              : MainAxisAlignment.start,
-                          children: [
-                            if (!isUser)
-                              CircleAvatar(
-                                radius: 16,
-                                backgroundColor: primaryColor,
-                                child: const Icon(Icons.smart_toy,
-                                    color: Colors.white, size: 18),
+                      ? Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.smart_toy,
+                                size: 64,
+                                color: Colors.grey[400],
                               ),
-                            if (!isUser) const SizedBox(width: 8),
-                            Flexible(
-                              child: Container(
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  color:
-                                      isUser ? primaryColor : Colors.grey[200],
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Text(
-                                  msg['content'] ?? '',
-                                  style: TextStyle(
-                                    color:
-                                        isUser ? Colors.white : Colors.black87,
-                                    fontSize: 14,
+                              SizedBox(height: 16),
+                              Text(
+                                AppLocalizations.current.t('问AI任何问题'),
+                                style: TextStyle(color: Colors.grey[600]),
+                              ),
+                            ],
+                          ),
+                        )
+                      : ListView.builder(
+                          controller: _scrollController,
+                          padding: const EdgeInsets.all(12),
+                          itemCount: _messages.length,
+                          itemBuilder: (context, index) {
+                            final msg = _messages[index];
+                            final isUser = msg['isUser'] == true;
+                            return Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 4),
+                              child: Row(
+                                mainAxisAlignment: isUser
+                                    ? MainAxisAlignment.end
+                                    : MainAxisAlignment.start,
+                                children: [
+                                  if (!isUser)
+                                    CircleAvatar(
+                                      radius: 16,
+                                      backgroundColor: primaryColor,
+                                      child: const Icon(
+                                        Icons.smart_toy,
+                                        color: Colors.white,
+                                        size: 18,
+                                      ),
+                                    ),
+                                  if (!isUser) const SizedBox(width: 8),
+                                  Flexible(
+                                    child: Container(
+                                      padding: const EdgeInsets.all(12),
+                                      decoration: BoxDecoration(
+                                        color: isUser
+                                            ? primaryColor
+                                            : Colors.grey[200],
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: Text(
+                                        msg['content'] ?? '',
+                                        style: TextStyle(
+                                          color: isUser
+                                              ? Colors.white
+                                              : Colors.black87,
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                    ),
                                   ),
-                                ),
+                                  if (isUser) const SizedBox(width: 8),
+                                  if (isUser)
+                                    CircleAvatar(
+                                      radius: 16,
+                                      backgroundColor: Colors.blue,
+                                      child: const Icon(
+                                        Icons.person,
+                                        color: Colors.white,
+                                        size: 18,
+                                      ),
+                                    ),
+                                ],
                               ),
-                            ),
-                            if (isUser) const SizedBox(width: 8),
-                            if (isUser)
-                              CircleAvatar(
-                                radius: 16,
-                                backgroundColor: Colors.blue,
-                                child: const Icon(Icons.person,
-                                    color: Colors.white, size: 18),
-                              ),
-                          ],
+                            );
+                          },
                         ),
-                      );
-                    },
+                ),
+                if (_loading)
+                  Padding(
+                    padding: EdgeInsets.all(8),
+                    child: LinearProgressIndicator(),
+                  ),
+                Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _inputController,
+                          decoration: InputDecoration(
+                            hintText: AppLocalizations.current.t('输入问题...'),
+                            border: OutlineInputBorder(),
+                          ),
+                          onSubmitted: (_) => _sendMessage(),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      IconButton(
+                        icon: const Icon(Icons.send),
+                        onPressed: _sendMessage,
+                        color: primaryColor,
+                      ),
+                    ],
                   ),
                 ),
-          if (_loading)
-            Padding(
-              padding: EdgeInsets.all(8),
-              child: LinearProgressIndicator(),
-            ),
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _inputController,
-                    decoration: InputDecoration(
-                      hintText: AppLocalizations.current.t('输入问题...'),
-                      border: OutlineInputBorder(),
-                    ),
-                    onSubmitted: (_) => _sendMessage(),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                IconButton(
-                  icon: const Icon(Icons.send),
-                  onPressed: _sendMessage,
-                  color: primaryColor,
-                ),
-              ],
-            ),
-          ),
               ],
             ),
           ),

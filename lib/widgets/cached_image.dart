@@ -47,7 +47,6 @@ class _CachedImageState extends State<CachedImage> {
   void didUpdateWidget(covariant CachedImage oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.url == widget.url) return;
-    _file = null;
     _failureScheduled = false;
     _loading = true;
     _failed = false;
@@ -65,36 +64,30 @@ class _CachedImageState extends State<CachedImage> {
         _failed = candidates.isEmpty;
       });
     }
-    for (var index = 0; index < candidates.length; index++) {
-      if (!mounted || generation != _loadGeneration) return;
-      final candidate = candidates[index];
-      final existing = await ImageCacheService.instance.existingFile(candidate);
-      if (!mounted || generation != _loadGeneration) return;
-      if (existing != null) {
-        setState(() {
-          _file = existing;
-          _candidateIndex = index;
-          _loading = false;
-          _failed = false;
-        });
-        return;
-      }
-      final cached = await ImageCacheService.instance.cachedFile(candidate);
-      if (!mounted || generation != _loadGeneration) return;
-      if (cached != null) {
-        setState(() {
-          _file = cached;
-          _candidateIndex = index;
-          _loading = false;
-          _failed = false;
-        });
-        return;
-      }
+    final existing = await ImageCacheService.instance.existingFile(widget.url);
+    if (!mounted || generation != _loadGeneration) return;
+    if (existing != null) {
+      setState(() {
+        _file = existing;
+        _loading = false;
+        _failed = false;
+      });
+      return;
+    }
+    final cached = await ImageCacheService.instance.cachedFile(widget.url);
+    if (!mounted || generation != _loadGeneration) return;
+    if (cached != null) {
+      setState(() {
+        _file = cached;
+        _loading = false;
+        _failed = false;
+      });
+      return;
     }
     if (mounted && generation == _loadGeneration) {
       setState(() {
         _loading = false;
-        _failed = true;
+        _failed = false;
       });
     }
   }

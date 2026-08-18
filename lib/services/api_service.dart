@@ -323,8 +323,8 @@ class ApiService {
 
   String? _v1FallbackPath(String v2Path) {
     const mappings = <String, String>{
-      '/v2/direct/messages/v2': '/v1/direct/messages',
-      '/v2/groups/messages/v2': '/v1/groups/messages',
+      '/v2/direct/messages/v2': '/v1/direct/messages/v2',
+      '/v2/groups/messages/v2': '/v1/groups/messages/v2',
       '/v2/groups/messages/after': '/v1/groups/messages',
       '/v2/direct/read': '/v1/direct/read',
       '/v2/groups/read': '/v1/groups/read',
@@ -411,8 +411,8 @@ class ApiService {
     BaseOptions(
       baseUrl: Constants.baseUrl,
       headers: {'Accept': 'application/json'},
-      connectTimeout: const Duration(seconds: 10),
-      receiveTimeout: const Duration(seconds: 10),
+      connectTimeout: const Duration(seconds: 12),
+      receiveTimeout: const Duration(seconds: 25),
       responseType: ResponseType.json,
       validateStatus: (status) => status != null && status >= 200 && status < 300,
     ),
@@ -423,10 +423,14 @@ class ApiService {
   static DateTime? _authRecoveryCooldownUntil;
   static bool _loginRedirectScheduled = false;
 
-  ApiService() {
+  static final ApiService _instance = ApiService._internal();
+  factory ApiService() => _instance;
+
+  ApiService._internal() {
     _dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) async {
+          options.baseUrl = Constants.baseUrl;
           options.extra['_startedAt'] = DateTime.now();
           final token = _auth.token;
           if (token != null && !options.uri.path.contains('/auth/handshake')) {
@@ -1306,10 +1310,8 @@ class ApiService {
         queryParameters: queryParameters,
       );
       if (response.statusCode == 200) {
-        final data = response.data is Map
-            ? Map<String, dynamic>.from(response.data as Map)
-            : <String, dynamic>{};
-        final rawMessages = _nestedList(response.data, const [
+        final data = _unwrapEnvelopeMap(response.data);
+        final rawMessages = _nestedList(data, const [
           'messages',
           'items',
           'list',
@@ -1320,9 +1322,12 @@ class ApiService {
             .whereType<Map>()
             .map((item) => Message.fromJson(Map<String, dynamic>.from(item)))
             .toList();
+        final rawHasMore = data['has_more'];
+        final hasMore = rawHasMore == true ||
+            rawHasMore?.toString().toLowerCase() == 'true';
         return {
           'messages': messages,
-          'has_more': data['has_more'] ?? false,
+          'has_more': hasMore,
           'effective_offset': data['effective_offset'] ?? 0,
           'next_before_created_at': data['next_before_created_at'],
           'next_before_id': data['next_before_id'],
@@ -1337,28 +1342,36 @@ class ApiService {
           final fallbackQuery = <String, dynamic>{
             'with_uid': withUid,
             'limit': limit,
-            if (afterCreatedAt == null) 'offset': offset,
+            if (beforeCreatedAt != null && beforeCreatedAt.isNotEmpty)
+              'before_created_at': beforeCreatedAt,
+            if (beforeId != null && beforeId.isNotEmpty) 'before_id': beforeId,
+            if (beforeCreatedAt == null && beforeId == null && afterCreatedAt == null)
+              'offset': offset,
             if (afterCreatedAt != null) 'after_created_at': afterCreatedAt,
             if (afterId != null && afterId.isNotEmpty) 'after_id': afterId,
           };
           final response = await _dio.get(
-            Constants.apiPath('/v1/direct/messages'),
+            Constants.apiPath('/v1/direct/messages/v2'),
             queryParameters: fallbackQuery,
           );
-          final data = response.data is Map
-              ? Map<String, dynamic>.from(response.data as Map)
-              : <String, dynamic>{};
-          final messages =
-              (data['messages'] as List?)
-                  ?.whereType<Map>()
-                  .map(
-                    (item) => Message.fromJson(Map<String, dynamic>.from(item)),
-                  )
-                  .toList() ??
-              const <Message>[];
+          final data = _unwrapEnvelopeMap(response.data);
+          final rawMessages = _nestedList(data, const [
+            'messages',
+            'items',
+            'list',
+            'data',
+            'result',
+          ]);
+          final messages = rawMessages
+              .whereType<Map>()
+              .map((item) => Message.fromJson(Map<String, dynamic>.from(item)))
+              .toList();
+          final rawHasMore = data['has_more'];
+          final hasMore = rawHasMore == true ||
+              rawHasMore?.toString().toLowerCase() == 'true';
           return {
             'messages': messages,
-            'has_more': data['has_more'] ?? false,
+            'has_more': hasMore,
             'effective_offset': data['effective_offset'] ?? offset,
             'next_before_created_at': data['next_before_created_at'],
             'next_before_id': data['next_before_id'],
@@ -1547,8 +1560,8 @@ class ApiService {
         queryParameters: queryParameters,
       );
       if (response.statusCode == 200) {
-        final data = _asMap(response.data);
-        final rawMessages = _nestedList(response.data, const [
+        final data = _unwrapEnvelopeMap(response.data);
+        final rawMessages = _nestedList(data, const [
           'messages',
           'items',
           'list',
@@ -1559,9 +1572,12 @@ class ApiService {
             .whereType<Map>()
             .map((e) => Message.fromJson(Map<String, dynamic>.from(e)))
             .toList();
+        final rawHasMore = data['has_more'];
+        final hasMore = rawHasMore == true ||
+            rawHasMore?.toString().toLowerCase() == 'true';
         return {
           'messages': messages,
-          'has_more': data['has_more'] ?? false,
+          'has_more': hasMore,
           'effective_offset': data['effective_offset'] ?? 0,
           'next_before_created_at': data['next_before_created_at'],
           'next_before_id': data['next_before_id'],
@@ -1600,9 +1616,12 @@ class ApiService {
           .whereType<Map>()
           .map((item) => Message.fromJson(Map<String, dynamic>.from(item)))
           .toList();
+      final rawHasMore = data['has_more'];
+      final hasMore = rawHasMore == true ||
+          rawHasMore?.toString().toLowerCase() == 'true';
       return {
         'messages': messages,
-        'has_more': data['has_more'] ?? false,
+        'has_more': hasMore,
         'next_group_seq':
             data['next_group_seq'] ?? data['server_group_seq'] ?? afterSeq,
         'server_group_seq': data['server_group_seq'],

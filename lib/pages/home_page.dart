@@ -65,17 +65,26 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
-    _restoreCachedConversations();
-    _restoreRecentConversations();
-    _restoreHiddenRecentKeys();
-    _ensureUserCacheDirectory();
-    _loadConversations();
-    _loadPinnedState();
-    _loadUnreadCounts();
+    unawaited(_initializeHomeState());
+  }
+
+  Future<void> _initializeHomeState() async {
+    final uid = context.read<AuthService>().userId;
+    if (uid != null && uid.isNotEmpty) {
+      await AccountStorage.instance.load(userId: uid);
+      await CacheService().directory(userId: uid);
+    }
+    await _restoreHiddenRecentKeys();
+    await _restoreCachedConversations();
+    await _restoreRecentConversations();
+    await _loadPinnedState();
+    if (!mounted) return;
+    unawaited(_loadConversations());
+    unawaited(_loadUnreadCounts());
     _startRealtimePolling();
     _startSystemNotificationPolling();
     _setupWebSocket();
-    _loadUserAvatar();
+    unawaited(_loadUserAvatar());
   }
 
   Future<void> _ensureUserCacheDirectory() async {
@@ -174,12 +183,64 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  bool _isIdentifierLabel(Conversation conversation, String? value) {
+    final label = value?.trim();
+    return label == null ||
+        label.isEmpty ||
+        label == conversation.id ||
+        label == '${conversation.type}:${conversation.id}';
+  }
+
+  bool _hasUsefulLastMessage(Message? message) {
+    if (message == null) return false;
+    return message.id.trim().isNotEmpty ||
+        message.body.trim().isNotEmpty ||
+        message.createdAt > 0 ||
+        message.msgType != 'text';
+  }
+
+  Message? _mergeLastMessage(Message? incoming, Message? previous) {
+    if (!_hasUsefulLastMessage(incoming)) return previous;
+    if (!_hasUsefulLastMessage(previous)) return incoming;
+    final incomingTime = incoming!.createdAt;
+    final previousTime = previous!.createdAt;
+    if (incomingTime != previousTime) {
+      return incomingTime > previousTime ? incoming : previous;
+    }
+    return incoming.id.compareTo(previous.id) >= 0 ? incoming : previous;
+  }
+
+  Conversation _mergeConversationValue(
+    Conversation incoming,
+    Conversation? previous,
+  ) {
+    final key = _conversationKey(incoming);
+    final keepName =
+        _isIdentifierLabel(incoming, incoming.name) &&
+        previous != null &&
+        !_isIdentifierLabel(previous, previous.name);
+    return incoming.copyWith(
+      name: keepName ? previous!.name : incoming.name ?? previous?.name,
+      avatar: incoming.avatar ?? previous?.avatar,
+      lastMessage: _mergeLastMessage(
+        incoming.lastMessage,
+        previous?.lastMessage,
+      ),
+      pinned: _pinnedMap[key] ?? previous?.pinned ?? incoming.pinned,
+      unreadCount:
+          _unreadCounts[key] ?? previous?.unreadCount ?? incoming.unreadCount,
+    );
+  }
+
   void _mergeRecentDetails(Iterable<Conversation> conversations) {
     var changed = false;
     for (final conversation in conversations) {
       final key = _conversationKey(conversation);
-      if (_recentConversations.containsKey(key)) {
-        _recentConversations[key] = conversation;
+      final previous = _recentConversations[key];
+      if (previous == null) continue;
+      final merged = _mergeConversationValue(conversation, previous);
+      if (merged.toJson().toString() != previous.toJson().toString()) {
+        _recentConversations[key] = merged;
         changed = true;
       }
     }
@@ -196,15 +257,12 @@ class _HomePageState extends State<HomePage> {
     if (incrementOpen) {
       _conversationOpenCounts[key] = (_conversationOpenCounts[key] ?? 0) + 1;
     }
-    if (!force &&
-        !_recentConversations.containsKey(key) &&
-        (_conversationOpenCounts[key] ?? 0) < 2)
-      return;
     if (force) {
       _hiddenRecentKeys.remove(key);
       unawaited(_persistHiddenRecentKeys());
     }
-    _recentConversations[key] = conversation;
+    final previous = _recentConversations[key];
+    _recentConversations[key] = _mergeConversationValue(conversation, previous);
     _recentUsedAt[key] = DateTime.now().millisecondsSinceEpoch;
     _scheduleRecentPersist();
   }
@@ -397,12 +455,6 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _onNewMessage(Message msg) {
-    unawaited(
-      PluginService().dispatchMessage(
-        msg,
-        conversationId: msg.groupId ?? msg.fromUid,
-      ),
-    );
     if (!mounted) return;
     if (!_realtimeMessageIds.add(msg.id)) return;
     if (_realtimeMessageIds.length > 5000) {
@@ -411,24 +463,32 @@ class _HomePageState extends State<HomePage> {
     final userId = context.read<AuthService>().userId;
     if (msg.fromUid == userId) return;
 
-    final key = msg.groupId == null
-        ? 'direct:${msg.fromUid}'
-        : 'group:${msg.groupId}';
-    final targetConversation = _conversationByKey(key);
+    final conversationType = msg.groupId == null ? 'direct' : 'group';
+    final conversationId = msg.groupId ?? msg.fromUid;
+    final isMuted = NotificationService().isConversationMuted(
+      conversationType,
+      conversationId,
+    );
     final isCurrentConversation =
         _currentConversation != null &&
-        _currentConversation!.id == (msg.groupId ?? msg.fromUid) &&
-        _currentConversation!.type ==
-            (msg.groupId == null ? 'direct' : 'group');
+        _currentConversation!.id == conversationId &&
+        _currentConversation!.type == conversationType;
     unawaited(
       NotificationService().showMessageNotification(
         fromName: msg.fromUid,
         message: msg.body,
-        conversationId: msg.groupId ?? msg.fromUid,
-        conversationType: msg.groupId == null ? 'direct' : 'group',
-        withFlash: !isCurrentConversation,
+        conversationId: conversationId,
+        conversationType: conversationType,
+        fromUid: msg.fromUid,
+        messageId: msg.id,
+        withFlash: !isCurrentConversation && !isMuted,
       ),
     );
+
+    final key = msg.groupId == null
+        ? 'direct:${msg.fromUid}'
+        : 'group:${msg.groupId}';
+    final targetConversation = _conversationByKey(key);
     setState(() {
       if (targetConversation != null) _mergeMessageIntoHome(msg);
       if (targetConversation != null && !isCurrentConversation) {
@@ -477,8 +537,8 @@ class _HomePageState extends State<HomePage> {
 
   void _startRealtimePolling() {
     _realtimePollTimer?.cancel();
-    _realtimePollTimer = Timer.periodic(const Duration(seconds: 2), (_) {
-      if (!mounted || _unreadPollInFlight) return;
+    _realtimePollTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (!mounted || _unreadPollInFlight || WebSocketService().isConnected) return;
       unawaited(_loadUnreadCounts());
       if (!_conversationPollInFlight) unawaited(_refreshConversationPreviews());
     });
@@ -487,8 +547,10 @@ class _HomePageState extends State<HomePage> {
   void _startSystemNotificationPolling() {
     _systemNotificationTimer?.cancel();
     unawaited(_pollSystemNotifications());
-    _systemNotificationTimer = Timer.periodic(const Duration(seconds: 12), (_) {
-      if (mounted) unawaited(_pollSystemNotifications());
+    _systemNotificationTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (mounted && !WebSocketService().isConnected) {
+        unawaited(_pollSystemNotifications());
+      }
     });
   }
 
@@ -505,6 +567,7 @@ class _HomePageState extends State<HomePage> {
           return null;
         }
       }
+
       final results = await Future.wait<dynamic>([
         safe(api.getNotifications(limit: 50, offset: 0), '系统通知'),
         safe(api.getFriendRequests(), '好友申请'),
@@ -625,29 +688,43 @@ class _HomePageState extends State<HomePage> {
       if (!mounted) return;
       final friends = results.isNotEmpty && results[0] is List
           ? (results[0] as List).whereType<Conversation>().toList()
-          : <Conversation>[];
+          : null;
       final groups = results.length > 1 && results[1] is List
           ? (results[1] as List).whereType<Conversation>().toList()
-          : <Conversation>[];
+          : null;
       final current = _currentConversation;
-      final validFriends = {for (final item in friends) _conversationKey(item): item};
-      final validGroups = {for (final item in groups) _conversationKey(item): item};
-      setState(() {
-        _friends = _mergeConversationUpdates(_friends, friends)
-            .where((item) => validFriends.containsKey(_conversationKey(item)))
-            .toList();
-        _groups = _mergeConversationUpdates(_groups, groups)
-            .where((item) => validGroups.containsKey(_conversationKey(item)))
-            .toList();
-        _mergeRecentDetails([..._groups, ..._friends]);
-        if (current != null) {
-          final replacement = [
-            ..._groups,
-            ..._friends,
-          ].where((item) => item.id == current.id && item.type == current.type);
-          if (replacement.isNotEmpty) _currentConversation = replacement.first;
+      var changed = false;
+      if (friends != null) {
+        final next = friends.isEmpty && _friends.isNotEmpty
+            ? _friends
+            : _mergeConversationUpdates(_friends, friends)
+                .where((item) => friends.any((incoming) => _conversationKey(incoming) == _conversationKey(item)))
+                .toList();
+        changed = !_sameConversationSnapshot(_friends, next);
+        if (changed) _friends = next;
+      }
+      if (groups != null) {
+        final next = groups.isEmpty && _groups.isNotEmpty
+            ? _groups
+            : _mergeConversationUpdates(_groups, groups)
+                .where((item) => groups.any((incoming) => _conversationKey(incoming) == _conversationKey(item)))
+                .toList();
+        final groupChanged = !_sameConversationSnapshot(_groups, next);
+        changed = changed || groupChanged;
+        if (groupChanged) _groups = next;
+      }
+      _mergeRecentDetails([..._groups, ..._friends]);
+      if (current != null) {
+        final replacement = [
+          ..._groups,
+          ..._friends,
+        ].where((item) => item.id == current.id && item.type == current.type);
+        if (replacement.isNotEmpty && replacement.first != current) {
+          _currentConversation = replacement.first;
+          changed = true;
         }
-      });
+      }
+      if (changed && mounted) setState(() {});
     } catch (error) {
       debugPrint('[会话预览] 增量刷新失败：$error');
     } finally {
@@ -655,21 +732,34 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  Future<List<Conversation>> _safeFriends() async {
+  bool _sameConversationSnapshot(
+    List<Conversation> left,
+    List<Conversation> right,
+  ) {
+    if (left.length != right.length) return false;
+    for (var index = 0; index < left.length; index++) {
+      if (left[index].toJson().toString() != right[index].toJson().toString()) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  Future<List<Conversation>?> _safeFriends() async {
     try {
       return await ApiService().getFriends();
     } catch (error) {
       debugPrint('[会话预览] 好友列表暂不可用：$error');
-      return const <Conversation>[];
+      return null;
     }
   }
 
-  Future<List<Conversation>> _safeGroups() async {
+  Future<List<Conversation>?> _safeGroups() async {
     try {
       return await ApiService().getGroups();
     } catch (error) {
       debugPrint('[会话预览] 群聊列表暂不可用：$error');
-      return const <Conversation>[];
+      return null;
     }
   }
 
@@ -681,12 +771,9 @@ class _HomePageState extends State<HomePage> {
       for (final item in current) _conversationKey(item): item,
     };
     for (final item in incoming) {
-      final old = byKey[_conversationKey(item)];
-      final unread =
-          _unreadCounts[_conversationKey(item)] ??
-          old?.unreadCount ??
-          item.unreadCount;
-      byKey[_conversationKey(item)] = item.copyWith(unreadCount: unread);
+      final key = _conversationKey(item);
+      final old = byKey[key];
+      byKey[key] = _mergeConversationValue(item, old);
     }
     return byKey.values.toList();
   }
@@ -709,18 +796,39 @@ class _HomePageState extends State<HomePage> {
           : <Conversation>[];
       if (mounted) {
         setState(() {
-          _friends = friends
+          final mergedFriends = _mergeConversationUpdates(_friends, friends)
+              .where(
+                (item) => friends.any(
+                  (incoming) =>
+                      _conversationKey(incoming) == _conversationKey(item),
+                ),
+              )
               .where((item) => item.id.trim().isNotEmpty)
               .toList();
-          _groups = groups.where((item) => item.id.trim().isNotEmpty).toList();
-          final validKeys = {...friends, ...groups}.map(_conversationKey).toSet();
-          _recentConversations.removeWhere((key, _) => !validKeys.contains(key));
+          final mergedGroups = _mergeConversationUpdates(_groups, groups)
+              .where(
+                (item) => groups.any(
+                  (incoming) =>
+                      _conversationKey(incoming) == _conversationKey(item),
+                ),
+              )
+              .where((item) => item.id.trim().isNotEmpty)
+              .toList();
+          _friends = friends.isEmpty && _friends.isNotEmpty ? _friends : mergedFriends;
+          _groups = groups.isEmpty && _groups.isNotEmpty ? _groups : mergedGroups;
+          final validKeys = {
+            ..._friends,
+            ..._groups,
+          }.map(_conversationKey).toSet();
+          _recentConversations.removeWhere(
+            (key, _) => !validKeys.contains(key),
+          );
           _recentUsedAt.removeWhere((key, _) => !validKeys.contains(key));
-          _mergeRecentDetails([...groups, ...friends]);
+          _mergeRecentDetails([..._groups, ..._friends]);
           _error = null;
           _loading = false;
           if (_currentConversation != null) {
-            final all = [...groups, ...friends];
+            final all = [..._groups, ..._friends];
             final active = _currentConversation!;
             final replacement = all.where(
               (c) => c.id == active.id && c.type == active.type,
@@ -732,11 +840,12 @@ class _HomePageState extends State<HomePage> {
         });
         final userId = context.read<AuthService>().userId;
         if (userId != null) {
-          await CacheService().writeJson(
+          unawaited(CacheService().writeJson(
             CacheService().scoped(userId, 'conversations'),
-            [...groups, ...friends].map((c) => c.toJson()).toList(),
-          );
-          await _loadPinnedState();
+            [..._groups, ..._friends].map((c) => c.toJson()).toList(),
+          ));
+          _scheduleRecentPersist();
+          unawaited(_loadPinnedState());
         }
       }
     } catch (e) {
@@ -765,13 +874,34 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  void _notifyIncomingMessage(Message message, String type, String id) {
+    if (message.fromUid == context.read<AuthService>().userId ||
+        id.trim().isEmpty)
+      return;
+    unawaited(
+      NotificationService().showMessageNotification(
+        fromName: message.fromUid,
+        message: message.body,
+        conversationId: id,
+        conversationType: type,
+        fromUid: message.fromUid,
+        messageId: message.id,
+        withFlash: true,
+      ),
+    );
+  }
+
   Future<void> _loadUnreadCounts({String? excludeKey}) async {
     if (_unreadPollInFlight) return;
     _unreadPollInFlight = true;
     try {
       final api = ApiService();
-      final directUnread = await api.getDirectUnread();
-      final groupUnread = await api.getGroupUnread();
+      final unreadResults = await Future.wait<Map<String, dynamic>>([
+        api.getDirectUnread(),
+        api.getGroupUnread(),
+      ]);
+      final directUnread = unreadResults[0];
+      final groupUnread = unreadResults[1];
       Map<String, int> counts = {};
       final seenUnreadIds = <String>{};
       final directMessages =
@@ -785,8 +915,16 @@ class _HomePageState extends State<HomePage> {
           final messageKey = message.id.isNotEmpty
               ? message.id
               : '${message.fromUid}:${message.createdAt}:${message.body}';
+          _notifyIncomingMessage(
+            message,
+            'direct',
+            (json['from_uid'] ?? message.fromUid).toString(),
+          );
           if (!seenUnreadIds.add(messageKey)) return;
-          if (_conversationByKey('direct:${json['from_uid'] ?? message.fromUid}') != null) {
+          if (_conversationByKey(
+                'direct:${json['from_uid'] ?? message.fromUid}',
+              ) !=
+              null) {
             _mergeMessageIntoHome(message);
           }
           final uid = json['from_uid'];
@@ -810,8 +948,16 @@ class _HomePageState extends State<HomePage> {
           final messageKey = message.id.isNotEmpty
               ? message.id
               : '${message.groupId}:${message.createdAt}:${message.body}';
+          _notifyIncomingMessage(
+            message,
+            'group',
+            (json['group_id'] ?? message.groupId ?? '').toString(),
+          );
           if (!seenUnreadIds.add(messageKey)) return;
-          if (_conversationByKey('group:${json['group_id'] ?? message.groupId ?? ''}') != null) {
+          if (_conversationByKey(
+                'group:${json['group_id'] ?? message.groupId ?? ''}',
+              ) !=
+              null) {
             _mergeMessageIntoHome(message);
           }
           final gid = json['group_id'];
@@ -829,7 +975,9 @@ class _HomePageState extends State<HomePage> {
         if (entry.value > serverCount) counts[entry.key] = entry.value;
       }
       final validKeys = {..._friends, ..._groups}.map(_conversationKey).toSet();
-      counts.removeWhere((key, value) => !validKeys.contains(key) || value <= 0);
+      counts.removeWhere(
+        (key, value) => !validKeys.contains(key) || value <= 0,
+      );
       final activeKey =
           excludeKey ??
           (_currentConversation == null
@@ -845,13 +993,8 @@ class _HomePageState extends State<HomePage> {
               .clamp(0, 1 << 30);
         });
       }
-    } catch (_) {
-      if (mounted) {
-        setState(() {
-          _unreadCounts = {};
-          _totalUnread = 0;
-        });
-      }
+    } catch (error) {
+      debugPrint('[未读] 暂时无法刷新，保留当前计数：$error');
     } finally {
       _unreadPollInFlight = false;
     }
@@ -909,10 +1052,23 @@ class _HomePageState extends State<HomePage> {
     final value = !(_pinnedMap[key] ?? conv.pinned);
     setState(() {
       _pinnedMap[key] = value;
+      final list = conv.type == 'group' ? _groups : _friends;
+      final index = list.indexWhere((item) => _conversationKey(item) == key);
+      if (index >= 0) list[index] = list[index].copyWith(pinned: value);
+      if (_recentConversations.containsKey(key)) {
+        _recentConversations[key] = _recentConversations[key]!.copyWith(
+          pinned: value,
+        );
+      }
     });
+    await AccountStorage.instance.setBool('pinned:$key', value);
+    _scheduleRecentPersist();
     final userId = context.read<AuthService>().userId;
     if (userId != null && userId.isNotEmpty) {
-      await AccountStorage.instance.setBool('pinned:$key', value);
+      await CacheService().writeJson(
+        CacheService().scoped(userId, 'conversations'),
+        [..._groups, ..._friends].map((item) => item.toJson()).toList(),
+      );
     }
   }
 
@@ -961,6 +1117,27 @@ class _HomePageState extends State<HomePage> {
             ],
           ),
         ),
+        PopupMenuItem(
+          value: NotificationService().isConversationMuted(conv.type, conv.id)
+              ? 'unmute'
+              : 'mute',
+          child: Row(
+            children: [
+              Icon(
+                NotificationService().isConversationMuted(conv.type, conv.id)
+                    ? Icons.notifications_active_outlined
+                    : Icons.notifications_off_outlined,
+                size: 18,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                NotificationService().isConversationMuted(conv.type, conv.id)
+                    ? '取消免打扰'
+                    : '免打扰',
+              ),
+            ],
+          ),
+        ),
       ],
     ).then((value) {
       if (value == 'pin' || value == 'unpin') {
@@ -969,6 +1146,15 @@ class _HomePageState extends State<HomePage> {
         _removeRecent(conv);
       } else if (value == 'add_recent') {
         setState(() => _rememberRecent(conv, force: true));
+      } else if (value == 'mute' || value == 'unmute') {
+        unawaited(
+          NotificationService().setConversationMuted(
+            type: conv.type,
+            conversationId: conv.id,
+            muted: value == 'mute',
+          ),
+        );
+        if (mounted) setState(() {});
       }
     });
   }
@@ -1008,8 +1194,13 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  int get displayUnread =>
-      _totalUnread < 0 ? 0 : _totalUnread.clamp(0, 1 << 30);
+  int get displayUnread {
+    final total = _unreadCounts.values.fold<int>(
+      0,
+      (sum, count) => sum + count,
+    );
+    return total < 0 ? 0 : total.clamp(0, 1 << 30);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1324,6 +1515,7 @@ class _HomePageState extends State<HomePage> {
           ),
           ...recent.map(
             (conv) => ConversationTile(
+              key: ValueKey('conversation:${_conversationKey(conv)}'),
               conversation: conv,
               unreadCount: _unreadCounts[_conversationKey(conv)] ?? 0,
               onTap: () => _selectConversation(conv),
@@ -1350,6 +1542,7 @@ class _HomePageState extends State<HomePage> {
           ),
           ...filteredGroups.map(
             (conv) => ConversationTile(
+              key: ValueKey('conversation:${_conversationKey(conv)}'),
               conversation: conv,
               unreadCount: _unreadCounts['group:${conv.id}'] ?? 0,
               onTap: () => _selectConversation(conv),
@@ -1376,6 +1569,7 @@ class _HomePageState extends State<HomePage> {
           ),
           ...filteredFriends.map(
             (conv) => ConversationTile(
+              key: ValueKey('conversation:${_conversationKey(conv)}'),
               conversation: conv,
               unreadCount: _unreadCounts['direct:${conv.id}'] ?? 0,
               onTap: () => _selectConversation(conv),

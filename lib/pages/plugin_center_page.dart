@@ -74,170 +74,176 @@ class _PluginCenterPageState extends State<PluginCenterPage> {
     final cooldownController = TextEditingController(text: '$cooldownSeconds');
     final containsController = TextEditingController(text: contains);
     final replyController = TextEditingController(text: reply);
+
     final result = await showDialog<Map<String, dynamic>>(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
           title: Text(plugin['name'].toString()),
-          content: plugin['id'] == 'oldchat.redpacket-helper'
-              ? Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    SwitchListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: Text(AppLocalizations.current.t('自动领取红包')),
-                      subtitle: Text(
-                        AppLocalizations.current.t('默认关闭；请自行确认风险'),
-                      ),
-                      value: autoClaim,
-                      onChanged: (value) =>
-                          setDialogState(() => autoClaim = value),
-                    ),
-                    TextField(
-                      keyboardType: TextInputType.number,
-                      controller: maxPerMinuteController,
-                      decoration: InputDecoration(
-                        labelText: AppLocalizations.current.t('每分钟最多领取'),
-                      ),
-                      onChanged: (value) =>
-                          maxPerMinute = int.tryParse(value) ?? 3,
-                    ),
-                    TextField(
-                      keyboardType: TextInputType.number,
-                      controller: dailyLimitController,
-                      decoration: InputDecoration(
-                        labelText: AppLocalizations.current.t('每日最多领取'),
-                      ),
-                      onChanged: (value) =>
-                          dailyLimit = int.tryParse(value) ?? 30,
-                    ),
-                    TextField(
-                      keyboardType: TextInputType.number,
-                      decoration: InputDecoration(
-                        labelText: AppLocalizations.current.t('红包至少剩余份数'),
-                      ),
-                      controller: TextEditingController(
-                        text: '$minRemainingCount',
-                      ),
-                      onChanged: (value) =>
-                          minRemainingCount = int.tryParse(value) ?? 1,
-                    ),
-                    SwitchListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: Text(AppLocalizations.current.t('跳过已过期红包')),
-                      value: skipExpired,
-                      onChanged: (value) =>
-                          setDialogState(() => skipExpired = value),
-                    ),
-                    SwitchListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: Text(AppLocalizations.current.t('跳过已领取红包')),
-                      value: skipClaimed,
-                      onChanged: (value) =>
-                          setDialogState(() => skipClaimed = value),
-                    ),
-                    TextField(
-                      keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true,
-                      ),
-                      decoration: InputDecoration(
-                        labelText: AppLocalizations.current.t('最低红包金额'),
-                      ),
-                      controller: TextEditingController(text: '$minAmount'),
-                      onChanged: (value) =>
-                          minAmount = double.tryParse(value) ?? 0,
-                    ),
-                    TextField(
-                      keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true,
-                      ),
-                      decoration: InputDecoration(
-                        labelText: AppLocalizations.current.t('最高红包金额，0为不限'),
-                      ),
-                      controller: TextEditingController(text: '$maxAmount'),
-                      onChanged: (value) =>
-                          maxAmount = double.tryParse(value) ?? 0,
-                    ),
-                    CheckboxListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: Text(AppLocalizations.current.t('仅领取未领取红包')),
-                      value: onlyUnclaimed,
-                      onChanged: (value) =>
-                          setDialogState(() => onlyUnclaimed = value ?? true),
-                    ),
-                    CheckboxListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: Text(AppLocalizations.current.t('跳过自己发出的红包')),
-                      value: skipSelf,
-                      onChanged: (value) =>
-                          setDialogState(() => skipSelf = value ?? true),
-                    ),
-                  ],
-                )
-              : plugin['id'] == 'oldchat.auto-reply'
-              ? SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          AppLocalizations.current.t('适用会话'),
-                          style: Theme.of(context).textTheme.labelLarge,
+          // ★ 修复：使用 SizedBox + SingleChildScrollView + 动态高度
+          content: SizedBox(
+            width: double.maxFinite,
+            height: MediaQuery.of(context).size.height * 0.6,
+            child: SingleChildScrollView(
+              child: plugin['id'] == 'oldchat.redpacket-helper'
+                  ? Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        SwitchListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(AppLocalizations.current.t('自动领取红包')),
+                          subtitle: Text(
+                            AppLocalizations.current.t('默认关闭；请自行确认风险'),
+                          ),
+                          value: autoClaim,
+                          onChanged: (value) =>
+                              setDialogState(() => autoClaim = value),
                         ),
-                      ),
-                      CheckboxListTile(
-                        contentPadding: EdgeInsets.zero,
-                        title: Text(AppLocalizations.current.t('私聊')),
-                        value: conversationTypes.contains('direct'),
-                        onChanged: (value) => setDialogState(() {
-                          if (value == true) {
-                            conversationTypes.add('direct');
-                          } else if (conversationTypes.length > 1) {
-                            conversationTypes.remove('direct');
-                          }
-                        }),
-                      ),
-                      CheckboxListTile(
-                        contentPadding: EdgeInsets.zero,
-                        title: Text(AppLocalizations.current.t('群聊')),
-                        value: conversationTypes.contains('group'),
-                        onChanged: (value) => setDialogState(() {
-                          if (value == true) {
-                            conversationTypes.add('group');
-                          } else if (conversationTypes.length > 1) {
-                            conversationTypes.remove('group');
-                          }
-                        }),
-                      ),
-                      TextField(
-                        controller: containsController,
-                        decoration: InputDecoration(
-                          labelText: AppLocalizations.current.t('触发关键词'),
+                        TextField(
+                          keyboardType: TextInputType.number,
+                          controller: maxPerMinuteController,
+                          decoration: InputDecoration(
+                            labelText: AppLocalizations.current.t('每分钟最多领取'),
+                          ),
+                          onChanged: (value) =>
+                              maxPerMinute = int.tryParse(value) ?? 3,
                         ),
-                        onChanged: (value) => contains = value,
-                      ),
-                      TextField(
-                        controller: replyController,
-                        decoration: InputDecoration(
-                          labelText: AppLocalizations.current.t('自动回复内容'),
+                        TextField(
+                          keyboardType: TextInputType.number,
+                          controller: dailyLimitController,
+                          decoration: InputDecoration(
+                            labelText: AppLocalizations.current.t('每日最多领取'),
+                          ),
+                          onChanged: (value) =>
+                              dailyLimit = int.tryParse(value) ?? 30,
                         ),
-                        maxLines: 3,
-                        onChanged: (value) => reply = value,
-                      ),
-                      TextField(
-                        keyboardType: TextInputType.number,
-                        controller: cooldownController,
-                        decoration: InputDecoration(
-                          labelText: AppLocalizations.current.t('自动回复冷却秒数'),
+                        TextField(
+                          keyboardType: TextInputType.number,
+                          decoration: InputDecoration(
+                            labelText: AppLocalizations.current.t('红包至少剩余份数'),
+                          ),
+                          controller: TextEditingController(
+                            text: '$minRemainingCount',
+                          ),
+                          onChanged: (value) =>
+                              minRemainingCount = int.tryParse(value) ?? 1,
                         ),
-                        onChanged: (value) =>
-                            cooldownSeconds = int.tryParse(value) ?? 60,
-                      ),
-                    ],
-                  ),
-                )
-              : Text(plugin['description'].toString()),
+                        SwitchListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(AppLocalizations.current.t('跳过已过期红包')),
+                          value: skipExpired,
+                          onChanged: (value) =>
+                              setDialogState(() => skipExpired = value),
+                        ),
+                        SwitchListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(AppLocalizations.current.t('跳过已领取红包')),
+                          value: skipClaimed,
+                          onChanged: (value) =>
+                              setDialogState(() => skipClaimed = value),
+                        ),
+                        TextField(
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
+                          decoration: InputDecoration(
+                            labelText: AppLocalizations.current.t('最低红包金额'),
+                          ),
+                          controller: TextEditingController(text: '$minAmount'),
+                          onChanged: (value) =>
+                              minAmount = double.tryParse(value) ?? 0,
+                        ),
+                        TextField(
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
+                          decoration: InputDecoration(
+                            labelText: AppLocalizations.current.t('最高红包金额，0为不限'),
+                          ),
+                          controller: TextEditingController(text: '$maxAmount'),
+                          onChanged: (value) =>
+                              maxAmount = double.tryParse(value) ?? 0,
+                        ),
+                        CheckboxListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(AppLocalizations.current.t('仅领取未领取红包')),
+                          value: onlyUnclaimed,
+                          onChanged: (value) =>
+                              setDialogState(() => onlyUnclaimed = value ?? true),
+                        ),
+                        CheckboxListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(AppLocalizations.current.t('跳过自己发出的红包')),
+                          value: skipSelf,
+                          onChanged: (value) =>
+                              setDialogState(() => skipSelf = value ?? true),
+                        ),
+                      ],
+                    )
+                  : plugin['id'] == 'oldchat.auto-reply'
+                  ? Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            AppLocalizations.current.t('适用会话'),
+                            style: Theme.of(context).textTheme.labelLarge,
+                          ),
+                        ),
+                        CheckboxListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(AppLocalizations.current.t('私聊')),
+                          value: conversationTypes.contains('direct'),
+                          onChanged: (value) => setDialogState(() {
+                            if (value == true) {
+                              conversationTypes.add('direct');
+                            } else if (conversationTypes.length > 1) {
+                              conversationTypes.remove('direct');
+                            }
+                          }),
+                        ),
+                        CheckboxListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(AppLocalizations.current.t('群聊')),
+                          value: conversationTypes.contains('group'),
+                          onChanged: (value) => setDialogState(() {
+                            if (value == true) {
+                              conversationTypes.add('group');
+                            } else if (conversationTypes.length > 1) {
+                              conversationTypes.remove('group');
+                            }
+                          }),
+                        ),
+                        TextField(
+                          controller: containsController,
+                          decoration: InputDecoration(
+                            labelText: AppLocalizations.current.t('触发关键词'),
+                          ),
+                          onChanged: (value) => contains = value,
+                        ),
+                        TextField(
+                          controller: replyController,
+                          decoration: InputDecoration(
+                            labelText: AppLocalizations.current.t('自动回复内容'),
+                          ),
+                          maxLines: 3,
+                          onChanged: (value) => reply = value,
+                        ),
+                        TextField(
+                          keyboardType: TextInputType.number,
+                          controller: cooldownController,
+                          decoration: InputDecoration(
+                            labelText: AppLocalizations.current.t('自动回复冷却秒数'),
+                          ),
+                          onChanged: (value) =>
+                              cooldownSeconds = int.tryParse(value) ?? 60,
+                        ),
+                      ],
+                    )
+                  : Text(plugin['description'].toString()),
+            ),
+          ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
@@ -267,6 +273,7 @@ class _PluginCenterPageState extends State<PluginCenterPage> {
         ),
       ),
     );
+
     maxPerMinuteController.dispose();
     dailyLimitController.dispose();
     containsController.dispose();
@@ -321,32 +328,6 @@ class _PluginCenterPageState extends State<PluginCenterPage> {
       _show(AppLocalizations.current.t('插件已导入并保存到本地'));
     } catch (error) {
       _show('${AppLocalizations.current.t('导入失败')}：$error');
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
-  Future<void> _export(Map<String, dynamic> plugin) async {
-    setState(() => _busy = true);
-    try {
-      final isCip = plugin['cip_main']?.toString().isNotEmpty == true;
-      final bytes = isCip
-          ? await _service.exportCip(plugin['id'].toString())
-          : await _service.exportPlugin(plugin['id'].toString());
-      final extension = isCip ? 'cip' : 'oldchat-plugin';
-      final path = filePickerPath(
-        await FilePicker.saveFile(
-          dialogTitle: '导出插件',
-          fileName: '${plugin['id']}.$extension',
-          type: FileType.custom,
-          allowedExtensions: [extension],
-          bytes: bytes,
-          lockParentWindow: true,
-        ),
-      );
-      if (path != null && mounted) _show('插件已保存到本地');
-    } catch (error) {
-      _show('导出失败：$error');
     } finally {
       if (mounted) setState(() => _busy = false);
     }

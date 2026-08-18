@@ -107,6 +107,7 @@ class AuthService extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(Constants.savedUsernameKey, username);
     await prefs.setString(Constants.savedPasswordKey, password);
+    await prefs.setBool(Constants.rememberPasswordKey, true);
   }
 
   // ★ 清除账号密码
@@ -116,6 +117,7 @@ class AuthService extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(Constants.savedUsernameKey);
     await prefs.remove(Constants.savedPasswordKey);
+    await prefs.setBool(Constants.rememberPasswordKey, false);
   }
 
   Future<void> clear() async {

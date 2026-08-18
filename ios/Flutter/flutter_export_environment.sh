@@ -1,10 +1,10 @@
 #!/bin/sh
 # This is a generated file; do not edit or check into version control.
-export "FLUTTER_ROOT=/root/flutter"
-export "FLUTTER_APPLICATION_PATH=/home/workspace/oldchat_desktop"
-export "FLUTTER_FRAMEWORK_SWIFT_PACKAGE_PATH=/home/workspace/oldchat_desktop/ios/Flutter/ephemeral/Packages/.packages/FlutterFramework"
+export "FLUTTER_ROOT=E:\flutter"
+export "FLUTTER_APPLICATION_PATH=C:\Users\Administrator\Desktop\oldchat_desktop"
+export "FLUTTER_FRAMEWORK_SWIFT_PACKAGE_PATH=C:\Users\Administrator\Desktop\oldchat_desktop\ios\Flutter\ephemeral\Packages\.packages\FlutterFramework"
 export "COCOAPODS_PARALLEL_CODE_SIGN=true"
-export "FLUTTER_TARGET=lib/main.dart"
+export "FLUTTER_TARGET=lib\main.dart"
 export "FLUTTER_BUILD_DIR=build"
 export "FLUTTER_BUILD_NAME=1.4.5.5"
 export "FLUTTER_BUILD_NUMBER=7"

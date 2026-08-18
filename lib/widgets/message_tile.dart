@@ -1041,9 +1041,10 @@ class _MessageTileState extends State<MessageTile> {
       cursor = match.end;
     }
     if (cursor < text.length) spans.add(TextSpan(text: text.substring(cursor)));
+    final inheritedStyle = DefaultTextStyle.of(context).style;
     return RichText(
       text: TextSpan(
-        style: const TextStyle(fontSize: 14, color: Colors.black87),
+        style: inheritedStyle.copyWith(fontSize: 14, color: Colors.black87),
         children: spans,
       ),
     );

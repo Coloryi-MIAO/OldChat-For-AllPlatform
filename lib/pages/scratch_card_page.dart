@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../services/api_service.dart';
 import '../services/app_localizations.dart';
 import '../services/cache_service.dart';
+import '../services/auth_service.dart';
 import '../utils/constants.dart';
 
 class ScratchCardPage extends StatefulWidget {
@@ -26,22 +27,37 @@ class _ScratchCardPageState extends State<ScratchCardPage> {
     unawaited(_load());
   }
 
+  String get _cacheKey => CacheService().scoped(
+    AuthService().userId ?? 'guest',
+    Constants.scratchCardCacheKey,
+  );
+
+  String _todayKey() {
+    final now = DateTime.now();
+    return '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+  }
+
   Future<void> _load() async {
-    final cached = await CacheService().readJson(
-      CacheService().scoped('global', Constants.scratchCardCacheKey),
-    );
-    if (cached is Map && mounted) {
-      setState(() {
-        _state = Map<String, dynamic>.from(cached);
-        _loading = false;
-      });
+    final cached = await CacheService().readJson(_cacheKey);
+    if (cached is Map) {
+      final envelope = Map<String, dynamic>.from(cached);
+      final cachedDate = envelope['date']?.toString();
+      final cachedState = envelope['state'];
+      if (cachedDate == _todayKey() && cachedState is Map && mounted) {
+        setState(() {
+          _state = Map<String, dynamic>.from(cachedState);
+          _loading = false;
+          _error = null;
+        });
+        return;
+      }
     }
     try {
       final value = await ApiService().getScratchCard();
-      await CacheService().writeJson(
-        CacheService().scoped('global', Constants.scratchCardCacheKey),
-        value,
-      );
+      await CacheService().writeJson(_cacheKey, {
+        'date': _todayKey(),
+        'state': value,
+      });
       if (!mounted) return;
       setState(() {
         _state = value;
@@ -65,10 +81,10 @@ class _ScratchCardPageState extends State<ScratchCardPage> {
     });
     try {
       final result = await ApiService().scratchCard();
-      await CacheService().writeJson(
-        CacheService().scoped('global', Constants.scratchCardCacheKey),
-        result,
-      );
+      await CacheService().writeJson(_cacheKey, {
+        'date': _todayKey(),
+        'state': result,
+      });
       if (!mounted) return;
       setState(() {
         _state = result;
@@ -94,17 +110,38 @@ class _ScratchCardPageState extends State<ScratchCardPage> {
   }
 
   bool get _alreadyScratched =>
-      _state?['already_scratched'] == true ||
-      _state?['already_done'] == true;
+      _state?['already_scratched'] == true || _state?['already_done'] == true;
 
   int _intValue(dynamic value) {
     if (value is num) return value.toInt();
     return int.tryParse(value?.toString() ?? '') ?? 0;
   }
 
+  List<dynamic> _slotsFromState(Map<String, dynamic>? state) {
+    final raw =
+        state?['slots'] ??
+        state?['cards'] ??
+        state?['rewards'] ??
+        state?['results'];
+    final values = raw is List ? List<dynamic>.from(raw) : <dynamic>[];
+    if (values.isEmpty) {
+      for (var index = 1; index <= 5; index++) {
+        final value =
+            state?['card_$index'] ??
+            state?['slot_$index'] ??
+            state?['reward_$index'];
+        if (value != null) values.add(value);
+      }
+    }
+    while (values.length < 5) values.add({'label': context.tr.t('谢谢惠顾')});
+    return values.take(5).toList();
+  }
+
   String _slotLabel(dynamic value) {
     if (value is Map) {
-      final amount = _intValue(value['amount'] ?? value['reward'] ?? value['coins']);
+      final amount = _intValue(
+        value['amount'] ?? value['reward'] ?? value['coins'],
+      );
       final label = value['label']?.toString().trim();
       if (label != null && label.isNotEmpty) return label;
       if (amount == 0) return context.tr.t('谢谢惠顾');
@@ -122,9 +159,7 @@ class _ScratchCardPageState extends State<ScratchCardPage> {
     final alreadyDone = _alreadyScratched;
     final reward = _intValue(state?['total_reward']);
     final balance = _intValue(state?['coin_balance']);
-    final rawSlots = state?['slots'] ?? state?['rewards'] ?? state?['results'];
-    final slots = rawSlots is List ? rawSlots.take(5).toList() : <dynamic>[];
-    while (slots.length < 5) slots.add(null);
+    final slots = _slotsFromState(state);
 
     return Scaffold(
       appBar: AppBar(title: Text(tr.scratchCard)),

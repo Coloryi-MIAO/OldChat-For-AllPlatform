@@ -638,15 +638,12 @@ class _SettingsPageState extends State<SettingsPage> {
           borderRadius: BorderRadius.circular(12),
           child: Material(
             color: Theme.of(context).cardColor,
-            borderRadius: BorderRadius.circular(12),
             clipBehavior: Clip.antiAlias,
-            child: Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.grey.withOpacity(0.15)),
-              ),
-              child: Column(children: children),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: BorderSide(color: Colors.grey.withOpacity(0.15)),
             ),
+            child: Column(children: children),
           ),
         ),
       ],
@@ -722,7 +719,9 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
           const SizedBox(height: 10),
           DropdownButtonFormField<String>(
-            key: ValueKey('${Constants.baseUrl}:${Constants.visibleServers.join('|')}'),
+            key: ValueKey(
+              '${Constants.baseUrl}:${Constants.visibleServers.join('|')}',
+            ),
             value: Constants.visibleServers.contains(Constants.baseUrl)
                 ? Constants.baseUrl
                 : Constants.defaultBaseUrl,

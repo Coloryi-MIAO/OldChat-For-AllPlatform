@@ -575,7 +575,7 @@ class PluginService extends ChangeNotifier {
     final type = message.msgType.toLowerCase();
     if (type.contains('redpacket') || type.contains('red_packet') || type.contains('red-pack')) {
       final match = RegExp(
-        r'(?:packet[_-]?id|red[_-]?packet[_-]?id)\s*[=:]\s*["\']?([A-Za-z0-9._-]+)',
+        r"""(?:packet[_-]?id|red[_-]?packet[_-]?id)\s*[=:]\s*["']?([A-Za-z0-9._-]+)""",
         caseSensitive: false,
       ).firstMatch(message.body);
       if (match != null) return {'packet_id': match.group(1)!};
@@ -689,14 +689,18 @@ class PluginService extends ChangeNotifier {
     _log(plugin, '${AppLocalizations.current.t('关键词提醒：')}$keyword');
   }
 
+  // ★ 修改点：每 10 条消息才保存一次，降低写入频率
   Future<void> _countMessage(Map<String, dynamic> plugin) async {
     final config = plugin['config'] is Map
         ? Map<String, dynamic>.from(plugin['config'])
         : <String, dynamic>{};
     final count = _intValue(config['received'], 0) + 1;
     plugin['config'] = {...config, 'received': count};
-    if (count == 1 || count % 10 == 0) _log(plugin, '本地收到消息 $count 条');
-    await _save();
+    // 只在计数为 10 的倍数时写入存储
+    if (count % 10 == 0) {
+      _log(plugin, '本地收到消息 $count 条');
+      await _save();
+    }
   }
 
   bool _matches(dynamic when, Map<String, dynamic> event) {

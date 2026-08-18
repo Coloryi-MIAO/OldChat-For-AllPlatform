@@ -16,6 +16,7 @@ import '../services/api_service.dart';
 import '../services/auth_service.dart';
 import '../services/websocket_service.dart';
 import '../services/plugin_service.dart';
+import '../services/notification_service.dart';
 import '../services/image_cache_service.dart';
 import '../services/local_emoji_service.dart';
 import '../services/clipboard_image_service.dart';
@@ -95,6 +96,10 @@ class _ChatPageState extends State<ChatPage>
   bool _markReadInFlight = false;
   bool _markReadPending = false;
   int _pendingBurnAfterSeconds = 0;
+  bool _conversationMuted = false;
+  Timer? _cacheSaveTimer;
+  bool _cacheSaveInFlight = false;
+  bool _cacheSavePending = false;
 
   @override
   void initState() {
@@ -108,6 +113,10 @@ class _ChatPageState extends State<ChatPage>
     ws.connect();
     _scrollController.addListener(_onScroll);
     if (widget.type == 'group') unawaited(_loadMentionMembers());
+    _conversationMuted = NotificationService().isConversationMuted(
+      widget.type,
+      widget.conversationId,
+    );
     unawaited(_loadMessages(initial: true));
     _startPolling();
   }
@@ -167,18 +176,26 @@ class _ChatPageState extends State<ChatPage>
 
   void _onScroll() {
     _refreshUnreadButtonState();
-    if (_scrollController.hasClients &&
-        _scrollController.position.pixels <= 160 &&
-        !_loading &&
-        !_isLoadingMore &&
-        _hasMore) {
-      _loadMessages();
+    if (!_scrollController.hasClients ||
+        _scrollController.position.pixels > 160 ||
+        _loading ||
+        _isLoadingMore ||
+        !_hasMore) {
+      return;
     }
+    _isLoadingMore = true;
+    unawaited(
+      _loadMessages(initial: false).whenComplete(() {
+        if (mounted) _isLoadingMore = false;
+      }),
+    );
   }
 
   @override
   void dispose() {
     _mentionFilterTimer?.cancel();
+    _cacheSaveTimer?.cancel();
+    unawaited(_flushCachedMessages());
     if (_routeSubscribed && _observedRoute != null) {
       routeObserver.unsubscribe(this);
     }
@@ -261,12 +278,6 @@ class _ChatPageState extends State<ChatPage>
   }
 
   void _onNewMessage(Message msg) {
-    unawaited(
-      PluginService().dispatchMessage(
-        msg,
-        conversationId: msg.groupId ?? msg.fromUid,
-      ),
-    );
     if (!mounted || !_isVisible) return;
     if (widget.type == 'direct' &&
         msg.fromUid != widget.conversationId &&
@@ -333,8 +344,9 @@ class _ChatPageState extends State<ChatPage>
   void _startPolling() {
     _pollTimer?.cancel();
     if (!_isVisible) return;
-    _pollTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (!mounted || !_isVisible || _isLoadingMore || _loading) return;
+    _pollTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
+      if (!mounted || !_isVisible || _isLoadingMore || _loading ||
+          !WebSocketService().isConnected) return;
       unawaited(_syncIncrementalMessages());
     });
   }
@@ -497,7 +509,7 @@ class _ChatPageState extends State<ChatPage>
           if (_firstUnreadIndex == -1) {
             _firstUnreadIndex = null;
           }
-          _hasMore = result['has_more'] ?? false;
+          _hasMore = result['has_more'] == true;
           _nextBeforeCreatedAt = result['next_before_created_at']?.toString();
           _nextBeforeId = result['next_before_id']?.toString();
           _offset = result['effective_offset'] ?? _offset + newMessages.length;
@@ -545,7 +557,7 @@ class _ChatPageState extends State<ChatPage>
               _messageKeys[m.id] = GlobalKey();
             }
           }
-          _hasMore = result['has_more'] ?? false;
+          _hasMore = result['has_more'] == true;
           _nextBeforeCreatedAt = result['next_before_created_at']?.toString();
           _nextBeforeId = result['next_before_id']?.toString();
           _offset = result['effective_offset'] ?? _offset + newMessages.length;
@@ -655,10 +667,26 @@ class _ChatPageState extends State<ChatPage>
   }
 
   Future<void> _saveCachedMessages() async {
-    await CacheService().writeJson(
-      _cacheKey,
-      _messages.map((m) => m.toJson()).toList(),
-    );
+    _cacheSavePending = true;
+    _cacheSaveTimer?.cancel();
+    _cacheSaveTimer = Timer(const Duration(milliseconds: 250), () {
+      unawaited(_flushCachedMessages());
+    });
+  }
+
+  Future<void> _flushCachedMessages() async {
+    if (_cacheSaveInFlight || !_cacheSavePending || !mounted) return;
+    _cacheSaveInFlight = true;
+    _cacheSavePending = false;
+    try {
+      await CacheService().writeJson(
+        _cacheKey,
+        _messages.map((m) => m.toJson()).toList(),
+      );
+    } finally {
+      _cacheSaveInFlight = false;
+      if (_cacheSavePending && mounted) unawaited(_flushCachedMessages());
+    }
   }
 
   Future<void> _markConversationRead() async {
@@ -1687,6 +1715,16 @@ class _ChatPageState extends State<ChatPage>
     }
   }
 
+  Future<void> _toggleConversationMute() async {
+    final next = !_conversationMuted;
+    await NotificationService().setConversationMuted(
+      type: widget.type,
+      conversationId: widget.conversationId,
+      muted: next,
+    );
+    if (mounted) setState(() => _conversationMuted = next);
+  }
+
   void _showChatBackgroundMenu(Offset globalPosition) {
     final overlay =
         Overlay.of(context).context.findRenderObject() as RenderBox?;
@@ -1714,12 +1752,28 @@ class _ChatPageState extends State<ChatPage>
             contentPadding: EdgeInsets.zero,
           ),
         ),
+        PopupMenuItem<String>(
+          value: 'mute',
+          child: ListTile(
+            leading: Icon(
+              _conversationMuted
+                  ? Icons.notifications_active_outlined
+                  : Icons.notifications_off_outlined,
+            ),
+            title: Text(
+              AppLocalizations.current.t(_conversationMuted ? '取消免打扰' : '免打扰'),
+            ),
+            contentPadding: EdgeInsets.zero,
+          ),
+        ),
       ],
     ).then((value) {
       if (value == 'bottom') {
         unawaited(_scheduleScrollToBottom());
       } else if (value == 'refresh') {
         unawaited(_refreshConversation());
+      } else if (value == 'mute') {
+        unawaited(_toggleConversationMute());
       }
     });
   }
@@ -2383,20 +2437,23 @@ class _ChatPageState extends State<ChatPage>
                       : NotificationListener<ScrollNotification>(
                           onNotification: (notification) {
                             if (notification is ScrollEndNotification &&
-                                _scrollController.position.pixels <= 0 &&
+                                notification.metrics.pixels <= 160 &&
                                 _hasMore &&
                                 !_isLoadingMore &&
                                 !_loading) {
                               _isLoadingMore = true;
-                              _loadMessages(initial: false).then((_) {
-                                _isLoadingMore = false;
-                              });
+                              unawaited(
+                                _loadMessages(initial: false).whenComplete(() {
+                                  if (mounted) _isLoadingMore = false;
+                                }),
+                              );
                             }
                             return false;
                           },
                           child: ListView.builder(
                             controller: _scrollController,
                             reverse: false,
+                            physics: const AlwaysScrollableScrollPhysics(),
                             padding: const EdgeInsets.fromLTRB(10, 8, 10, 84),
                             itemCount: _messages.length,
                             itemBuilder: (ctx, i) {
@@ -2640,6 +2697,9 @@ class _ChatPageState extends State<ChatPage>
                       case 'refresh':
                         _refreshConversation();
                         break;
+                      case 'mute':
+                        _toggleConversationMute();
+                        break;
                       case 'bottom':
                         _scrollToBottom();
                         break;
@@ -2673,6 +2733,14 @@ class _ChatPageState extends State<ChatPage>
                     PopupMenuItem(
                       value: 'refresh',
                       child: Text(AppLocalizations.current.t('刷新消息')),
+                    ),
+                    PopupMenuItem(
+                      value: 'mute',
+                      child: Text(
+                        AppLocalizations.current.t(
+                          _conversationMuted ? '取消免打扰' : '免打扰',
+                        ),
+                      ),
                     ),
                     PopupMenuItem(
                       value: 'bottom',
@@ -2728,6 +2796,9 @@ class _ChatPageState extends State<ChatPage>
                 case 'refresh':
                   _refreshConversation();
                   break;
+                case 'mute':
+                  _toggleConversationMute();
+                  break;
                 case 'bottom':
                   _scrollToBottom();
                   break;
@@ -2753,6 +2824,14 @@ class _ChatPageState extends State<ChatPage>
               PopupMenuItem(
                 value: 'refresh',
                 child: Text(AppLocalizations.current.t('刷新消息')),
+              ),
+              PopupMenuItem(
+                value: 'mute',
+                child: Text(
+                  AppLocalizations.current.t(
+                    _conversationMuted ? '取消免打扰' : '免打扰',
+                  ),
+                ),
               ),
               PopupMenuItem(
                 value: 'bottom',

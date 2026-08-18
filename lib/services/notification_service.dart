@@ -11,6 +11,7 @@ import 'package:flutter_desktop_notifications/flutter_desktop_notifications.dart
 
 import 'app_localizations.dart';
 import 'account_storage.dart';
+import 'auth_service.dart';
 import '../pages/chat_page.dart';
 import '../utils/constants.dart';
 import '../utils/navigation.dart';
@@ -26,6 +27,8 @@ class NotificationService {
   static final List<String> _pendingActivationPayloads = <String>[];
   static String? _toastInitError;
   static File? _toastLogFile;
+  static final Set<String> _shownMessageNotificationIds = <String>{};
+  static Future<void> _toastQueue = Future<void>.value();
   static final DesktopNotifier _desktopNotifier = DesktopNotifier(
     appName: Constants.appName,
     appId: Constants.appAumid,
@@ -65,7 +68,9 @@ class NotificationService {
       final appData = Platform.environment['APPDATA'];
       final root = appData == null || appData.isEmpty
           ? await getApplicationSupportDirectory()
-          : Directory('$appData${Platform.pathSeparator}OldChat_For_AllPlatform');
+          : Directory(
+              '$appData${Platform.pathSeparator}OldChat_For_AllPlatform',
+            );
       final accountRoot = Directory(
         '${root.path}${Platform.pathSeparator}accounts${Platform.pathSeparator}${AccountStorage.instance.userId}',
       );
@@ -182,9 +187,7 @@ class NotificationService {
         await _writeToastLog('WinToast 未初始化，继续使用 WindowsNotification/备用通知');
       }
       await _desktopNotifier.requestPermission();
-      await WindowsNotification(
-        applicationId: Constants.appAumid,
-      ).init();
+      await WindowsNotification(applicationId: Constants.appAumid).init();
       await _desktopNotifier.setCallback((event) {
         if (event.event == NotificationEvent.activated) {
           openConversationFromNotification(event.arguments);
@@ -207,6 +210,11 @@ class NotificationService {
         const InitializationSettings(android: androidSettings),
         onDidReceiveNotificationResponse: _onNotificationTap,
       );
+      final androidPlugin = _notifications
+          .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin
+          >();
+      await androidPlugin?.requestNotificationsPermission();
     }
   }
 
@@ -221,6 +229,33 @@ class NotificationService {
   Future<void> setTaskbarFlashEnabled(bool value) async {
     _taskbarFlashEnabled = value;
     await AccountStorage.instance.setBool(Constants.taskbarFlashKey, value);
+  }
+
+  String _conversationMuteKey(String type, String conversationId) =>
+      'mute:$type:$conversationId';
+
+  bool isConversationMuted(String type, String conversationId) {
+    final normalizedType = type.trim().isEmpty ? 'direct' : type.trim();
+    final normalizedId = conversationId.trim();
+    if (normalizedId.isEmpty) return false;
+    return AccountStorage.instance.getBool(
+          _conversationMuteKey(normalizedType, normalizedId),
+        ) ??
+        false;
+  }
+
+  Future<void> setConversationMuted({
+    required String type,
+    required String conversationId,
+    required bool muted,
+  }) async {
+    final normalizedType = type.trim().isEmpty ? 'direct' : type.trim();
+    final normalizedId = conversationId.trim();
+    if (normalizedId.isEmpty) return;
+    await AccountStorage.instance.setBool(
+      _conversationMuteKey(normalizedType, normalizedId),
+      muted,
+    );
   }
 
   void _onNotificationTap(NotificationResponse response) =>
@@ -251,16 +286,47 @@ class NotificationService {
     bool withFlash = false,
   }) async {
     if (!_enabled) return;
+    final operation = _toastQueue.then<void>(
+      (_) => _showNotificationNow(
+        title: title,
+        body: body,
+        payload: payload,
+        withFlash: withFlash,
+      ),
+    );
+    _toastQueue = operation.catchError((_) {});
+    await operation;
+  }
 
+  Future<void> _showNotificationNow({
+    required String title,
+    required String body,
+    String? payload,
+    bool withFlash = false,
+  }) async {
     if (Platform.isWindows) {
       final notificationId = 'oldchat-${DateTime.now().microsecondsSinceEpoch}';
       var shown = false;
       if (_winToastInitialized) {
         try {
           final toastPayload = _escapeXml(payload ?? '');
-          await WinToast.instance().showCustomToast(
-            xml:
-                '<toast launch="$toastPayload" duration="short"><visual><binding template="ToastGeneric"><text>${_escapeXml(title)}</text><text>${_escapeXml(body)}</text></binding></visual><audio silent="false"/></toast>',
+          final toast = Toast(
+            launch: toastPayload,
+            duration: ToastDuration.short,
+            children: [
+              ToastChildAudio(source: ToastAudioSource.defaultSound),
+              ToastChildVisual(
+                binding: ToastVisualBinding(
+                  children: [
+                    ToastVisualBindingChildText(text: title, id: 1),
+                    ToastVisualBindingChildText(text: body, id: 2),
+                  ],
+                ),
+              ),
+            ],
+          );
+          await WinToast.instance().showToast(
+            toast: toast,
             tag: notificationId,
             group: 'oldchat',
           );
@@ -287,7 +353,9 @@ class NotificationService {
           shown = true;
           await _writeToastLog('WindowsNotification 已显示：$title');
         } catch (windowsNotificationError) {
-          await _writeToastLog('WindowsNotification 发送失败：$windowsNotificationError');
+          await _writeToastLog(
+            'WindowsNotification 发送失败：$windowsNotificationError',
+          );
         }
       }
       if (!shown) {
@@ -369,11 +437,26 @@ class NotificationService {
     required String message,
     String? conversationId,
     String? conversationType,
+    String? fromUid,
+    String? messageId,
     bool withFlash = false,
   }) async {
-    final payload = conversationId != null && conversationType != null
-        ? '$conversationType|$conversationId'
-        : null;
+    final type = conversationType?.trim() ?? '';
+    final id = conversationId?.trim() ?? '';
+    final normalizedMessageId = messageId?.trim() ?? '';
+    if (fromUid != null && fromUid.trim() == AuthService().userId) return;
+    if (normalizedMessageId.isNotEmpty &&
+        !_shownMessageNotificationIds.add(normalizedMessageId)) {
+      return;
+    }
+    if (_shownMessageNotificationIds.length > 5000) {
+      _shownMessageNotificationIds.remove(_shownMessageNotificationIds.first);
+    }
+    if (id.isNotEmpty && isConversationMuted(type, id)) {
+      await _writeToastLog('会话免打扰，跳过通知：$type|$id');
+      return;
+    }
+    final payload = id.isNotEmpty && type.isNotEmpty ? '$type|$id' : null;
     var display = message;
     try {
       final decoded = jsonDecode(message);

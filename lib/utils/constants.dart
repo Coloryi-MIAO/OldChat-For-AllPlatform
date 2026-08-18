@@ -131,6 +131,7 @@ class Constants {
   static const String refreshTokenKey = 'refresh_token';
   static const String savedUsernameKey = 'saved_username'; // ★ 新增
   static const String savedPasswordKey = 'saved_password';
+  static const String rememberPasswordKey = 'remember_password';
   static const String desktopNotificationsKey = 'desktop_notifications_enabled';
   static const String taskbarFlashKey = 'taskbar_flash_notification';
   static const String multiSessionReceptionKey =

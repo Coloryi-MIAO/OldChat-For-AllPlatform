@@ -4,51 +4,70 @@ List<String> resolveMediaCandidates(String? url) {
   final raw = url?.trim() ?? '';
   if (raw.isEmpty) return const <String>[];
   if (raw.startsWith('data:') || raw.startsWith('blob:')) return [raw];
+
   if (raw.startsWith('channel-private:')) {
-    return [Constants.resolveMediaUrl(raw)];
+    return _candidateUrls(
+      '/channel-media/${raw.substring('channel-private:'.length)}',
+      preferredOrigin: Constants.baseUrl,
+    );
   }
+
   final parsed = Uri.tryParse(raw);
   if (parsed != null && (parsed.scheme == 'http' || parsed.scheme == 'https')) {
-    if (parsed.path.contains('/channel-media/')) return [raw];
+    final host = parsed.host.toLowerCase();
     final trustedHosts = <String>{
-      Uri.tryParse(Constants.defaultBaseUrl)?.host ?? '',
-      Uri.tryParse(Constants.hiddenFallbackServer)?.host ?? '',
-      Uri.tryParse(Constants.baseUrl)?.host ?? '',
+      for (final server in Constants.mediaServers)
+        Uri.tryParse(server)?.host.toLowerCase() ?? '',
+      Uri.tryParse(Constants.baseUrl)?.host.toLowerCase() ?? '',
+      'files.mcl0.dpdns.org',
     };
-    final isKnownMediaPath = parsed.path == '/media' ||
-        parsed.path.startsWith('/media/') ||
-        parsed.path == '/uploads' ||
-        parsed.path.startsWith('/uploads/') ||
-        parsed.path.startsWith('/v1/uploads/');
-    if (!trustedHosts.contains(parsed.host) && !isKnownMediaPath) return [raw];
-    final normalized = _normalizeMediaPath(parsed.path, parsed.query);
-    final origin = '${parsed.scheme}://${parsed.authority}';
-    return _candidatesForPath(origin, normalized);
+    if (!trustedHosts.contains(host)) return [raw];
+    final path = parsed.path.isEmpty ? '/' : parsed.path;
+    final query = parsed.hasQuery ? '?${parsed.query}' : '';
+    return _candidateUrls(
+      '$path$query',
+      preferredOrigin: '${parsed.scheme}://${parsed.authority}',
+      original: raw,
+    );
   }
-  final path = _normalizeMediaPath(raw.startsWith('/') ? raw : '/$raw', '');
-  return _candidatesForPath(Constants.defaultBaseUrl, path);
+
+  final path = raw.startsWith('/') ? raw : '/$raw';
+  return _candidateUrls(path, preferredOrigin: Constants.defaultBaseUrl);
 }
 
-List<String> _candidatesForPath(String preferredOrigin, String path) {
+List<String> _candidateUrls(
+  String path, {
+  required String preferredOrigin,
+  String? original,
+}) {
+  final question = path.indexOf('?');
+  final cleanPath = question < 0 ? path : path.substring(0, question);
+  final query = question < 0 ? '' : path.substring(question);
+  final appPath = _asAppUploadPath(cleanPath);
   final origins = <String>[
     preferredOrigin,
+    Constants.defaultBaseUrl,
     ...Constants.mediaServers,
   ].map((value) => value.replaceFirst(RegExp(r'/+$'), '')).toSet();
-  return origins.map((origin) => '$origin$path').toList();
+  final candidates = <String>[];
+
+  if (original != null) candidates.add(original);
+  for (final origin in origins) {
+    if (appPath != cleanPath) candidates.add('$origin$appPath$query');
+    if (cleanPath.startsWith('/media/')) {
+      final suffix = cleanPath.substring('/media'.length);
+      candidates.add('$origin/uploads$suffix$query');
+    }
+    candidates.add('$origin$cleanPath$query');
+  }
+  return candidates.toSet().toList(growable: false);
 }
 
-String _normalizeMediaPath(String path, String query) {
-  var normalized = path;
-  if (normalized == '/media' || normalized.startsWith('/media/')) {
-    normalized = '/uploads/media${normalized.substring('/media'.length)}';
-  } else if (normalized.startsWith('/uploads/media/') &&
-      !normalized.startsWith('/v1/')) {
-    normalized = '/v1$normalized';
-  } else if (normalized.startsWith('/uploads/') &&
-      !normalized.startsWith('/v1/')) {
-    normalized = '/v1$normalized';
-  }
-  return query.isEmpty ? normalized : '$normalized?$query';
+String _asAppUploadPath(String path) {
+  if (path.startsWith('/v1/uploads/')) return path;
+  if (path.startsWith('/uploads/')) return '/v1$path';
+  if (path.startsWith('/media/')) return '/v1/uploads$path';
+  return path;
 }
 
 String resolveMediaUrl(String? url) {

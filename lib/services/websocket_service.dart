@@ -1,15 +1,16 @@
-import 'plugin_service.dart';
 import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
-import 'package:cryptography/cryptography.dart';
-import 'package:web_socket_channel/web_socket_channel.dart';
+import 'dart:io' show WebSocket, WebSocketException;
+import 'package:web_socket_channel/web_socket_channel.dart';  // ← 必须导入
+import 'package:web_socket_channel/io.dart';                 // ← 必须导入
 import 'package:web_socket_channel/status.dart' as status;
 import '../utils/constants.dart';
 import '../models/message.dart';
 import 'auth_service.dart';
 import 'api_service.dart';
+import 'notification_service.dart';
 import 'ws_session_service.dart';
+import 'plugin_service.dart';
 
 typedef OnMessageCallback = void Function(Message message);
 typedef OnEventCallback = void Function(String type, Map<String, dynamic> data);
@@ -77,42 +78,70 @@ class WebSocketService {
     try {
       final session = WsSessionService();
       await session.ensureReady();
+      if (session.sessionId == null || session.sessionId!.isEmpty) {
+        throw Exception('Session ID is null after handshake');
+      }
+      print('WebSocket: sessionId = ${session.sessionId}');
+
       final baseUri = Uri.parse(Constants.baseUrl);
       final wsUri = baseUri.replace(
         scheme: baseUri.scheme == 'https' ? 'wss' : 'ws',
         path: Constants.wsPath,
         queryParameters: {
-          'token': token,
-          if (session.sessionId != null) 'sid': session.sessionId!,
+          'sid': session.sessionId!,
         },
       );
-      late final WebSocketChannel channel;
-      channel = WebSocketChannel.connect(wsUri);
+      print('WebSocket: Connecting to $wsUri');
+
+      final headers = <String, String>{
+        'Authorization': 'Bearer $token',
+      };
+
+      final socket = await WebSocket.connect(
+        wsUri.toString(),
+        headers: headers,
+      );
+      print('WebSocket: Socket connected');
+
+      // 使用 IOWebSocketChannel 包装
+      final channel = IOWebSocketChannel(socket);
       _channel = channel;
+
       channel.stream.listen(
         (data) => _handleMessage(data),
         onDone: () => _handleDisconnected(channel, generation),
         onError: (error) {
+          final errorStr = error.toString().toLowerCase();
           final authError =
-              error.toString().contains('401') ||
-              error.toString().contains('Unauthorized');
+              errorStr.contains('401') ||
+              errorStr.contains('unauthorized') ||
+              errorStr.contains('400');
           _handleDisconnected(channel, generation, error, false);
           if (authError) {
+            WsSessionService().reset();
             unawaited(_refreshTokenAndReconnect());
           } else if (_shouldReconnect) {
             _scheduleReconnect();
           }
         },
       );
+
       _connected = true;
       _reconnectAttempts = 0;
       _refreshAttempts = 0;
       _isReconnecting = false;
       print('WebSocket: Connected');
+    } on WebSocketException catch (e) {
+      _connecting = false;
+      _channel = null;
+      print('WebSocket: WebSocketException - $e');
+      WsSessionService().reset();
+      _scheduleReconnect();
     } catch (e) {
       _connecting = false;
       _channel = null;
       print('WebSocket: Connection failed - $e');
+      WsSessionService().reset();
       _scheduleReconnect();
     }
   }
@@ -128,30 +157,34 @@ class WebSocketService {
     _channel = null;
     _connected = false;
     _connecting = false;
-    WsSessionService().reset();
+    final errorStr = error?.toString() ?? '';
+    if (errorStr.contains('400') ||
+        errorStr.contains('401') ||
+        errorStr.contains('Unauthorized')) {
+      WsSessionService().reset();
+      print('WebSocket: 认证错误，已重置会话');
+    }
     if (error != null) print('WebSocket: Error - $error');
     print('WebSocket: Disconnected');
     if (_shouldReconnect && schedule) _scheduleReconnect();
   }
 
-  void _emitDirect(Message message) {
-    unawaited(
-      PluginService().dispatchMessage(
-        message,
-        conversationId: message.groupId ?? message.fromUid,
+  void _scheduleReconnect() {
+    if (!_shouldReconnect || _reconnectTimer?.isActive == true || _connecting)
+      return;
+    _reconnectAttempts++;
+    final exponent = _reconnectAttempts > 4 ? 4 : _reconnectAttempts - 1;
+    final delay = Duration(
+      milliseconds: (_reconnectDelay.inMilliseconds * (1 << exponent)).clamp(
+        1000,
+        30000,
       ),
     );
-    _emit(_directListeners, message);
-  }
-
-  void _emitGroup(Message message) {
-    unawaited(
-      PluginService().dispatchMessage(
-        message,
-        conversationId: message.groupId ?? '',
-      ),
-    );
-    _emit(_groupListeners, message);
+    print('WebSocket: ${delay.inSeconds}秒后重连 (尝试 $_reconnectAttempts)');
+    _reconnectTimer = Timer(delay, () {
+      _reconnectTimer = null;
+      if (_shouldReconnect && !_connected && !_connecting) connect();
+    });
   }
 
   Future<void> _refreshTokenAndReconnect() async {
@@ -176,24 +209,6 @@ class WebSocketService {
       _isReconnecting = false;
     }
     _scheduleReconnect();
-  }
-
-  void _scheduleReconnect() {
-    if (!_shouldReconnect || _reconnectTimer?.isActive == true || _connecting)
-      return;
-    _reconnectAttempts++;
-    final exponent = _reconnectAttempts > 4 ? 4 : _reconnectAttempts - 1;
-    final delay = Duration(
-      milliseconds: (_reconnectDelay.inMilliseconds * (1 << exponent)).clamp(
-        1000,
-        30000,
-      ),
-    );
-    print('WebSocket: ${delay.inSeconds}秒后重连 (尝试 $_reconnectAttempts)');
-    _reconnectTimer = Timer(delay, () {
-      _reconnectTimer = null;
-      if (_shouldReconnect && !_connected && !_connecting) connect();
-    });
   }
 
   void disconnect() {
@@ -287,13 +302,15 @@ class WebSocketService {
         }
         return;
       }
-      final isGroup = normalizedType == 'group_message' ||
+      final isGroup =
+          normalizedType == 'group_message' ||
           normalizedType == 'new_group_message' ||
           normalizedType == 'group_message_new' ||
           (normalizedType.contains('group_message') &&
               normalizedType.endsWith('_new')) ||
           (normalizedType == 'new_message' && payload['group_id'] != null);
-      final isDirect = normalizedType == 'direct_message' ||
+      final isDirect =
+          normalizedType == 'direct_message' ||
           normalizedType == 'new_direct_message' ||
           normalizedType == 'direct_message_new' ||
           (normalizedType.contains('direct_message') &&
@@ -311,5 +328,49 @@ class WebSocketService {
     } catch (e) {
       print('WebSocket: 解析消息错误 - $e');
     }
+  }
+
+  void _emitDirect(Message message) {
+    final conversationId = message.fromUid;
+    final isSelf = _auth.userId == message.fromUid;
+    if (!isSelf) {
+      unawaited(
+        NotificationService().showMessageNotification(
+          fromName: message.fromUid,
+          message: message.body,
+          conversationId: conversationId,
+          conversationType: 'direct',
+          fromUid: message.fromUid,
+          messageId: message.id,
+          withFlash: true,
+        ),
+      );
+      unawaited(
+        PluginService().dispatchMessage(message, conversationId: conversationId),
+      );
+    }
+    _emit(_directListeners, message);
+  }
+
+  void _emitGroup(Message message) {
+    final conversationId = message.groupId ?? '';
+    final isSelf = _auth.userId == message.fromUid;
+    if (!isSelf) {
+      unawaited(
+        NotificationService().showMessageNotification(
+          fromName: message.fromUid,
+          message: message.body,
+          conversationId: conversationId,
+          conversationType: 'group',
+          fromUid: message.fromUid,
+          messageId: message.id,
+          withFlash: true,
+        ),
+      );
+      unawaited(
+        PluginService().dispatchMessage(message, conversationId: conversationId),
+      );
+    }
+    _emit(_groupListeners, message);
   }
 }

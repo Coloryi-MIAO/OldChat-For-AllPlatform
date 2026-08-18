@@ -17,7 +17,7 @@ class AboutPage extends StatefulWidget {
 }
 
 class _AboutPageState extends State<AboutPage> {
-  String _version = '1.4.0+5';
+  String _version = '1.4.5-beta.5+7';
   EnvironmentSnapshot? _environment;
   bool _checking = false;
   String _updateMessage = '尚未检查更新';
@@ -146,8 +146,8 @@ class _AboutPageState extends State<AboutPage> {
                 const SizedBox(height: 24),
                 Text(
                   tr.text(
-                    '由 Coloryi-MIAO 开发的 Windows Flutter 聊天客户端，基于 OldChat 服务端.',
-                    'A Windows Flutter chat client by Coloryi-MIAO, powered by the OldChat server.',
+                    '由 Coloryi-MIAO 开发的 Flutter 聊天客户端，基于 OldChat 服务端.',
+                    'A Flutter chat client by Coloryi-MIAO, powered by the OldChat server.',
                   ),
                   textAlign: TextAlign.center,
                 ),

@@ -50,7 +50,8 @@ class _LoginPageState extends State<LoginPage>
       _supportedEmailPattern.hasMatch(value.trim());
 
   bool _rememberPassword = false;
-  late SharedPreferences _prefs;
+  bool _credentialsLoaded = false;
+  SharedPreferences? _prefs;
 
   @override
   void initState() {
@@ -61,14 +62,25 @@ class _LoginPageState extends State<LoginPage>
 
   Future<void> _loadSavedCredentials() async {
     _prefs = await SharedPreferences.getInstance();
-    final savedUsername = _prefs.getString('saved_username') ?? '';
-    final savedPassword = _prefs.getString('saved_password') ?? '';
-    final remember = _prefs.getBool('remember_password') ?? false;
+    final prefs = _prefs!;
+    final savedUsername = prefs.getString(Constants.savedUsernameKey) ?? '';
+    final savedPassword = prefs.getString(Constants.savedPasswordKey) ?? '';
+    final remember = prefs.getBool(Constants.rememberPasswordKey) ?? savedPassword.isNotEmpty;
+    if (!mounted) return;
     setState(() {
       _usernameController.text = savedUsername;
-      _passwordController.text = savedPassword;
+      _passwordController.text = remember ? savedPassword : '';
       _rememberPassword = remember;
+      _credentialsLoaded = true;
     });
+  }
+
+  Future<void> _setRememberPassword(bool remember) async {
+    final prefs = _prefs ??= await SharedPreferences.getInstance();
+    await prefs.setBool(Constants.rememberPasswordKey, remember);
+    if (!remember && mounted) {
+      await context.read<AuthService>().clearCredentials();
+    }
   }
 
   Future<void> _openAgreement() async {
@@ -168,6 +180,9 @@ class _LoginPageState extends State<LoginPage>
   }
 
   Future<void> _login() async {
+    if (!_credentialsLoaded) {
+      await _loadSavedCredentials();
+    }
     if (!_formKey.currentState!.validate()) return;
     if (!_loginAgreement) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -538,12 +553,21 @@ class _LoginPageState extends State<LoginPage>
             children: [
               Checkbox(
                 value: _rememberPassword,
-                onChanged: (value) {
-                  setState(() => _rememberPassword = value ?? false);
+                onChanged: (value) async {
+                  final remember = value ?? false;
+                  setState(() => _rememberPassword = remember);
+                  await _setRememberPassword(remember);
                 },
                 activeColor: primaryColor,
               ),
-              Text(AppLocalizations.current.t('记住密码')),
+              GestureDetector(
+                onTap: () async {
+                  final remember = !_rememberPassword;
+                  setState(() => _rememberPassword = remember);
+                  await _setRememberPassword(remember);
+                },
+                child: Text(AppLocalizations.current.t('记住密码')),
+              ),
             ],
           ),
           CheckboxListTile(

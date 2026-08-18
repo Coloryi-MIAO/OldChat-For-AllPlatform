@@ -218,7 +218,9 @@ class _ChannelPageState extends State<ChannelPage> {
                             ),
                           ),
                           if (_channel.handle.isNotEmpty)
-                            Text(AppLocalizations.current.t('@${_channel.handle}')),
+                            Text(
+                              AppLocalizations.current.t('@${_channel.handle}'),
+                            ),
                           if (_channel.description.isNotEmpty)
                             Text(
                               _channel.description,
@@ -250,7 +252,9 @@ class _ChannelPageState extends State<ChannelPage> {
                         controller: _postController,
                         minLines: 1,
                         maxLines: 3,
-                        decoration: InputDecoration(hintText: AppLocalizations.current.t('发布频道消息')),
+                        decoration: InputDecoration(
+                          hintText: AppLocalizations.current.t('发布频道消息'),
+                        ),
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -267,7 +271,9 @@ class _ChannelPageState extends State<ChannelPage> {
                 child: Center(child: CircularProgressIndicator()),
               )
             else if (_posts.isEmpty)
-              SliverFillRemaining(child: Center(child: Text(AppLocalizations.current.t('暂无帖子'))))
+              SliverFillRemaining(
+                child: Center(child: Text(AppLocalizations.current.t('暂无帖子'))),
+              )
             else
               SliverList(
                 delegate: SliverChildBuilderDelegate((context, index) {
@@ -370,7 +376,8 @@ class ChannelDiscoveryPage extends StatefulWidget {
 class _ChannelDiscoveryPageState extends State<ChannelDiscoveryPage> {
   final _query = TextEditingController();
   List<ChannelInfo> _channels = [];
-  bool _loading = false;
+  bool _loading = true;
+  bool _searchInFlight = false;
 
   @override
   void initState() {
@@ -387,7 +394,8 @@ class _ChannelDiscoveryPageState extends State<ChannelDiscoveryPage> {
   }
 
   Future<void> _search() async {
-    if (!mounted) return;
+    if (!mounted || _searchInFlight) return;
+    _searchInFlight = true;
     final cacheKey = 'channel_discovery:${_query.text.trim()}';
     final cached = await ImageCacheService.instance.readJsonCache(cacheKey);
     if (cached is List && mounted) {
@@ -419,10 +427,12 @@ class _ChannelDiscoveryPageState extends State<ChannelDiscoveryPage> {
       if (!mounted) return;
       setState(() => _loading = false);
       if (_channels.isEmpty) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(AppLocalizations.current.t('搜索失败：$error'))));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(AppLocalizations.current.t('搜索失败：$error'))),
+        );
       }
+    } finally {
+      _searchInFlight = false;
     }
   }
 
