@@ -255,29 +255,12 @@ class NotificationService {
     if (Platform.isWindows) {
       final notificationId = 'oldchat-${DateTime.now().microsecondsSinceEpoch}';
       var shown = false;
-      try {
-        await WindowsNotification(
-          applicationId: Constants.appAumid,
-        ).showNotificationPluginTemplate(
-          NotificationMessage.fromPluginTemplate(
-            notificationId,
-            title,
-            body,
-            launch: payload,
-            group: 'oldchat',
-            audio: const NotificationAudio(sound: NotificationSound.Default),
-          ),
-        );
-        shown = true;
-        await _writeToastLog('WindowsNotification 已显示：$title');
-      } catch (windowsNotificationError) {
-        await _writeToastLog('WindowsNotification 发送失败：$windowsNotificationError');
-      }
-      if (!shown && _winToastInitialized) {
+      if (_winToastInitialized) {
         try {
+          final toastPayload = _escapeXml(payload ?? '');
           await WinToast.instance().showCustomToast(
             xml:
-                '<toast launch="${_escapeXml(payload ?? '')}"><visual><binding template="ToastGeneric"><text>${_escapeXml(title)}</text><text>${_escapeXml(body)}</text></binding></visual></toast>',
+                '<toast launch="$toastPayload" duration="short"><visual><binding template="ToastGeneric"><text>${_escapeXml(title)}</text><text>${_escapeXml(body)}</text></binding></visual><audio silent="false"/></toast>',
             tag: notificationId,
             group: 'oldchat',
           );
@@ -285,6 +268,26 @@ class NotificationService {
           await _writeToastLog('显示通知：$title（WinToast）');
         } catch (winToastError) {
           await _writeToastLog('WinToast 发送失败：$winToastError');
+        }
+      }
+      if (!shown) {
+        try {
+          await WindowsNotification(
+            applicationId: Constants.appAumid,
+          ).showNotificationPluginTemplate(
+            NotificationMessage.fromPluginTemplate(
+              notificationId,
+              title,
+              body,
+              launch: payload,
+              group: 'oldchat',
+              audio: const NotificationAudio(sound: NotificationSound.Default),
+            ),
+          );
+          shown = true;
+          await _writeToastLog('WindowsNotification 已显示：$title');
+        } catch (windowsNotificationError) {
+          await _writeToastLog('WindowsNotification 发送失败：$windowsNotificationError');
         }
       }
       if (!shown) {

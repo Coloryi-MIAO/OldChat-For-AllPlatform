@@ -375,7 +375,9 @@ class _ChannelDiscoveryPageState extends State<ChannelDiscoveryPage> {
   @override
   void initState() {
     super.initState();
-    _search();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _search();
+    });
   }
 
   @override

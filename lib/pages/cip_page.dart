@@ -48,7 +48,7 @@ class _CipPageState extends State<CipPage> {
       await _service.importCipFile(File(path));
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(context.tr.t('CIP 已导入，请在插件中心启用后运行'))),
+          SnackBar(content: Text(context.tr.t('CIP 已导入，请在 CIP 中心启用后运行'))),
         );
       }
     } catch (error) {

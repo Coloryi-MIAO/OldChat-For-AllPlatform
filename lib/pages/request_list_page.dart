@@ -23,6 +23,14 @@ class _RequestListPageState extends State<RequestListPage> {
     _load();
   }
 
+  Future<Map<String, dynamic>> _safe(Future<Map<String, dynamic>> future) async {
+    try {
+      return await future;
+    } catch (_) {
+      return <String, dynamic>{};
+    }
+  }
+
   Future<void> _load() async {
     if (!mounted) return;
     setState(() {
@@ -33,16 +41,17 @@ class _RequestListPageState extends State<RequestListPage> {
       final api = ApiService();
       if (widget.groups) {
         final results = await Future.wait([
-          api.getAllGroupRequests(),
-          api.getGroupInvitations(),
+          _safe(api.getAllGroupRequests()),
+          _safe(api.getGroupInvitations()),
         ]);
         final items = <Map<String, dynamic>>[];
         for (final data in results) {
-          final raw = data['requests'] ?? data['invitations'] ?? data['items'] ?? data['data'];
+          final raw = data['requests'] ?? data['invitations'] ?? data['items'] ?? data['data'] ?? data['result'];
           if (raw is List) {
             for (final value in raw.whereType<Map>()) {
               final item = Map<String, dynamic>.from(value);
-              if ('${item['status'] ?? 'pending'}' == 'pending' || item['status'] == 0) items.add(item);
+              final status = '${item['status'] ?? 'pending'}'.toLowerCase();
+              if (status == 'pending' || status == '0' || status == 'waiting') items.add(item);
             }
           }
         }
@@ -56,10 +65,11 @@ class _RequestListPageState extends State<RequestListPage> {
         final friends = await api.getFriends();
         final friendIds = friends.map((item) => item.id).toSet();
         final data = await api.getFriendRequests();
-        final raw = data['requests'] ?? data['items'] ?? data['data'];
+        final raw = data['requests'] ?? data['items'] ?? data['data'] ?? data['result'];
         final items = raw is List
             ? raw.whereType<Map>().map((value) => Map<String, dynamic>.from(value)).where((item) {
-                return ('${item['status'] ?? 'pending'}' == 'pending' || item['status'] == 0) && !friendIds.contains(item['from_uid']);
+                final status = '${item['status'] ?? 'pending'}'.toLowerCase();
+                return (status == 'pending' || status == '0' || status == 'waiting') && !friendIds.contains(item['from_uid']);
               }).toList()
             : <Map<String, dynamic>>[];
         if (mounted) setState(() => _items = items);

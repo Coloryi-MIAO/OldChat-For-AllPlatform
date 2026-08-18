@@ -103,6 +103,13 @@ class _ScratchCardPageState extends State<ScratchCardPage> {
   }
 
   String _slotLabel(dynamic value) {
+    if (value is Map) {
+      final amount = _intValue(value['amount'] ?? value['reward'] ?? value['coins']);
+      final label = value['label']?.toString().trim();
+      if (label != null && label.isNotEmpty) return label;
+      if (amount == 0) return context.tr.t('谢谢惠顾');
+      return '$amount ${context.tr.t('金币余额')}';
+    }
     final amount = _intValue(value);
     if (amount == 0) return context.tr.t('谢谢惠顾');
     return '$amount ${context.tr.t('金币余额')}';
@@ -115,10 +122,9 @@ class _ScratchCardPageState extends State<ScratchCardPage> {
     final alreadyDone = _alreadyScratched;
     final reward = _intValue(state?['total_reward']);
     final balance = _intValue(state?['coin_balance']);
-    final slots = (state?['slots'] is List ? state!['slots'] as List : const [])
-        .take(5)
-        .toList();
-    while (slots.length < 5) slots.add(0);
+    final rawSlots = state?['slots'] ?? state?['rewards'] ?? state?['results'];
+    final slots = rawSlots is List ? rawSlots.take(5).toList() : <dynamic>[];
+    while (slots.length < 5) slots.add(null);
 
     return Scaffold(
       appBar: AppBar(title: Text(tr.scratchCard)),
@@ -180,7 +186,7 @@ class _ScratchCardPageState extends State<ScratchCardPage> {
                                     borderRadius: BorderRadius.circular(16),
                                   ),
                                   child: Text(
-                                    alreadyDone ? _slotLabel(slot) : '?',
+                                    _slotLabel(slot),
                                     textAlign: TextAlign.center,
                                     style: TextStyle(
                                       fontWeight: FontWeight.w600,

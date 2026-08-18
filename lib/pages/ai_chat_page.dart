@@ -392,9 +392,11 @@ class _AIChatPageState extends State<AIChatPage> with WidgetsBindingObserver {
         children: [
           SizedBox(
             width: 220,
-            child: DecoratedBox(
-              decoration: BoxDecoration(color: primaryColor.withValues(alpha: 0.08), border: Border(right: BorderSide(color: primaryColor.withValues(alpha: 0.18)))),
-              child: Column(
+            child: Material(
+              color: primaryColor.withValues(alpha: 0.08),
+              child: DecoratedBox(
+                decoration: BoxDecoration(border: Border(right: BorderSide(color: primaryColor.withValues(alpha: 0.18)))),
+                child: Column(
                 children: [
                   ListTile(title: Text(AppLocalizations.current.t('AI 会话')), trailing: IconButton(icon: Icon(Icons.add), onPressed: _newSession)),
                   Expanded(
@@ -408,6 +410,7 @@ class _AIChatPageState extends State<AIChatPage> with WidgetsBindingObserver {
                     ),
                   ),
                 ],
+                ),
               ),
             ),
           ),

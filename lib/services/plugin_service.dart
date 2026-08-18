@@ -50,8 +50,11 @@ class PluginService extends ChangeNotifier {
   final List<DateTime> _redPacketClaims = [];
   final Set<String> _claimedPacketIds = {};
   final Set<String> _dispatchedMessageIds = {};
+  final Set<String> _claimingPacketIds = {};
+  final Map<String, DateTime> _redPacketRetryAfter = {};
   final List<void Function(Map<String, dynamic>)> _messageListeners = [];
   bool _loaded = false;
+  String? _loadedUserId;
 
   List<Map<String, dynamic>> get plugins => _plugins.values
       .map((value) {
@@ -73,9 +76,19 @@ class PluginService extends ChangeNotifier {
   bool get loaded => _loaded;
 
   Future<void> load() async {
-    if (_loaded) return;
+    final userId = AuthService().userId ?? 'guest';
+    await AccountStorage.instance.load(userId: userId);
+    if (_loaded && _loadedUserId == userId) return;
+    _plugins.clear();
+    _pendingActions.clear();
+    _replyCooldowns.clear();
+    _redPacketClaims.clear();
+    _claimedPacketIds.clear();
+    _dispatchedMessageIds.clear();
+    _claimingPacketIds.clear();
+    _redPacketRetryAfter.clear();
     _loaded = true;
-    await AccountStorage.instance.load();
+    _loadedUserId = userId;
     final storage = AccountStorage.instance;
     _readPlugins(storage.getString('plugins'));
     _readPending(storage.getString('plugin_pending'));
@@ -174,6 +187,10 @@ class PluginService extends ChangeNotifier {
           'daily_limit': 30,
           'conversation_types': ['direct', 'group'],
           'min_remaining_count': 1,
+          'min_amount': 0,
+          'max_amount': 0,
+          'only_unclaimed': true,
+          'skip_self': true,
           'skip_expired': true,
           'skip_claimed': true,
         },
@@ -423,27 +440,39 @@ class PluginService extends ChangeNotifier {
     if (id == 'oldchat.auto-reply') {
       final contains = config['contains']?.toString().trim() ?? '';
       final reply = config['reply']?.toString().trim() ?? '';
-      final conversationType =
-          config['conversation_type']?.toString() ?? 'direct';
+      final conversationTypes = config['conversation_types'] is List
+          ? (config['conversation_types'] as List)
+                .map((value) => value.toString())
+                .where((value) => value == 'direct' || value == 'group')
+                .toSet()
+          : <String>{config['conversation_type']?.toString() ?? 'direct'};
+      if (conversationTypes.isEmpty) conversationTypes.add('direct');
       final cooldown = _intValue(
         config['cooldown_seconds'],
         60,
       ).clamp(0, 86400);
-      plugin['rules'] = contains.isEmpty || reply.isEmpty
+      final triggers = contains
+          .split(RegExp(r'[,，\\n]'))
+          .map((value) => value.trim())
+          .where((value) => value.isNotEmpty)
+          .toSet();
+      plugin['rules'] = triggers.isEmpty || reply.isEmpty
           ? <Map<String, dynamic>>[]
-          : <Map<String, dynamic>>[
-              {
-                'when': {
-                  'conversation_type': conversationType,
-                  'contains': contains,
-                },
-                'action': {
-                  'type': 'send_text',
-                  'text': reply,
-                  'cooldown_seconds': cooldown,
-                },
-              },
-            ];
+          : triggers
+                .map(
+                  (trigger) => <String, dynamic>{
+                    'when': {
+                      'conversation_types': conversationTypes.toList(),
+                      'contains': trigger,
+                    },
+                    'action': {
+                      'type': 'send_text',
+                      'text': reply,
+                      'cooldown_seconds': cooldown,
+                    },
+                  },
+                )
+                .toList();
     }
     await _save();
     notifyListeners();
@@ -513,30 +542,45 @@ class PluginService extends ChangeNotifier {
   }
 
   Map<String, dynamic>? _extractRedPacket(Message message, dynamic parsed) {
+    Map<String, dynamic>? normalize(Map value) {
+      final result = Map<String, dynamic>.from(value);
+      final nested = result['red_packet'] ?? result['redPacket'];
+      if (nested is Map) return normalize(nested);
+      final id = result['packet_id'] ??
+          result['packetId'] ??
+          result['red_packet_id'] ??
+          result['redPacketId'] ??
+          (result['packet'] is Map ? (result['packet'] as Map)['id'] : result['id']);
+      if (id == null || id.toString().trim().isEmpty) return null;
+      result['packet_id'] = id.toString().trim();
+      return result;
+    }
+
     if (parsed is Map) {
-      final value = Map<String, dynamic>.from(parsed);
-      if (!value.containsKey('packet_id')) {
-        final id =
-            value['packetId'] ??
-            value['red_packet_id'] ??
-            value['redPacketId'] ??
-            value['id'];
-        if (id != null && id.toString().trim().isNotEmpty)
-          value['packet_id'] = id.toString();
-      }
-      return value;
+      final value = normalize(parsed);
+      if (value != null) return value;
     }
     final decoded = _decodeMap(message.body);
-    if (decoded == null) return null;
-    final nested = decoded['red_packet'] ?? decoded['redPacket'];
-    if (nested is Map) return Map<String, dynamic>.from(nested);
-    final id =
-        decoded['packet_id'] ??
-        decoded['packetId'] ??
-        decoded['red_packet_id'] ??
-        decoded['redPacketId'];
-    if (id == null || id.toString().trim().isEmpty) return null;
-    return {'packet_id': id.toString(), ...decoded};
+    if (decoded != null) {
+      final value = normalize(decoded);
+      if (value != null) return value;
+      for (final key in const ['data', 'result', 'payload']) {
+        final nested = decoded[key];
+        if (nested is Map) {
+          final value = normalize(nested);
+          if (value != null) return value;
+        }
+      }
+    }
+    final type = message.msgType.toLowerCase();
+    if (type.contains('redpacket') || type.contains('red_packet') || type.contains('red-pack')) {
+      final match = RegExp(
+        r'(?:packet[_-]?id|red[_-]?packet[_-]?id)\s*[=:]\s*["\']?([A-Za-z0-9._-]+)',
+        caseSensitive: false,
+      ).firstMatch(message.body);
+      if (match != null) return {'packet_id': match.group(1)!};
+    }
+    return null;
   }
 
   Map<String, dynamic>? _decodeMap(String value) {
@@ -657,15 +701,30 @@ class PluginService extends ChangeNotifier {
 
   bool _matches(dynamic when, Map<String, dynamic> event) {
     if (when is! Map) return true;
-    final type = when['conversation_type']?.toString();
-    if (type != null && type.isNotEmpty && type != event['conversation_type'])
+    final types = when['conversation_types'] is List
+        ? (when['conversation_types'] as List)
+              .map((value) => value.toString())
+              .where((value) => value.isNotEmpty)
+              .toSet()
+        : <String>{};
+    final legacyType = when['conversation_type']?.toString();
+    if (types.isNotEmpty && !types.contains(event['conversation_type'])) {
       return false;
+    }
+    if (types.isEmpty &&
+        legacyType != null &&
+        legacyType.isNotEmpty &&
+        legacyType != event['conversation_type']) {
+      return false;
+    }
     final msgType = when['msg_type']?.toString();
-    if (msgType != null && msgType.isNotEmpty && msgType != event['msg_type'])
+    if (msgType != null && msgType.isNotEmpty && msgType != event['msg_type']) {
       return false;
+    }
     final contains = when['contains']?.toString() ?? '';
-    if (contains.isNotEmpty && !event['text'].toString().contains(contains))
+    if (contains.isNotEmpty && !event['text'].toString().contains(contains)) {
       return false;
+    }
     return true;
   }
 
@@ -679,8 +738,12 @@ class PluginService extends ChangeNotifier {
     final targetId = event['conversation_id'].toString();
     if (type == 'send_text') {
       if (!_hasPermission(plugin, 'messages.send')) return;
-      final text = action['text']?.toString().trim() ?? '';
-      if (text.isEmpty) return;
+      final rawText = action['text']?.toString().trim() ?? '';
+      if (rawText.isEmpty) return;
+      final text = rawText
+          .replaceAll('{text}', event['text']?.toString() ?? '')
+          .replaceAll('{uid}', event['from_uid']?.toString() ?? '')
+          .replaceAll('{conversation_id}', targetId);
       final cooldown = _intValue(
         action['cooldown_seconds'],
         60,
@@ -765,65 +828,74 @@ class PluginService extends ChangeNotifier {
   ) async {
     final packet = event['red_packet'];
     if (packet is! Map || !_hasPermission(plugin, 'redpacket.claim')) return;
-    final msgType = event['msg_type']?.toString().toLowerCase() ?? '';
-    final packetId =
-        (packet['packet_id'] ??
-                packet['packetId'] ??
-                packet['red_packet_id'] ??
-                packet['redPacketId'] ??
-                packet['id'])
-            ?.toString() ??
-        '';
-    if (packetId.isEmpty &&
-        !msgType.contains('redpacket') &&
-        !msgType.contains('red_packet') &&
-        !msgType.contains('red-pack'))
-      return;
-    if (packetId.isEmpty) return;
     final config = plugin['config'] is Map
         ? Map<String, dynamic>.from(plugin['config'])
         : <String, dynamic>{};
-    if (config['auto_claim'] != true || _claimedPacketIds.contains(packetId))
-      return;
-    final allowedTypes = config['conversation_types'] is List
-        ? (config['conversation_types'] as List)
-              .map((value) => value.toString())
-              .toSet()
-        : {'direct', 'group'};
-    if (!allowedTypes.contains(event['conversation_type']?.toString())) return;
-    final remainingCount = _intValue(
-      packet['remaining_count'] ?? packet['remainingCount'],
-      1,
-    );
-    final minRemainingCount = _intValue(
-      config['min_remaining_count'],
-      1,
-    ).clamp(0, 100000);
-    if (remainingCount < minRemainingCount) return;
-    final status = (packet['status'] ?? '').toString().toLowerCase();
-    if (config['skip_expired'] == true &&
-        {'expired', 'closed', 'finished'}.contains(status))
-      return;
-    if (config['skip_claimed'] == true &&
-        {'claimed', 'already_claimed'}.contains(status))
-      return;
-    final maxPerMinute = _intValue(config['max_per_minute'], 3).clamp(1, 30);
-    final dailyLimit = _intValue(config['daily_limit'], 30).clamp(1, 500);
-    final now = DateTime.now();
-    _redPacketClaims.removeWhere(
-      (time) => now.difference(time) > const Duration(minutes: 1),
-    );
-    if (_redPacketClaims.length >= maxPerMinute) return;
-    final today = _redPacketClaims
-        .where(
-          (time) =>
+    if (config['auto_claim'] != true) return;
+    final packetId = (packet['packet_id'] ??
+            packet['packetId'] ??
+            packet['red_packet_id'] ??
+            packet['redPacketId'] ??
+            packet['id'])
+        ?.toString()
+        .trim() ?? '';
+    if (packetId.isEmpty) return;
+    if (_claimedPacketIds.contains(packetId) ||
+        _redPacketRetryAfter[packetId]?.isAfter(DateTime.now()) == true ||
+        !_claimingPacketIds.add(packetId)) return;
+    try {
+      final allowedTypes = config['conversation_types'] is List
+          ? (config['conversation_types'] as List)
+                .map((value) => value.toString())
+                .toSet()
+          : {'direct', 'group'};
+      if (!allowedTypes.contains(event['conversation_type']?.toString())) return;
+      final remainingCount = _intValue(
+        packet['remaining_count'] ?? packet['remainingCount'],
+        1,
+      );
+      final minRemainingCount = _intValue(
+        config['min_remaining_count'],
+        1,
+      ).clamp(0, 100000);
+      if (remainingCount < minRemainingCount) return;
+      final currentUid = AuthService().userId;
+      final senderUid = _packetFromUid(packet);
+      if (config['skip_self'] == true &&
+          currentUid != null &&
+          currentUid.isNotEmpty &&
+          senderUid.isNotEmpty &&
+          senderUid == currentUid) return;
+      final amount = _packetAmount(packet);
+      final minAmount = _doubleValue(config['min_amount'], 0);
+      final maxAmount = _doubleValue(config['max_amount'], 0);
+      if (amount != null && amount < minAmount) return;
+      if (amount != null && maxAmount > 0 && amount > maxAmount) return;
+      if (config['only_unclaimed'] == true && _packetAlreadyClaimed(packet)) return;
+      final status = (packet['status'] ?? '').toString().toLowerCase();
+      if (config['skip_expired'] == true &&
+          {'expired', 'closed', 'finished'}.contains(status)) return;
+      if (config['skip_claimed'] == true &&
+          (_packetAlreadyClaimed(packet) ||
+              {'claimed', 'already_claimed'}.contains(status))) return;
+      final maxPerMinute = _intValue(config['max_per_minute'], 3).clamp(1, 30);
+      final dailyLimit = _intValue(config['daily_limit'], 30).clamp(1, 500);
+      final now = DateTime.now();
+      _redPacketClaims.removeWhere(
+        (time) => now.difference(time) > const Duration(minutes: 1),
+      );
+      if (_redPacketClaims.length >= maxPerMinute) return;
+      final today = _redPacketClaims
+          .where((time) =>
               time.year == now.year &&
               time.month == now.month &&
-              time.day == now.day,
-        )
-        .length;
-    if (today >= dailyLimit) return;
-    await claimRedPacket(plugin['id'].toString(), packetId);
+              time.day == now.day)
+          .length;
+      if (today >= dailyLimit) return;
+      await claimRedPacket(plugin['id'].toString(), packetId);
+    } finally {
+      _claimingPacketIds.remove(packetId);
+    }
   }
 
   Future<void> claimRedPacket(String pluginId, String packetId) async {
@@ -835,7 +907,24 @@ class PluginService extends ChangeNotifier {
       throw Exception('插件未启用或没有领取红包权限');
     }
     if (_claimedPacketIds.contains(packetId)) return;
-    await ApiService().claimRedPacket(packetId);
+    try {
+      await ApiService().claimRedPacket(packetId);
+    } on Exception catch (error) {
+      final message = error.toString().toLowerCase();
+      final terminal = message.contains('400') ||
+          message.contains('404') ||
+          message.contains('expired') ||
+          message.contains('claimed');
+      final transient = message.contains('401') || message.contains('429');
+      if (terminal) {
+        _claimedPacketIds.add(packetId);
+        await _save();
+      } else if (transient) {
+        _redPacketRetryAfter[packetId] =
+            DateTime.now().add(const Duration(seconds: 20));
+      }
+      rethrow;
+    }
     _claimedPacketIds.add(packetId);
     _redPacketClaims.add(DateTime.now());
     await _save();

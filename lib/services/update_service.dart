@@ -29,6 +29,7 @@ class ReleaseInfo {
 
 class UpdateService {
   static const repository = 'Coloryi-MIAO/OldChat-For-AllPlatform';
+  static const releasesPage = 'https://github.com/Coloryi-MIAO/OldChat-For-AllPlatform/releases';
   final Dio _dio = Dio(
     BaseOptions(
       baseUrl: 'https://api.github.com',

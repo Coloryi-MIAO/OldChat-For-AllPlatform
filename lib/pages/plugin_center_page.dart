@@ -1,14 +1,9 @@
 import 'package:flutter/material.dart';
-import 'dart:convert';
 import 'dart:io';
 import '../utils/file_picker_compat.dart';
 import 'package:provider/provider.dart';
-import 'package:archive/archive.dart';
-import 'package:flutter/services.dart';
-import 'package:flutter/foundation.dart';
 import '../services/app_localizations.dart';
 import '../services/plugin_service.dart';
-import '../services/account_storage.dart';
 import '../services/theme_service.dart';
 
 class PluginCenterPage extends StatefulWidget {
@@ -64,9 +59,19 @@ class _PluginCenterPageState extends State<PluginCenterPage> {
     var skipSelf = config['skip_self'] != false;
     var contains = config['contains']?.toString() ?? '';
     var reply = config['reply']?.toString() ?? '';
-    var conversationType = config['conversation_type']?.toString() ?? 'direct';
+    final savedConversationTypes = config['conversation_types'] is List
+        ? (config['conversation_types'] as List)
+              .map((value) => value.toString())
+              .toSet()
+        : <String>{config['conversation_type']?.toString() ?? 'direct'};
+    final conversationTypes = savedConversationTypes
+        .where((value) => value == 'direct' || value == 'group')
+        .toSet();
+    if (conversationTypes.isEmpty) conversationTypes.add('direct');
+    var cooldownSeconds = int.tryParse('${config['cooldown_seconds'] ?? 60}') ?? 60;
     final maxPerMinuteController = TextEditingController(text: '$maxPerMinute');
     final dailyLimitController = TextEditingController(text: '$dailyLimit');
+    final cooldownController = TextEditingController(text: '$cooldownSeconds');
     final containsController = TextEditingController(text: contains);
     final replyController = TextEditingController(text: reply);
     final result = await showDialog<Map<String, dynamic>>(
@@ -174,24 +179,36 @@ class _PluginCenterPageState extends State<PluginCenterPage> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      DropdownButtonFormField<String>(
-                        value: conversationType,
-                        decoration: InputDecoration(
-                          labelText: AppLocalizations.current.t('适用会话'),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          AppLocalizations.current.t('适用会话'),
+                          style: Theme.of(context).textTheme.labelLarge,
                         ),
-                        items: [
-                          DropdownMenuItem(
-                            value: 'direct',
-                            child: Text(AppLocalizations.current.t('私聊')),
-                          ),
-                          DropdownMenuItem(
-                            value: 'group',
-                            child: Text(AppLocalizations.current.t('群聊')),
-                          ),
-                        ],
-                        onChanged: (value) => setDialogState(
-                          () => conversationType = value ?? 'direct',
-                        ),
+                      ),
+                      CheckboxListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(AppLocalizations.current.t('私聊')),
+                        value: conversationTypes.contains('direct'),
+                        onChanged: (value) => setDialogState(() {
+                          if (value == true) {
+                            conversationTypes.add('direct');
+                          } else if (conversationTypes.length > 1) {
+                            conversationTypes.remove('direct');
+                          }
+                        }),
+                      ),
+                      CheckboxListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(AppLocalizations.current.t('群聊')),
+                        value: conversationTypes.contains('group'),
+                        onChanged: (value) => setDialogState(() {
+                          if (value == true) {
+                            conversationTypes.add('group');
+                          } else if (conversationTypes.length > 1) {
+                            conversationTypes.remove('group');
+                          }
+                        }),
                       ),
                       TextField(
                         controller: containsController,
@@ -207,6 +224,15 @@ class _PluginCenterPageState extends State<PluginCenterPage> {
                         ),
                         maxLines: 3,
                         onChanged: (value) => reply = value,
+                      ),
+                      TextField(
+                        keyboardType: TextInputType.number,
+                        controller: cooldownController,
+                        decoration: InputDecoration(
+                          labelText: AppLocalizations.current.t('自动回复冷却秒数'),
+                        ),
+                        onChanged: (value) =>
+                            cooldownSeconds = int.tryParse(value) ?? 60,
                       ),
                     ],
                   ),
@@ -231,7 +257,9 @@ class _PluginCenterPageState extends State<PluginCenterPage> {
                 'skip_self': skipSelf,
                 'contains': contains,
                 'reply': reply,
-                'conversation_type': conversationType,
+                'conversation_types': conversationTypes.toList(),
+                'conversation_type': conversationTypes.first,
+                'cooldown_seconds': cooldownSeconds.clamp(0, 86400),
               }),
               child: Text(AppLocalizations.current.t('保存')),
             ),
@@ -243,6 +271,7 @@ class _PluginCenterPageState extends State<PluginCenterPage> {
     dailyLimitController.dispose();
     containsController.dispose();
     replyController.dispose();
+    cooldownController.dispose();
     if (result != null) {
       await _service.updateConfig(plugin['id'].toString(), result);
     }
@@ -275,24 +304,20 @@ class _PluginCenterPageState extends State<PluginCenterPage> {
   Future<void> _importPackage() async {
     final result = await FilePicker.pickFiles(
       type: FileType.custom,
-      allowedExtensions: const ['oldchat-plugin', 'cip'],
+      allowedExtensions: const ['oldchat-plugin'],
       withData: false,
     );
     final selectedFiles = filePickerFiles(result);
     final path = selectedFiles.isNotEmpty ? selectedFiles.first.path : null;
     if (path == null || path.isEmpty) return;
     final extension = path.split('.').last.toLowerCase();
-    if (extension != 'oldchat-plugin' && extension != 'cip') {
-      _show(AppLocalizations.current.t('仅支持 .oldchat-plugin 和 .cip 文件'));
+    if (extension != 'oldchat-plugin') {
+      _show(AppLocalizations.current.t('仅支持 .oldchat-plugin 文件；CIP 请在 CIP 中心导入'));
       return;
     }
     setState(() => _busy = true);
     try {
-      if (extension == 'cip') {
-        await _service.importCipFile(File(path));
-      } else {
-        await _service.importPluginFile(File(path));
-      }
+      await _service.importPluginFile(File(path));
       _show(AppLocalizations.current.t('插件已导入并保存到本地'));
     } catch (error) {
       _show('${AppLocalizations.current.t('导入失败')}：$error');
@@ -367,38 +392,19 @@ class _PluginCenterPageState extends State<PluginCenterPage> {
           IconButton(
             onPressed: _busy ? null : _importPackage,
             icon: const Icon(Icons.file_upload_outlined),
-            tooltip: AppLocalizations.current.t('导入 .oldchat-plugin / .cip'),
+            tooltip: AppLocalizations.current.t('导入 .oldchat-plugin'),
           ),
         ],
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          Card(
-            child: Padding(
-              padding: EdgeInsets.all(14),
-              child: Text(
-                AppLocalizations.current.t(
-                  '系统插件默认关闭。自动发送图片、红包和动态必须先通过审核；插件不能读取 Token、执行脚本或绕过宿主 API。',
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(14),
-              child: Text(
-                context.tr.t(
-                  '系统插件默认关闭。自动发送图片、红包和动态必须先通过审核；插件不能读取 Token、执行脚本或绕过宿主 API。',
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          ..._service.plugins.map(_buildPlugin),
-          const SizedBox(height: 12),
-          _buildButtonEditor(),
+          ..._service.plugins
+              .where((plugin) =>
+                  plugin['id'] != 'oldchat.function-buttons' &&
+                  !(plugin['cip_main'] is String &&
+                      (plugin['cip_main'] as String).trim().isNotEmpty))
+              .map(_buildPlugin),
           if (_service.pendingActions.isNotEmpty) ...[
             const SizedBox(height: 18),
             Text(
@@ -438,59 +444,6 @@ class _PluginCenterPageState extends State<PluginCenterPage> {
         ],
       ),
     );
-  }
-
-  Widget _buildButtonEditor() {
-    const buttons = <Map<String, String>>[
-      {'key': 'channels', 'label': '频道'},
-      {'key': 'plugins', 'label': '插件'},
-      {'key': 'cip', 'label': 'CIP 小程序'},
-      {'key': 'friend_requests', 'label': '好友申请'},
-      {'key': 'group_requests', 'label': '群聊申请'},
-    ];
-    return FutureBuilder<Map<String, bool>>(
-      future: _loadButtonVisibility(),
-      builder: (context, snapshot) {
-        final values = snapshot.data ?? <String, bool>{};
-        return Card(
-          child: ExpansionTile(
-            leading: const Icon(Icons.tune),
-            title: Text(AppLocalizations.current.t('功能按钮编辑')),
-            subtitle: Text(AppLocalizations.current.t('自定义功能页中的入口显示，不影响安全入口')),
-            children: buttons.map((button) {
-              final key = button['key']!;
-              return SwitchListTile(
-                title: Text(button['label']!),
-                value: values[key] ?? true,
-                onChanged: (value) async {
-                  await _setButtonVisibility(key, value);
-                  if (mounted) setState(() {});
-                },
-              );
-            }).toList(),
-          ),
-        );
-      },
-    );
-  }
-
-  Future<Map<String, bool>> _loadButtonVisibility() async {
-    await AccountStorage.instance.load();
-    final storage = AccountStorage.instance;
-    return {
-      for (final key in const [
-        'channels',
-        'plugins',
-        'cip',
-        'friend_requests',
-        'group_requests',
-      ])
-        key: storage.getBool('oldchat_button_visible_$key') ?? true,
-    };
-  }
-
-  Future<void> _setButtonVisibility(String key, bool value) async {
-    await AccountStorage.instance.setBool('oldchat_button_visible_$key', value);
   }
 
   Widget _buildPlugin(Map<String, dynamic> plugin) {

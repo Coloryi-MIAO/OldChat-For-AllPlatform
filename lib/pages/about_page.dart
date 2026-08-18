@@ -105,8 +105,8 @@ class _AboutPageState extends State<AboutPage> {
       appBar: AppBar(
         title: Text(
           tr.text(
-            '关于 ${Constants.appName}（OCFW）',
-            'About ${Constants.appName} (OCFW)',
+            '关于 ${Constants.appName}',
+            'About ${Constants.appName}',
           ),
         ),
         backgroundColor: primary,
@@ -134,7 +134,7 @@ class _AboutPageState extends State<AboutPage> {
                 ),
                 const SizedBox(height: 20),
                 Text(
-                  '${Constants.appName} · OCFW',
+                  Constants.appName,
                   style: TextStyle(
                     fontSize: 28,
                     fontWeight: FontWeight.bold,

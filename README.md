@@ -13,18 +13,18 @@ OldChat For AllPlatform 是基于 Flutter 的跨平台聊天客户端，当前�
 - Windows 可执行文件：`OldChat_For_AllPlatform.exe`
 - Windows AUMID：`Coloryi.OldChatForAllPlatform`
 - Windows Toast CLSID：`936C39FC-6BBC-4A57-B8F8-7C627E401B2F`
-- 图标源：`assets/app_icon.png`；Windows 原生图标：`assets/app_icon.ico`
+- 图标源：`file assets/app_icon.png`；Windows 原生图标：`file assets/app_icon.ico`
 
-Android 的原生入口位于 `android/app/src/main/kotlin/com/coloryi/oldchat_for_allplatform/MainActivity.kt`。测试 target 会使用同一标识加 `.RunnerTests` 后缀，这是 Apple 工具链的独立测试 bundle。
+Android 的原生入口位于 `file android/app/src/main/kotlin/com/coloryi/oldchat_for_allplatform/MainActivity.kt`。测试 target 会使用同一标识加 `.RunnerTests` 后缀，这是 Apple 工具链的独立测试 bundle。
 
 ## 服务端与数据
 
-默认服务器为 `http://60.205.94.101:8080`；`http://154.9.24.232` 是隐藏的自动回退地址；已移除 `oc.mcl0.dpdns.org`。服务器列表和账户设置按 UID 保存。
+默认服务器为 `http://60.205.94.101:8080`；`http://***.***.***.***` 是隐藏的自动回退地址。服务器列表和账户设置按 UID 保存。
 
 Windows 的账户数据目录为：
 
 ```text
-%APPDATA%\\OldChat_For_AllPlatform\\accounts\\<UID>\\
+%APPDATA%\OldChat_For_AllPlatform\accounts\<UID>
 ```
 
 缓存、设置、媒体、插件状态和日志均按账户隔离。不要把真实 token、密码、设备密钥或生产账户数据提交到 Git。
@@ -66,7 +66,7 @@ flutter build web --release
 
 ## GitHub Actions
 
-`.github/workflows/build.yml` 提供以下流程：
+`file .github/workflows/build.yml` 提供以下流程：
 
 1. Ubuntu 上执行 `flutter pub get`、`flutter analyze` 和 `flutter test`；
 2. 分别构建 Android APK、Web、Linux、Windows、macOS 和未签名 iOS；
@@ -77,10 +77,19 @@ iOS 真机发布仍需要 Apple 签名；Android 正式发布需要配置自己�
 
 ## 插件
 
-支持大小写不敏感的 `.oldchat-plugin` 与 `.cip` 文件。插件必须声明 manifest、入口和最小权限；不得读取其他账户、导出认证信息或绕过宿主请求层。红包助手必须按红包 ID 去重，遵守服务端冷却和过期时间，遇到 400、401 或 429 立即停止当前操作，不得无限重试。
+插件中心只负责 `.oldchat-plugin`；CIP 文件统一在 CIP 中心导入、启用和运行。系统内置的功能按钮插件仍保留并继续提供入口排序与隐藏配置，但不再在插件中心单独绘制“功能按钮编辑”卡片。
 
-更多接口约定见 `api.md`，服务端路由见 `routes.md`，插件规范见 `PLUGIN_DEVELOPMENT.md`。
+自动回复支持私聊与群聊、多关键词、变量 `{text}`、`{uid}`、`{conversation_id}` 和按会话冷却。红包助手支持私聊与群聊、红包 ID 去重、并发领取锁、过期/已领取过滤、最低剩余份数、金额范围、自己发送过滤、每分钟/每日限额；遇到临时认证或限流错误会退避，不会无限重试。
+
+支持大小写不敏感的 `.oldchat-plugin` 与 `.cip` 文件。插件必须声明 manifest、入口和最小权限；不得读取其他账户、导出认证信息或绕过宿主请求层。
+
+更多接口约定见 `file api.md`，服务端路由见 `file routes.md`，插件规范见 `file PLUGIN_DEVELOPMENT.md`。
 
 ## 许可
 
 请参阅 `LICENSE`。
+
+
+## 更新
+
+关于页和设置页从 GitHub Releases 检查更新，仓库为 `https://github.com/Coloryi-MIAO/OldChat-For-AllPlatform`；不会再使用已移除的旧服务器更新地址。

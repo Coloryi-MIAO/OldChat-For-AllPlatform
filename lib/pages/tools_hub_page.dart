@@ -188,8 +188,8 @@ class _ToolsHubPageState extends State<ToolsHubPage> {
           ? Center(
               child: Text(
                 tr.text(
-                  '没有可显示的入口，请在编辑功能按钮中恢复',
-                  'No entries are visible. Restore them in the button editor.',
+                  '没有可显示的入口，请到设置中恢复默认设置',
+                  'No entries are visible. Restore the default settings.',
                 ),
               ),
             )

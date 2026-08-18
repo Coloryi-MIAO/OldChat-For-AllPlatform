@@ -72,12 +72,26 @@ class _LoginPageState extends State<LoginPage>
   }
 
   Future<void> _openAgreement() async {
-    _agreementTimer?.cancel();
-    setState(() {
-      _agreementOpenedAt = DateTime.now();
+    final now = DateTime.now();
+    if (_agreementOpenedAt == null ||
+        now.difference(_agreementOpenedAt!).inSeconds >= 30) {
+      _agreementOpenedAt = now;
       _agreementSeconds = 0;
       _registrationAgreement = false;
+    }
+    _agreementTimer?.cancel();
+    void Function(VoidCallback)? refreshDialog;
+    _agreementTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted || _agreementOpenedAt == null) {
+        timer.cancel();
+        return;
+      }
+      final elapsed = DateTime.now().difference(_agreementOpenedAt!).inSeconds;
+      setState(() => _agreementSeconds = elapsed.clamp(0, 30));
+      refreshDialog?.call(() {});
+      if (elapsed >= 30) timer.cancel();
     });
+    setState(() {});
     try {
       final text = await rootBundle.loadString(
         'assets/legal/user_service_agreement.txt',
@@ -86,7 +100,10 @@ class _LoginPageState extends State<LoginPage>
       await showDialog<void>(
         context: context,
         barrierDismissible: false,
-        builder: (dialogContext) => AlertDialog(
+        builder: (dialogContext) => StatefulBuilder(
+          builder: (dialogContext, setDialogState) {
+            refreshDialog = setDialogState;
+            return AlertDialog(
           title: const Text('《用户服务协议与免责声明》'),
           content: SizedBox(
             width: 620,
@@ -98,18 +115,23 @@ class _LoginPageState extends State<LoginPage>
               onPressed: () => Navigator.pop(dialogContext),
               child: const Text('关闭'),
             ),
+            if (_agreementSeconds >= 30)
+              FilledButton(
+                onPressed: () {
+                  setState(() => _registrationAgreement = true);
+                  Navigator.pop(dialogContext);
+                },
+                child: const Text('我已阅读并同意'),
+              )
+            else
+              Text('请继续阅读，还需 ${30 - _agreementSeconds} 秒'),
           ],
+        );
+          },
         ),
       );
       if (!mounted) return;
-      _agreementTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-        if (!mounted) return;
-        final elapsed = DateTime.now()
-            .difference(_agreementOpenedAt!)
-            .inSeconds;
-        setState(() => _agreementSeconds = elapsed.clamp(0, 30));
-        if (elapsed >= 30) timer.cancel();
-      });
+      refreshDialog = null;
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(
@@ -438,7 +460,7 @@ class _LoginPageState extends State<LoginPage>
                         const SizedBox(width: 12),
                         const Flexible(
                           child: Text(
-                            'OldChat（OCFW）',
+                            'OldChat For AllPlatform',
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               fontSize: 28,

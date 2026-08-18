@@ -1,38 +1,57 @@
 import 'constants.dart';
 
 List<String> resolveMediaCandidates(String? url) {
-  if (url == null || url.trim().isEmpty) return const <String>[];
-  final raw = url.trim();
+  final raw = url?.trim() ?? '';
+  if (raw.isEmpty) return const <String>[];
   if (raw.startsWith('data:') || raw.startsWith('blob:')) return [raw];
-  final uri = Uri.tryParse(raw);
-  final isAbsolute = uri != null && (uri.scheme == 'http' || uri.scheme == 'https');
-  if (isAbsolute && !_isTrustedMediaHost(uri.host)) return [raw];
-  final path = raw.startsWith('http://') || raw.startsWith('https://')
-      ? (uri?.path ?? raw)
-      : (raw.startsWith('/') ? raw : '/$raw');
-  final isUpload = path.startsWith('/v1/uploads/') || path.startsWith('/uploads/');
-  if (!isUpload && (raw.startsWith('http://') || raw.startsWith('https://'))) return [raw];
-  final uploadPath = path.startsWith('/uploads/') ? '/v1$path' : path;
-  final suffix = uploadPath.substring('/v1/uploads/'.length);
-  final candidates = <String>[
-    '${Constants.resourceBaseUrl}/$suffix',
-    '${Constants.backupServer}/v1/uploads/$suffix',
-    '${Constants.baseUrl}/v1/uploads/$suffix',
-  ];
-  return candidates.toSet().toList();
+  if (raw.startsWith('channel-private:')) {
+    return [Constants.resolveMediaUrl(raw)];
+  }
+  final parsed = Uri.tryParse(raw);
+  if (parsed != null && (parsed.scheme == 'http' || parsed.scheme == 'https')) {
+    if (parsed.path.contains('/channel-media/')) return [raw];
+    final trustedHosts = <String>{
+      Uri.tryParse(Constants.defaultBaseUrl)?.host ?? '',
+      Uri.tryParse(Constants.hiddenFallbackServer)?.host ?? '',
+      Uri.tryParse(Constants.baseUrl)?.host ?? '',
+    };
+    final isKnownMediaPath = parsed.path == '/media' ||
+        parsed.path.startsWith('/media/') ||
+        parsed.path == '/uploads' ||
+        parsed.path.startsWith('/uploads/') ||
+        parsed.path.startsWith('/v1/uploads/');
+    if (!trustedHosts.contains(parsed.host) && !isKnownMediaPath) return [raw];
+    final normalized = _normalizeMediaPath(parsed.path, parsed.query);
+    final origin = '${parsed.scheme}://${parsed.authority}';
+    return _candidatesForPath(origin, normalized);
+  }
+  final path = _normalizeMediaPath(raw.startsWith('/') ? raw : '/$raw', '');
+  return _candidatesForPath(Constants.defaultBaseUrl, path);
 }
 
-bool _isTrustedMediaHost(String host) {
-  final lower = host.toLowerCase();
-  return lower == 'files.mcl0.dpdns.org' ||
-      lower == '60.205.94.101' ||
-      lower == '154.9.24.232' ||
-      lower == 'data.mcl0.dpdns.org' ||
-      lower == Uri.tryParse(Constants.baseUrl)?.host.toLowerCase();
+List<String> _candidatesForPath(String preferredOrigin, String path) {
+  final origins = <String>[
+    preferredOrigin,
+    ...Constants.mediaServers,
+  ].map((value) => value.replaceFirst(RegExp(r'/+$'), '')).toSet();
+  return origins.map((origin) => '$origin$path').toList();
+}
+
+String _normalizeMediaPath(String path, String query) {
+  var normalized = path;
+  if (normalized == '/media' || normalized.startsWith('/media/')) {
+    normalized = '/uploads/media${normalized.substring('/media'.length)}';
+  } else if (normalized.startsWith('/uploads/media/') &&
+      !normalized.startsWith('/v1/')) {
+    normalized = '/v1$normalized';
+  } else if (normalized.startsWith('/uploads/') &&
+      !normalized.startsWith('/v1/')) {
+    normalized = '/v1$normalized';
+  }
+  return query.isEmpty ? normalized : '$normalized?$query';
 }
 
 String resolveMediaUrl(String? url) {
   final candidates = resolveMediaCandidates(url);
-  if (candidates.isNotEmpty) return candidates.first;
-  return '';
+  return candidates.isNotEmpty ? candidates.first : '';
 }

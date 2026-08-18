@@ -415,7 +415,6 @@ class _HomePageState extends State<HomePage> {
         ? 'direct:${msg.fromUid}'
         : 'group:${msg.groupId}';
     final targetConversation = _conversationByKey(key);
-    if (targetConversation == null) return;
     final isCurrentConversation =
         _currentConversation != null &&
         _currentConversation!.id == (msg.groupId ?? msg.fromUid) &&
@@ -431,8 +430,8 @@ class _HomePageState extends State<HomePage> {
       ),
     );
     setState(() {
-      _mergeMessageIntoHome(msg);
-      if (!isCurrentConversation) {
+      if (targetConversation != null) _mergeMessageIntoHome(msg);
+      if (targetConversation != null && !isCurrentConversation) {
         _unreadCounts[key] = (_unreadCounts[key] ?? 0) + 1;
         _realtimeUnreadPending[key] = _unreadCounts[key]!;
       }
@@ -631,9 +630,15 @@ class _HomePageState extends State<HomePage> {
           ? (results[1] as List).whereType<Conversation>().toList()
           : <Conversation>[];
       final current = _currentConversation;
+      final validFriends = {for (final item in friends) _conversationKey(item): item};
+      final validGroups = {for (final item in groups) _conversationKey(item): item};
       setState(() {
-        _friends = _mergeConversationUpdates(_friends, friends);
-        _groups = _mergeConversationUpdates(_groups, groups);
+        _friends = _mergeConversationUpdates(_friends, friends)
+            .where((item) => validFriends.containsKey(_conversationKey(item)))
+            .toList();
+        _groups = _mergeConversationUpdates(_groups, groups)
+            .where((item) => validGroups.containsKey(_conversationKey(item)))
+            .toList();
         _mergeRecentDetails([..._groups, ..._friends]);
         if (current != null) {
           final replacement = [
@@ -708,6 +713,9 @@ class _HomePageState extends State<HomePage> {
               .where((item) => item.id.trim().isNotEmpty)
               .toList();
           _groups = groups.where((item) => item.id.trim().isNotEmpty).toList();
+          final validKeys = {...friends, ...groups}.map(_conversationKey).toSet();
+          _recentConversations.removeWhere((key, _) => !validKeys.contains(key));
+          _recentUsedAt.removeWhere((key, _) => !validKeys.contains(key));
           _mergeRecentDetails([...groups, ...friends]);
           _error = null;
           _loading = false;

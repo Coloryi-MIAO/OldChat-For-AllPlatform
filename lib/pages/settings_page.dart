@@ -636,13 +636,17 @@ class _SettingsPageState extends State<SettingsPage> {
         ),
         ClipRRect(
           borderRadius: BorderRadius.circular(12),
-          child: Container(
-            decoration: BoxDecoration(
-              color: Theme.of(context).cardColor,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.grey.withOpacity(0.15)),
+          child: Material(
+            color: Theme.of(context).cardColor,
+            borderRadius: BorderRadius.circular(12),
+            clipBehavior: Clip.antiAlias,
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey.withOpacity(0.15)),
+              ),
+              child: Column(children: children),
             ),
-            child: Column(children: children),
           ),
         ),
       ],
@@ -718,16 +722,20 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
           const SizedBox(height: 10),
           DropdownButtonFormField<String>(
+            key: ValueKey('${Constants.baseUrl}:${Constants.visibleServers.join('|')}'),
             value: Constants.visibleServers.contains(Constants.baseUrl)
                 ? Constants.baseUrl
-                : null,
-            hint: Text(
-              Constants.hiddenFallbackServer.replaceAll(RegExp(r'.'), '*'),
-            ),
+                : Constants.defaultBaseUrl,
             items: Constants.visibleServers
                 .map(
-                  (server) =>
-                      DropdownMenuItem(value: server, child: Text(server)),
+                  (server) => DropdownMenuItem(
+                    value: server,
+                    child: Text(
+                      server == Constants.hiddenFallbackServer
+                          ? '******'
+                          : server,
+                    ),
+                  ),
                 )
                 .toList(),
             onChanged: (value) async {

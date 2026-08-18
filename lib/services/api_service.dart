@@ -846,7 +846,11 @@ class ApiService {
     try {
       await _dio.post(
         Constants.apiPath('/v1/auth/email/send'),
-        data: {'email': email, ..._geetestFields(captchaResult)},
+        data: {
+          'email': email,
+          'purpose': 'register',
+          ..._geetestFields(captchaResult),
+        },
       );
     } on DioException catch (e) {
       final error = e.response?.data;
@@ -879,7 +883,7 @@ class ApiService {
     try {
       final response = await _requestV2WithV1Fallback('GET', '/v2/friends');
       if (response.statusCode == 200) {
-        final list = _nestedList(response.data, const [
+        final list = _nestedList(_unwrapEnvelopeMap(response.data), const [
           'friends',
           'items',
           'list',
@@ -910,8 +914,8 @@ class ApiService {
         'GET',
         '/v2/friends/requests',
       );
-      final value = _asMap(response.data);
-      final requests = _nestedList(response.data, const [
+      final value = _unwrapEnvelopeMap(response.data);
+      final requests = _nestedList(value, const [
         'requests',
         'items',
         'list',
@@ -985,7 +989,7 @@ class ApiService {
     try {
       final response = await _requestV2WithV1Fallback('GET', '/v2/groups/list');
       if (response.statusCode == 200) {
-        final list = _nestedList(response.data, const [
+        final list = _nestedList(_unwrapEnvelopeMap(response.data), const [
           'groups',
           'items',
           'list',
@@ -1079,12 +1083,12 @@ class ApiService {
 
   Future<Map<String, dynamic>> getGroupRequests(String groupId) async {
     try {
-      final response = await _v2Request(
+      final response = await _requestV2WithV1Fallback(
         'GET',
         '/v2/groups/requests',
         queryParameters: {'group_id': groupId.trim()},
       );
-      return _asMap(response.data);
+      return _unwrapEnvelopeMap(response.data);
     } on DioException catch (e) {
       throw _apiError('加载群聊申请失败', e);
     }
@@ -1096,11 +1100,13 @@ class ApiService {
         'GET',
         '/v2/groups/requests',
       );
-      final value = _asMap(response.data);
-      final requests = _nestedList(response.data, const [
+      final value = _unwrapEnvelopeMap(response.data);
+      final requests = _nestedList(value, const [
         'requests',
         'items',
         'list',
+        'data',
+        'result',
       ]);
       if (requests.isNotEmpty) value['requests'] = requests;
       return value;
@@ -1115,11 +1121,13 @@ class ApiService {
         'GET',
         '/v2/groups/invitations',
       );
-      final value = _asMap(response.data);
-      final invitations = _nestedList(response.data, const [
+      final value = _unwrapEnvelopeMap(response.data);
+      final invitations = _nestedList(value, const [
         'invitations',
         'items',
         'list',
+        'data',
+        'result',
       ]);
       if (invitations.isNotEmpty) value['invitations'] = invitations;
       return value;
@@ -1849,21 +1857,16 @@ class ApiService {
 
   Future<Map<String, dynamic>> claimRedPacket(String packetId) async {
     try {
-      final response = await _dio.post(
-        Constants.apiPath('/v1/redpackets/claim'),
-        data: {'packet_id': packetId},
+      final response = await _v2Request(
+        'POST',
+        '/v2/redpackets/claim',
+        data: {'packet_id': packetId.trim()},
       );
-      if (response.statusCode == 200) {
-        return response.data;
-      } else {
-        throw Exception('棰嗗彇绾㈠寘澶辫触');
-      }
+      final value = response.data;
+      if (value is Map) return Map<String, dynamic>.from(value);
+      return <String, dynamic>{'data': value};
     } on DioException catch (e) {
-      final error = e.response?.data;
-      if (error is Map && error.containsKey('error')) {
-        throw Exception(error['error']);
-      }
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('领取红包失败', e);
     }
   }
 
@@ -2490,7 +2493,8 @@ class ApiService {
           'limit': 50,
         },
       );
-      final raw = _nestedValue(response.data, const [
+      final unwrapped = _unwrapEnvelopeMap(response.data);
+      final raw = _nestedValue(unwrapped, const [
         'channels',
         'items',
         'list',
@@ -2590,7 +2594,7 @@ class ApiService {
       await _v2Request(
         'POST',
         '/v2/channels/read',
-        data: {'channel_id': channelId.trim(), 'seq': seq},
+        data: {'channel_id': channelId.trim(), 'read_seq': seq},
       );
     } on DioException catch (e) {
       throw _apiError('标记频道已读失败', e);
@@ -2612,7 +2616,7 @@ class ApiService {
           'limit': 100,
         },
       );
-      final data = r.data;
+      final data = _unwrapEnvelopeMap(r.data);
       final raw = _nestedValue(data, const [
         'posts',
         'items',

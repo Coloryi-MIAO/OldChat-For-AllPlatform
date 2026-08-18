@@ -7,7 +7,8 @@ class Constants {
   static const String apiVersionKey = 'api_version';
   static const String defaultBaseUrl = 'http://60.205.94.101:8080';
   static const String hiddenFallbackServer = 'http://154.9.24.232';
-  static const String backupServer = 'http://60.205.94.101:8080';
+  static const String backupServer = defaultBaseUrl;
+  static const String mediaFallbackServer = hiddenFallbackServer;
   static const String resourceBaseUrl = defaultBaseUrl;
   static const String appName = 'OldChat For AllPlatform';
   static const String appAumid = 'Coloryi.OldChatForAllPlatform';
@@ -28,11 +29,15 @@ class Constants {
 
   static List<String> _customServers = <String>[];
 
-  static List<String> get visibleServers => [
+  static List<String> get visibleServers => {
     defaultBaseUrl,
-    backupServer,
     ..._customServers,
-  ];
+  }.toList(growable: false);
+
+  static List<String> get mediaServers => {
+    defaultBaseUrl,
+    hiddenFallbackServer,
+  }.toList(growable: false);
 
   static bool _isServerUrl(String value) {
     final uri = Uri.tryParse(value.trim());
@@ -90,7 +95,11 @@ class Constants {
   }
 
   static Future<void> saveBaseUrl(String url) async {
-    _baseUrl = url.trim();
+    final normalized = url.trim().replaceFirst(RegExp(r'/+$'), '');
+    if (!_isServerUrl(normalized)) {
+      throw ArgumentError.value(url, 'url', '服务器地址无效');
+    }
+    _baseUrl = normalized;
     await AccountStorage.instance.setString(baseUrlKey, _baseUrl);
   }
 
@@ -105,6 +114,17 @@ class Constants {
   static String get momentsPath =>
       apiPath(_apiVersion == 'v1' ? '/v1/moments' : '/v1/moments/v2');
   static String get wsPath => apiPath('/v1/ws');
+
+  static String resolveMediaUrl(String raw) {
+    final value = raw.trim();
+    if (value.startsWith('channel-private:')) {
+      return '$defaultBaseUrl/channel-media/${value.substring('channel-private:'.length)}';
+    }
+    if (value.contains('/channel-media/')) return value;
+    if (value.startsWith('http://') || value.startsWith('https://')) return value;
+    return '$defaultBaseUrl${value.startsWith('/') ? '' : '/'}$value';
+  }
+
   static const String geetestCaptchaId = '769d069177e132e46eeba07a6210cf3a';
   static const String tokenKey = 'access_token';
   static const String userIdKey = 'user_id';

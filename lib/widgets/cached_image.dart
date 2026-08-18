@@ -47,8 +47,7 @@ class _CachedImageState extends State<CachedImage> {
   void didUpdateWidget(covariant CachedImage oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.url == widget.url) return;
-    final oldFile = _file;
-    _file = oldFile;
+    _file = null;
     _failureScheduled = false;
     _loading = true;
     _failed = false;
@@ -95,7 +94,7 @@ class _CachedImageState extends State<CachedImage> {
     if (mounted && generation == _loadGeneration) {
       setState(() {
         _loading = false;
-        _failed = false;
+        _failed = true;
       });
     }
   }

@@ -1667,15 +1667,12 @@ class _ChatPageState extends State<ChatPage>
       final api = ApiService();
       final data = await api.claimRedPacket(packetId);
       final amount = data['amount'] ?? data['claimed_amount'] ?? 0;
-      _claimedPackets.add(packetId);
+      if (!mounted) return;
+      setState(() => _claimedPackets = {..._claimedPackets, packetId});
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(AppLocalizations.current.t('领取成功：$amount 旧币'))),
       );
-      _offset = 0;
-      _hasMore = true;
-      _messages.clear();
-      _messageKeys.clear();
-      await _loadMessages(initial: true);
+      await _saveCachedMessages();
     } catch (e) {
       String msg = e.toString();
       if (msg.contains('already claimed') || msg.contains('已领取')) {

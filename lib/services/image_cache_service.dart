@@ -51,6 +51,11 @@ class ImageCacheService {
   Future<File?> cachedFile(String url) async {
     final normalized = url.trim();
     if (normalized.isEmpty) return null;
+    final candidates = resolveMediaCandidates(normalized);
+    for (final candidate in candidates) {
+      final existing = await existingFile(candidate);
+      if (existing != null) return existing;
+    }
     final existing = await existingFile(normalized);
     if (existing != null) return existing;
     final uid = AuthService().userId ?? 'guest';
@@ -61,26 +66,40 @@ class ImageCacheService {
     if (await file.exists() && await file.length() > 0) return file;
     try {
       final token = AuthService().token;
-      final response = await _dio.get<List<int>>(
-        normalized,
-        options: Options(
-          followRedirects: true,
-          validateStatus: (status) => status != null && status < 400,
-          responseType: ResponseType.bytes,
-          headers: token == null || token.isEmpty
-              ? null
-              : {'Authorization': 'Bearer $token'},
-        ),
-      );
+      final headers = <String, String>{
+        'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+        'User-Agent': 'OldChat For AllPlatform/1.4.5',
+        if (token != null && token.isNotEmpty && !normalized.contains('/channel-media/'))
+          'Authorization': 'Bearer $token',
+      };
+      Response<List<int>>? response;
+      Object? lastError;
+      for (final candidate in candidates.isEmpty ? <String>[normalized] : candidates) {
+        try {
+          response = await _dio.get<List<int>>(
+            candidate,
+            options: Options(
+              followRedirects: true,
+              validateStatus: (status) => status != null && status < 400,
+              responseType: ResponseType.bytes,
+              headers: headers,
+            ),
+          );
+          if (response.statusCode == 200 || response.statusCode == 206) break;
+        } catch (error) {
+          lastError = error;
+        }
+      }
+      if (response == null || response.statusCode == null || response.statusCode! >= 400) {
+        throw lastError ?? Exception('媒体下载失败');
+      }
+      if (response.statusCode != 200 && response.statusCode != 206) {
+        throw Exception('媒体下载失败：HTTP ${response.statusCode}');
+      }
       final bytes = response.data;
       final contentType =
-          response.headers.value(Headers.contentTypeHeader)?.toLowerCase() ??
-          '';
-      if (bytes == null ||
-          bytes.isEmpty ||
-          contentType.contains('text/html') ||
-          contentType.contains('application/json'))
-        return null;
+          response.headers.value(Headers.contentTypeHeader)?.toLowerCase() ?? '';
+      if (bytes == null || bytes.isEmpty || contentType.contains('text/html') || contentType.contains('application/json')) return null;
       final temporary = File('${file.path}.part');
       await temporary.writeAsBytes(bytes, flush: true);
       if (await file.exists()) await file.delete();
