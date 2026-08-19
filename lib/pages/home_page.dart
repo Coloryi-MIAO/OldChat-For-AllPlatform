@@ -1236,6 +1236,8 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
+    final compactNavigation = kIsWeb || Platform.isAndroid || Platform.isIOS;
+    if (compactNavigation) return _buildCompactShell(context);
     return Scaffold(
       body: _loading
           ? Center(child: CircularProgressIndicator())
@@ -1369,6 +1371,134 @@ class _HomePageState extends State<HomePage> {
                 ),
               ],
             ),
+    );
+  }
+
+  Widget _buildCompactShell(BuildContext context) {
+    final destinations = <(String, IconData, String)>[
+      (context.tr.text('主页', 'Home'), Icons.home_outlined, '/'),
+      (context.tr.text('功能', 'Tools'), Icons.apps_outlined, '/tools'),
+      (context.tr.text('更多', 'More'), Icons.more_horiz, '/more'),
+      (context.tr.text('个人', 'Profile'), Icons.person_outline, '/profile'),
+    ];
+    final current = _currentConversation;
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(current?.name ?? context.tr.text('主页', 'Home')),
+        actions: [
+          IconButton(
+            tooltip: context.tr.refresh,
+            onPressed: _refresh,
+            icon: _refreshing
+                ? const SizedBox.square(
+                    dimension: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.refresh),
+          ),
+          IconButton(
+            tooltip: context.tr.logout,
+            onPressed: _logout,
+            icon: const Icon(Icons.logout),
+          ),
+        ],
+      ),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : current == null
+          ? _buildCompactHomeBody()
+          : ChatPage(
+              key: ValueKey('${current.type}:${current.id}'),
+              conversationId: current.id,
+              type: current.type,
+              title: current.name ?? context.tr.chat,
+              embed: false,
+              onMessageSent: () {
+                unawaited(_loadConversations());
+                unawaited(_loadUnreadCounts());
+              },
+            ),
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: 0,
+        onDestinationSelected: (index) async {
+          if (index == 0) {
+            if (mounted) setState(() => _currentConversation = null);
+            return;
+          }
+          await Navigator.pushNamed(context, destinations[index].$3);
+          if (mounted) setState(() {});
+        },
+        destinations: [
+          for (final destination in destinations)
+            NavigationDestination(
+              icon: Icon(destination.$2),
+              selectedIcon: Icon(destination.$2),
+              label: destination.$1,
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCompactHomeBody() {
+    final query = _searchController.text.trim().toLowerCase();
+    final conversations =
+        <Conversation>[..._recentList(), ..._groups, ..._friends]
+            .where(
+              (conversation) =>
+                  conversation.name?.toLowerCase().contains(query) == true ||
+                  conversation.id.toLowerCase().contains(query),
+            )
+            .fold<Map<String, Conversation>>({}, (map, conversation) {
+              map[_conversationKey(conversation)] = conversation;
+              return map;
+            })
+            .values
+            .toList();
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
+          child: TextField(
+            controller: _searchController,
+            onChanged: (_) => setState(() {}),
+            decoration: InputDecoration(
+              hintText: context.tr.text(
+                '搜索好友或群聊...',
+                'Search friends or groups...',
+              ),
+              prefixIcon: const Icon(Icons.search),
+              filled: true,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(24),
+                borderSide: BorderSide.none,
+              ),
+            ),
+          ),
+        ),
+        Expanded(
+          child: conversations.isEmpty
+              ? Center(
+                  child: Text(context.tr.text('暂无会话', 'No conversations yet')),
+                )
+              : ListView.builder(
+                  itemCount: conversations.length,
+                  itemBuilder: (context, index) {
+                    final conversation = conversations[index];
+                    return ConversationTile(
+                      conversation: conversation,
+                      unreadCount:
+                          _unreadCounts[_conversationKey(conversation)] ?? 0,
+                      isActive: false,
+                      isPinned: _isPinned(conversation),
+                      onTap: () => _selectConversation(conversation),
+                      onSecondaryTapDown: (details) =>
+                          _showConversationMenu(context, conversation, details),
+                    );
+                  },
+                ),
+        ),
+      ],
     );
   }
 

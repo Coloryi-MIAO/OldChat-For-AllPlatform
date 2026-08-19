@@ -165,7 +165,11 @@ class ApiService {
               'X-Auth': await session.encrypt('Bearer $token'),
           },
         },
-        extra: {'_v2Attempt': true, '_skipV2Signing': true, '_gatewayRequest': true},
+        extra: {
+          '_v2Attempt': true,
+          '_skipV2Signing': true,
+          '_gatewayRequest': true,
+        },
       ),
     );
     if (response.data is Map) {
@@ -414,7 +418,8 @@ class ApiService {
       connectTimeout: const Duration(seconds: 12),
       receiveTimeout: const Duration(seconds: 25),
       responseType: ResponseType.json,
-      validateStatus: (status) => status != null && status >= 200 && status < 300,
+      validateStatus: (status) =>
+          status != null && status >= 200 && status < 300,
     ),
   );
 
@@ -1323,7 +1328,8 @@ class ApiService {
             .map((item) => Message.fromJson(Map<String, dynamic>.from(item)))
             .toList();
         final rawHasMore = data['has_more'];
-        final hasMore = rawHasMore == true ||
+        final hasMore =
+            rawHasMore == true ||
             rawHasMore?.toString().toLowerCase() == 'true';
         return {
           'messages': messages,
@@ -1345,7 +1351,9 @@ class ApiService {
             if (beforeCreatedAt != null && beforeCreatedAt.isNotEmpty)
               'before_created_at': beforeCreatedAt,
             if (beforeId != null && beforeId.isNotEmpty) 'before_id': beforeId,
-            if (beforeCreatedAt == null && beforeId == null && afterCreatedAt == null)
+            if (beforeCreatedAt == null &&
+                beforeId == null &&
+                afterCreatedAt == null)
               'offset': offset,
             if (afterCreatedAt != null) 'after_created_at': afterCreatedAt,
             if (afterId != null && afterId.isNotEmpty) 'after_id': afterId,
@@ -1367,7 +1375,8 @@ class ApiService {
               .map((item) => Message.fromJson(Map<String, dynamic>.from(item)))
               .toList();
           final rawHasMore = data['has_more'];
-          final hasMore = rawHasMore == true ||
+          final hasMore =
+              rawHasMore == true ||
               rawHasMore?.toString().toLowerCase() == 'true';
           return {
             'messages': messages,
@@ -1573,7 +1582,8 @@ class ApiService {
             .map((e) => Message.fromJson(Map<String, dynamic>.from(e)))
             .toList();
         final rawHasMore = data['has_more'];
-        final hasMore = rawHasMore == true ||
+        final hasMore =
+            rawHasMore == true ||
             rawHasMore?.toString().toLowerCase() == 'true';
         return {
           'messages': messages,
@@ -1617,8 +1627,8 @@ class ApiService {
           .map((item) => Message.fromJson(Map<String, dynamic>.from(item)))
           .toList();
       final rawHasMore = data['has_more'];
-      final hasMore = rawHasMore == true ||
-          rawHasMore?.toString().toLowerCase() == 'true';
+      final hasMore =
+          rawHasMore == true || rawHasMore?.toString().toLowerCase() == 'true';
       return {
         'messages': messages,
         'has_more': hasMore,

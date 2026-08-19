@@ -92,7 +92,8 @@ while ($true) {
   void _handleBytes(List<int> bytes) {
     _buffer.addAll(bytes);
     while (_buffer.length >= 4) {
-      final length = _buffer[0] |
+      final length =
+          _buffer[0] |
           (_buffer[1] << 8) |
           (_buffer[2] << 16) |
           (_buffer[3] << 24);

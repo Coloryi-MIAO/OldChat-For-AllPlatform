@@ -12,7 +12,9 @@ class LanguageController extends ChangeNotifier {
 
   Future<void> load() async {
     await AccountStorage.instance.load();
-    _language = AccountStorage.instance.getString(Constants.languageKey) == 'en' ? 'en' : 'zh';
+    _language = AccountStorage.instance.getString(Constants.languageKey) == 'en'
+        ? 'en'
+        : 'zh';
     AppLocalizations.setCurrent(Locale(_language));
     notifyListeners();
   }

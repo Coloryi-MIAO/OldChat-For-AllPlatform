@@ -7,7 +7,8 @@ class AISettings {
 
   const AISettings({this.apiKey = '', this.baseUrl = '', this.model = ''});
 
-  bool get isConfigured => apiKey.trim().isNotEmpty && baseUrl.trim().isNotEmpty;
+  bool get isConfigured =>
+      apiKey.trim().isNotEmpty && baseUrl.trim().isNotEmpty;
 }
 
 class AISettingsService {
@@ -25,7 +26,11 @@ class AISettingsService {
     );
   }
 
-  static Future<void> save({required String apiKey, required String baseUrl, String model = ''}) async {
+  static Future<void> save({
+    required String apiKey,
+    required String baseUrl,
+    String model = '',
+  }) async {
     await AccountStorage.instance.setString(_apiKey, apiKey.trim());
     await AccountStorage.instance.setString(_baseUrl, baseUrl.trim());
     await AccountStorage.instance.setString(_model, model.trim());

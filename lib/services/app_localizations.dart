@@ -35,12 +35,15 @@ class AppLocalizations {
     '暂无成员': 'No members yet',
     '加载群成员失败: \$e': 'Failed to load group members: \$e',
     '不是好友': 'Not friends',
-    '您还不是对方的好友，需要先发送好友申请才能聊天。': 'You are not friends yet. Send a friend request before chatting.',
+    '您还不是对方的好友，需要先发送好友申请才能聊天。':
+        'You are not friends yet. Send a friend request before chatting.',
     '取消': 'Cancel',
     '发送申请': 'Send request',
     '你们已经是好友了': 'You are already friends',
-    '您已发送过好友申请，请等待对方通过': 'You have already sent a friend request. Please wait for approval.',
-    '对方已向您发送好友申请，请检查通知': 'The other person sent you a friend request. Check your notifications.',
+    '您已发送过好友申请，请等待对方通过':
+        'You have already sent a friend request. Please wait for approval.',
+    '对方已向您发送好友申请，请检查通知':
+        'The other person sent you a friend request. Check your notifications.',
     '好友申请已发送，等待对方通过': 'Friend request sent. Waiting for approval.',
     '发送申请失败: \$e': 'Failed to send request: \$e',
     '操作已提交': 'Action submitted',
@@ -99,10 +102,12 @@ class AppLocalizations {
     '私聊': 'Direct message',
     '群聊': 'Group chat',
     '插件中心': 'Plugin center',
-    '系统插件默认关闭。自动发送图片、红包和动态必须先通过审核；插件不能读取 Token、执行脚本或绕过宿主 API。': 'System plugins are off by default. Automatic sending of images, red packets, and posts requires review first; plugins cannot read Tokens, run scripts, or bypass the host API.',
+    '系统插件默认关闭。自动发送图片、红包和动态必须先通过审核；插件不能读取 Token、执行脚本或绕过宿主 API。':
+        'System plugins are off by default. Automatic sending of images, red packets, and posts requires review first; plugins cannot read Tokens, run scripts, or bypass the host API.',
     '待审核操作': 'Pending actions',
     '功能按钮编辑': 'Feature button editor',
-    '自定义功能页中的入口显示，不影响安全入口': 'Customize entry points shown on the feature page; security entry points are unaffected',
+    '自定义功能页中的入口显示，不影响安全入口':
+        'Customize entry points shown on the feature page; security entry points are unaffected',
     '权限：\$permissions': 'Permissions: \$permissions',
     '每分钟最多领取': 'Maximum claims per minute',
     '每日最多领取': 'Maximum claims per day',
@@ -110,15 +115,21 @@ class AppLocalizations {
     '触发关键词': 'Trigger keywords',
     '自动回复内容': 'Auto-reply content',
     '自动回复冷却秒数': 'Auto-reply cooldown (seconds)',
-    'CIP 已导入，请在 CIP 中心启用后运行': 'CIP imported. Enable it in the CIP center before running.',
-    '仅支持 .oldchat-plugin 文件；CIP 请在 CIP 中心导入': 'Only .oldchat-plugin files are supported here; import CIP files in the CIP center.',
+    'CIP 已导入，请在 CIP 中心启用后运行':
+        'CIP imported. Enable it in the CIP center before running.',
+    '仅支持 .oldchat-plugin 文件；CIP 请在 CIP 中心导入':
+        'Only .oldchat-plugin files are supported here; import CIP files in the CIP center.',
     '导入 .oldchat-plugin / .cip': 'Import .oldchat-plugin / .cip',
     '通过并执行': 'Approve and execute',
     '拒绝': 'Reject',
-    '系统：\${_environment!.operatingSystem}': 'System: \${_environment!.operatingSystem}',
-    '模式：\${_environment!.buildMode} · \${_environment!.architecture}': 'Mode: \${_environment!.buildMode} · \${_environment!.architecture}',
-    '缓存：\${_environment!.cacheBytes} bytes': 'Cache: \${_environment!.cacheBytes} bytes',
-    '缓存目录：\${_environment!.cachePath}': 'Cache directory: \${_environment!.cachePath}',
+    '系统：\${_environment!.operatingSystem}':
+        'System: \${_environment!.operatingSystem}',
+    '模式：\${_environment!.buildMode} · \${_environment!.architecture}':
+        'Mode: \${_environment!.buildMode} · \${_environment!.architecture}',
+    '缓存：\${_environment!.cacheBytes} bytes':
+        'Cache: \${_environment!.cacheBytes} bytes',
+    '缓存目录：\${_environment!.cachePath}':
+        'Cache directory: \${_environment!.cachePath}',
     '缓存已清除': 'Cache cleared',
     '清除缓存失败：\$error': 'Failed to clear cache: \$error',
     '缓存位置已设置为 \$result': 'Cache location set to \$result',
@@ -132,7 +143,8 @@ class AppLocalizations {
     'API 路径版本': 'API path version',
     'v1（兼容旧服务端）': 'v1 (compatible with legacy servers)',
     'v2（新版服务端）': 'v2 (new server)',
-    'API 已切换为 \$value，重新进入页面后生效': 'API switched to \$value; take effect after re-entering the page',
+    'API 已切换为 \$value，重新进入页面后生效':
+        'API switched to \$value; take effect after re-entering the page',
     '粉色主题': 'Pink theme',
     '启用粉色主题配色': 'Enable pink theme colors',
     '桌面通知': 'Desktop notifications',
@@ -145,9 +157,11 @@ class AppLocalizations {
     '显示高级下载设置': 'Show advanced download settings',
     '端点': 'Endpoint',
     '密钥': 'Key',
-    '管理自动回复、红包助手和审核队列': 'Manage auto-replies, red packet assistant, and review queue',
+    '管理自动回复、红包助手和审核队列':
+        'Manage auto-replies, red packet assistant, and review queue',
     '自动检查更新': 'Check for updates automatically',
-    '启动应用后在后台检查新版本': 'Check for new versions in the background after launching the app',
+    '启动应用后在后台检查新版本':
+        'Check for new versions in the background after launching the app',
     '检查更新': 'Check for updates',
     '点击检查是否有新版本': 'Click to check for a new version',
     '环境诊断': 'Environment diagnostics',
@@ -164,7 +178,8 @@ class AppLocalizations {
     '服务器地址设置': 'Server address settings',
     '修改后会自动保存并刷新': 'Changes are saved and applied automatically',
     '请输入服务器地址': 'Enter the server address',
-    '地址必须以 http:// 或 https:// 开头': 'The address must start with http:// or https://',
+    '地址必须以 http:// 或 https:// 开头':
+        'The address must start with http:// or https://',
     '设置已保存，页面将刷新': 'Settings saved; the page will refresh',
     '记住密码': 'Remember password',
     '服务器设置': 'Server settings',
@@ -188,7 +203,8 @@ class AppLocalizations {
     '选择分享对象': 'Choose who to share with',
     '好友': 'Friends',
     '获取会话失败: \$error': 'Failed to get conversation: \$error',
-    '已分享给 \${target.name ?? target.id}': 'Shared with \${target.name ?? target.id}',
+    '已分享给 \${target.name ?? target.id}':
+        'Shared with \${target.name ?? target.id}',
     '分享失败: \$error': 'Failed to share: \$error',
     '表情广场': 'Sticker plaza',
     '加载失败: \$_errorMessage': 'Load failed: \$_errorMessage',
@@ -221,7 +237,8 @@ class AppLocalizations {
     '输入评论...': 'Enter a comment...',
     '写评论...': 'Write a comment...',
     '频道': 'Channel',
-    '\${_channel.subscriberCount} 人订阅': '\${_channel.subscriberCount} subscribers',
+    '\${_channel.subscriberCount} 人订阅':
+        '\${_channel.subscriberCount} subscribers',
     '暂无帖子': 'No posts yet',
     '搜索失败：\$error': 'Search failed: \$error',
     '频道发现': 'Discover channels',
@@ -281,13 +298,13 @@ class AppLocalizations {
     '已移除收藏': 'Favorite removed',
     '类型: \$type': 'Type: \$type',
 
-
     '我的收藏': 'My favorites',
     '暂无收藏': 'No favorites yet',
     '详情': 'Details',
     '选择一个会话开始聊天': 'Choose a conversation to start chatting',
     '右键刷新': 'Right-click to refresh',
-    '群聊已不存在，已从会话列表移除': 'The group chat no longer exists and was removed from the conversation list',
+    '群聊已不存在，已从会话列表移除':
+        'The group chat no longer exists and was removed from the conversation list',
     '没有匹配的会话': 'No matching conversations',
     '最近会话': 'Recent conversations',
     '搜索好友或群聊...': 'Search friends or group chats...',
@@ -312,14 +329,7 @@ class AppLocalizations {
     '陈述已提交': 'Statement submitted',
     '提交失败：\$error': 'Submission failed: \$error',
 
-
-
-
-
-
     '举报证据：\$evidence': 'Report evidence: \$evidence',
-
-
 
     '支持': 'Support',
     '反对': 'Oppose',
@@ -332,30 +342,39 @@ class AppLocalizations {
     '处理群聊申请失败：\$e': 'Failed to process group chat request: \$e',
     '加载通知失败: \$e': 'Failed to load notifications: \$e',
     '请求ID无效': 'Invalid request ID',
-    '好友申请 (\${_friendRequests.length})': 'Friend requests (\${_friendRequests.length})',
+    '好友申请 (\${_friendRequests.length})':
+        'Friend requests (\${_friendRequests.length})',
     '点击操作': 'Click an action',
-    '请求添加您为好友 · \${_formatTime(createdAt)}': 'Requested to add you as a friend · \${_formatTime(createdAt)}',
-    '群聊申请 (\${_groupRequests.length})': 'Group chat requests (\${_groupRequests.length})',
+    '请求添加您为好友 · \${_formatTime(createdAt)}':
+        'Requested to add you as a friend · \${_formatTime(createdAt)}',
+    '群聊申请 (\${_groupRequests.length})':
+        'Group chat requests (\${_groupRequests.length})',
     '\$fromName 申请加入 \$groupName': '\$fromName requested to join \$groupName',
-    '系统通知 (\${_notifications.length})': 'System notifications (\${_notifications.length})',
+    '系统通知 (\${_notifications.length})':
+        'System notifications (\${_notifications.length})',
     '暂无通知': 'No notifications yet',
     '通知中心': 'Notification center',
     '接受': 'Accept',
     '全部已读': 'Mark all as read',
     '文件已保存到 Windows 下载文件夹。': 'File saved to the Windows Downloads folder.',
     '文件：\${widget.fileName}': 'File: \${widget.fileName}',
-    '下载完成，文件已保存到 Windows“下载”文件夹。': 'Download complete. The file was saved to the Windows “Downloads” folder.',
+    '下载完成，文件已保存到 Windows“下载”文件夹。':
+        'Download complete. The file was saved to the Windows “Downloads” folder.',
     '浏览器打开': 'Open in browser',
     '系统播放器打开': 'Open in system player',
     '下载视频': 'Download video',
     '播放视频': 'Play video',
     '发现新版本 \${release.tagName}': 'New version found: \${release.tagName}',
-    '当前版本：\${widget.currentVersion}': 'Current version: \${widget.currentVersion}',
+    '当前版本：\${widget.currentVersion}':
+        'Current version: \${widget.currentVersion}',
     '最新版本：\${release.name}': 'Latest version: \${release.name}',
-    '发布时间：\${release.publishedAt!.toLocal()}': 'Released: \${release.publishedAt!.toLocal()}',
+    '发布时间：\${release.publishedAt!.toLocal()}':
+        'Released: \${release.publishedAt!.toLocal()}',
     '本次更新': 'What’s new',
-    '下载完成，点击“立即更新”后将启动更新程序并关闭当前 OldChat。': 'Download complete. Click “Update now” to launch the updater and close the current OldChat.',
-    '正在启动更新程序，即将关闭当前 OldChat…': 'Launching the updater. The current OldChat will close shortly…',
+    '下载完成，点击“立即更新”后将启动更新程序并关闭当前 OldChat。':
+        'Download complete. Click “Update now” to launch the updater and close the current OldChat.',
+    '正在启动更新程序，即将关闭当前 OldChat…':
+        'Launching the updater. The current OldChat will close shortly…',
     '打开位置': 'Open location',
     '已交给 aria2 下载（任务 \$gid）': 'Sent to aria2 for download (task \$gid)',
     '图片已保存到：\$path': 'Image saved to: \$path',
@@ -391,7 +410,8 @@ class AppLocalizations {
     '退出': 'Exit',
     '聊天': 'Chat',
     'Windows 通知测试成功': 'Windows notification test succeeded',
-    '测试通知未发送：WinToast 未初始化': 'Test notification was not sent: WinToast is not initialized',
+    '测试通知未发送：WinToast 未初始化':
+        'Test notification was not sent: WinToast is not initialized',
     '关键词提醒：': 'Keyword alert: ',
     '金币余额': 'Coin balance',
     '今日已刮得': 'Earned today',

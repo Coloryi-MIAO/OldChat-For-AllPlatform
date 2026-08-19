@@ -64,7 +64,8 @@ class WsSessionService {
           'Accept': 'application/json',
         },
         responseType: ResponseType.json,
-        validateStatus: (status) => status != null && status >= 200 && status < 300,
+        validateStatus: (status) =>
+            status != null && status >= 200 && status < 300,
       ),
     );
     final rawData = response.data;

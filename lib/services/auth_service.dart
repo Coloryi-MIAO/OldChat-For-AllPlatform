@@ -62,7 +62,8 @@ class AuthService extends ChangeNotifier {
     String? refreshToken,
   }) async {
     final previousUserId = _userId;
-    final tokenChanged = _token != token || (userId != null && _userId != userId);
+    final tokenChanged =
+        _token != token || (userId != null && _userId != userId);
     _token = token;
     if (userId != null) _userId = userId;
     if (refreshToken != null) _refreshToken = refreshToken;
@@ -76,13 +77,24 @@ class AuthService extends ChangeNotifier {
       await CacheService().ensureUserDirectory(userId);
       await AccountStorage.instance.load(userId: userId);
       await AccountStorage.instance.migrateLegacyKeys(const [
-        Constants.baseUrlKey, Constants.apiVersionKey, Constants.languageKey,
-        Constants.desktopNotificationsKey, Constants.taskbarFlashKey,
-        Constants.multiSessionReceptionKey, Constants.messageOrderCorrectionKey,
-        Constants.autoUpdateKey, Constants.splashDurationKey,
-        'close_confirm_enabled', 'close_minimize_to_tray', 'exit_close_action',
-        'aria2_show_settings', 'aria2_configured', 'ai_sessions',
-        'ai_personal_api_key', 'ai_personal_base_url', 'ai_personal_model',
+        Constants.baseUrlKey,
+        Constants.apiVersionKey,
+        Constants.languageKey,
+        Constants.desktopNotificationsKey,
+        Constants.taskbarFlashKey,
+        Constants.multiSessionReceptionKey,
+        Constants.messageOrderCorrectionKey,
+        Constants.autoUpdateKey,
+        Constants.splashDurationKey,
+        'close_confirm_enabled',
+        'close_minimize_to_tray',
+        'exit_close_action',
+        'aria2_show_settings',
+        'aria2_configured',
+        'ai_sessions',
+        'ai_personal_api_key',
+        'ai_personal_base_url',
+        'ai_personal_model',
         'oldchat_local_emojis',
       ]);
     } else if (previousUserId != null) {

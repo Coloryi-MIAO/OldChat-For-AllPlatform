@@ -29,7 +29,8 @@ class ReleaseInfo {
 
 class UpdateService {
   static const repository = 'Coloryi-MIAO/OldChat-For-AllPlatform';
-  static const releasesPage = 'https://github.com/Coloryi-MIAO/OldChat-For-AllPlatform/releases';
+  static const releasesPage =
+      'https://github.com/Coloryi-MIAO/OldChat-For-AllPlatform/releases';
   final Dio _dio = Dio(
     BaseOptions(
       baseUrl: 'https://api.github.com',
@@ -45,7 +46,9 @@ class UpdateService {
   Future<String> currentVersion() async {
     final info = await PackageInfo.fromPlatform();
     final build = info.buildNumber.trim();
-    return build.isEmpty ? info.version : '${info.version}.${build.replaceFirst(RegExp(r'^\\+'), '')}';
+    return build.isEmpty
+        ? info.version
+        : '${info.version}.${build.replaceFirst(RegExp(r'^\\+'), '')}';
   }
 
   Future<ReleaseInfo?> latest(UpdateChannel channel) async {
@@ -88,12 +91,16 @@ class UpdateService {
       '${Directory.systemTemp.path}${Platform.pathSeparator}OldChatUpdates',
     );
     await directory.create(recursive: true);
-    final tagName = _safeFileName(release.tagName).replaceFirst(RegExp(r'^v', caseSensitive: false), '');
+    final tagName = _safeFileName(
+      release.tagName,
+    ).replaceFirst(RegExp(r'^v', caseSensitive: false), '');
     final sourceName = url.split('/').last.split('?').first;
     final sourceExtension = sourceName.contains('.')
         ? sourceName.substring(sourceName.lastIndexOf('.'))
         : '.exe';
-    final extension = sourceExtension.toLowerCase() == '.exe' ? '.exe' : sourceExtension;
+    final extension = sourceExtension.toLowerCase() == '.exe'
+        ? '.exe'
+        : sourceExtension;
     final name = 'OldChat-$tagName$extension';
     final file = File('${directory.path}${Platform.pathSeparator}$name');
     if (await file.exists()) await file.delete();
@@ -113,7 +120,8 @@ class UpdateService {
         validateStatus: (status) => status != null && status < 400,
       ),
     );
-    final total = int.tryParse(
+    final total =
+        int.tryParse(
           response.headers.value(Headers.contentLengthHeader) ?? '',
         ) ??
         release.downloadSize ??
@@ -152,7 +160,9 @@ class UpdateService {
     final escapedInstaller = installer.path.replaceAll("'", "''");
     final escapedPid = pid.toString();
     final escapedApp = Platform.resolvedExecutable.replaceAll("'", "''");
-    final escapedWorkdir = File(Platform.resolvedExecutable).parent.path.replaceAll("'", "''");
+    final escapedWorkdir = File(
+      Platform.resolvedExecutable,
+    ).parent.path.replaceAll("'", "''");
     await updater.writeAsString('''
 \$ErrorActionPreference = 'Stop'
 \$installer = '$escapedInstaller'
@@ -165,11 +175,16 @@ if (Test-Path -LiteralPath \$appPath) { Start-Process -FilePath \$appPath -Worki
 Remove-Item -LiteralPath \$installer -Force -ErrorAction SilentlyContinue
 Remove-Item -LiteralPath \$MyInvocation.MyCommand.Path -Force -ErrorAction SilentlyContinue
 ''');
-    await Process.start(
-      'powershell.exe',
-      ['-NoProfile', '-NonInteractive', '-WindowStyle', 'Hidden', '-ExecutionPolicy', 'Bypass', '-File', updater.path],
-      mode: ProcessStartMode.detached,
-    );
+    await Process.start('powershell.exe', [
+      '-NoProfile',
+      '-NonInteractive',
+      '-WindowStyle',
+      'Hidden',
+      '-ExecutionPolicy',
+      'Bypass',
+      '-File',
+      updater.path,
+    ], mode: ProcessStartMode.detached);
     exit(0);
   }
 
@@ -177,7 +192,8 @@ Remove-Item -LiteralPath \$MyInvocation.MyCommand.Path -Force -ErrorAction Silen
     var name = Uri.decodeComponent(value.trim());
     name = name.replaceAll(RegExp(r'[<>:"/\\|?*\x00-\x1F]'), '_');
     name = name.replaceAll(RegExp(r'\s+'), ' ').trim();
-    if (name.isEmpty || name == '.' || name == '..') return 'OldChat-update.exe';
+    if (name.isEmpty || name == '.' || name == '..')
+      return 'OldChat-update.exe';
     if (!name.toLowerCase().endsWith('.exe')) name = '$name.exe';
     return name;
   }

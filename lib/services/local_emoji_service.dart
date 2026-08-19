@@ -15,7 +15,10 @@ class LocalEmojiService {
     try {
       final decoded = jsonDecode(raw);
       return decoded is List
-          ? decoded.whereType<Map>().map((item) => Map<String, dynamic>.from(item)).toList()
+          ? decoded
+                .whereType<Map>()
+                .map((item) => Map<String, dynamic>.from(item))
+                .toList()
           : <Map<String, dynamic>>[];
     } catch (_) {
       return <Map<String, dynamic>>[];
@@ -24,9 +27,14 @@ class LocalEmojiService {
 
   Future<void> save(Map<String, dynamic> emoji) async {
     final items = await list();
-    items.removeWhere((item) => item['id']?.toString() == emoji['id']?.toString());
+    items.removeWhere(
+      (item) => item['id']?.toString() == emoji['id']?.toString(),
+    );
     items.insert(0, Map<String, dynamic>.from(emoji));
-    await AccountStorage.instance.setString(_key, jsonEncode(items.take(500).toList()));
+    await AccountStorage.instance.setString(
+      _key,
+      jsonEncode(items.take(500).toList()),
+    );
   }
 
   Future<void> remove(String id) async {

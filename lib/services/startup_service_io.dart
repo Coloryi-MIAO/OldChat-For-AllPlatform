@@ -98,7 +98,8 @@ Future<int> startupCleanupOnStartup() async {
     await for (final entity in root.list(recursive: true, followLinks: false)) {
       if (entity is! File) continue;
       final name = entity.path.toLowerCase();
-      final temporary = name.endsWith('.tmp') ||
+      final temporary =
+          name.endsWith('.tmp') ||
           name.endsWith('.part') ||
           name.endsWith('.download') ||
           name.endsWith('.invalid') ||

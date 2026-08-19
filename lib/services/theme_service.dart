@@ -46,7 +46,10 @@ class AppThemeController extends ChangeNotifier {
     if (_pluginTheme == null) {
       await AccountStorage.instance.remove(_pluginThemeKey);
     } else {
-      await AccountStorage.instance.setString(_pluginThemeKey, jsonEncode(_pluginTheme));
+      await AccountStorage.instance.setString(
+        _pluginThemeKey,
+        jsonEncode(_pluginTheme),
+      );
     }
   }
 

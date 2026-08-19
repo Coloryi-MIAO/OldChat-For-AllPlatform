@@ -38,23 +38,34 @@ class Aria2Service {
         if (secret.isNotEmpty)
           secret.startsWith('token:') ? secret : 'token:$secret',
       ];
-      final response = await Dio(BaseOptions(
-        connectTimeout: const Duration(milliseconds: 800),
-        receiveTimeout: const Duration(milliseconds: 800),
-      )).post(endpoint, data: jsonEncode({
-        'jsonrpc': '2.0',
-        'id': 'oldchat-test',
-        'method': 'aria2.getVersion',
-        'params': params,
-      }));
-      final data = response.data is String ? jsonDecode(response.data) : response.data;
+      final response =
+          await Dio(
+            BaseOptions(
+              connectTimeout: const Duration(milliseconds: 800),
+              receiveTimeout: const Duration(milliseconds: 800),
+            ),
+          ).post(
+            endpoint,
+            data: jsonEncode({
+              'jsonrpc': '2.0',
+              'id': 'oldchat-test',
+              'method': 'aria2.getVersion',
+              'params': params,
+            }),
+          );
+      final data = response.data is String
+          ? jsonDecode(response.data)
+          : response.data;
       return data is Map && data['error'] == null;
     } catch (_) {
       return false;
     }
   }
 
-  Future<void> saveSettings({required String endpoint, required String secret}) async {
+  Future<void> saveSettings({
+    required String endpoint,
+    required String secret,
+  }) async {
     final normalizedEndpoint = endpoint.trim();
     final normalizedSecret = secret.trim();
     await AccountStorage.instance.setString(
@@ -89,20 +100,25 @@ class Aria2Service {
       [value],
       options,
     ];
-    final response = await Dio(BaseOptions(
-      connectTimeout: const Duration(seconds: 5),
-      receiveTimeout: const Duration(seconds: 10),
-      headers: {'Content-Type': 'application/json'},
-    )).post(
-      config['endpoint']!,
-      data: jsonEncode({
-        'jsonrpc': '2.0',
-        'id': DateTime.now().microsecondsSinceEpoch,
-        'method': 'aria2.addUri',
-        'params': params,
-      }),
-    );
-    final data = response.data is String ? jsonDecode(response.data) : response.data;
+    final response =
+        await Dio(
+          BaseOptions(
+            connectTimeout: const Duration(seconds: 5),
+            receiveTimeout: const Duration(seconds: 10),
+            headers: {'Content-Type': 'application/json'},
+          ),
+        ).post(
+          config['endpoint']!,
+          data: jsonEncode({
+            'jsonrpc': '2.0',
+            'id': DateTime.now().microsecondsSinceEpoch,
+            'method': 'aria2.addUri',
+            'params': params,
+          }),
+        );
+    final data = response.data is String
+        ? jsonDecode(response.data)
+        : response.data;
     if (data is Map && data['error'] != null) {
       throw Exception(data['error']['message'] ?? 'aria2 添加任务失败');
     }

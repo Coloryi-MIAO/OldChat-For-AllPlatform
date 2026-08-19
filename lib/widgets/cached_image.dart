@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:io';
+import '../utils/file_handle.dart';
 
 import 'package:flutter/material.dart';
 
@@ -29,7 +29,7 @@ class CachedImage extends StatefulWidget {
 }
 
 class _CachedImageState extends State<CachedImage> {
-  File? _file;
+  FileHandle? _file;
   List<String> _candidates = const [];
   int _candidateIndex = 0;
   bool _loading = true;
@@ -121,7 +121,7 @@ class _CachedImageState extends State<CachedImage> {
     }
     if (_file != null) {
       return Image(
-        image: ResizeImage(FileImage(_file!), width: widget.cacheWidth),
+        image: ResizeImage(fileImage(_file!), width: widget.cacheWidth),
         width: widget.width,
         height: widget.height,
         fit: widget.fit,
