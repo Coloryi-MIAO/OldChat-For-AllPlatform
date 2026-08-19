@@ -984,12 +984,16 @@ class _MessageTileState extends State<MessageTile> {
         Wrap(
           spacing: 6,
           runSpacing: 6,
-          children: buttons.map((button) {
+          children: buttons.asMap().entries.map((entry) {
+            final button = entry.value;
             final label = (button['text'] ?? '').toString();
             final action = (button['action'] ?? 'send_text').toString();
-            final data = (button['data'] ?? '').toString();
+            final data = jsonEncode({
+              'button_index': entry.key,
+              'data': (button['data'] ?? '').toString(),
+            });
             return OutlinedButton(
-              onPressed: data.isEmpty || widget.onMessageAction == null
+              onPressed: widget.onMessageAction == null
                   ? null
                   : () => widget.onMessageAction!(msg, action, data),
               child: Text(label.isEmpty ? '操作' : label),

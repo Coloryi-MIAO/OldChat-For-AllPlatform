@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:dio/dio.dart';
@@ -344,9 +345,17 @@ class _ChatPageState extends State<ChatPage>
   void _startPolling() {
     _pollTimer?.cancel();
     if (!_isVisible) return;
-    _pollTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
-      if (!mounted || !_isVisible || _isLoadingMore || _loading ||
-          !WebSocketService().isConnected) return;
+    _pollTimer = Timer.periodic(const Duration(seconds: 2), (timer) {
+      if (!mounted ||
+          !_isVisible ||
+          _isLoadingMore ||
+          _loading ||
+          _realtimeSyncInFlight)
+        return;
+      if (!WebSocketService().isConnected) {
+        unawaited(WebSocketService().connect());
+        return;
+      }
       unawaited(_syncIncrementalMessages());
     });
   }
@@ -1362,13 +1371,27 @@ class _ChatPageState extends State<ChatPage>
     }
     if (action != 'send_text' && action != 'reply_msg') {
       try {
+        var buttonIndex = 0;
+        var formData = data;
+        try {
+          final decoded = jsonDecode(data);
+          if (decoded is Map) {
+            buttonIndex =
+                int.tryParse(
+                  '${decoded['button_index'] ?? decoded['index'] ?? 0}',
+                ) ??
+                0;
+            formData = (decoded['form_data'] ?? decoded['data'] ?? '')
+                .toString();
+          }
+        } catch (_) {}
         await ApiService().callbackButton(
           messageId: message.id,
           conversationType: widget.type,
           conversationId: widget.conversationId,
-          buttonIndex: 0,
+          buttonIndex: buttonIndex,
           action: action,
-          formData: data,
+          formData: formData,
         );
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -1459,6 +1482,72 @@ class _ChatPageState extends State<ChatPage>
     }
   }
 
+  Future<void> _sendPickedFile(PlatformFile picked, String type) async {
+    if (widget.type == 'direct' && !_isFriend) {
+      final shouldSend = await _showFriendRequestDialog();
+      if (shouldSend) await _sendFriendRequest(widget.conversationId);
+      return;
+    }
+    try {
+      final bytes = await filePickerBytes(picked);
+      if (bytes == null || bytes.isEmpty) throw Exception('无法读取文件');
+      final api = ApiService();
+      final formData = FormData.fromMap({
+        'file': MultipartFile.fromBytes(bytes, filename: picked.name),
+      });
+      final uploadResult = await api.uploadFile(formData);
+      final mediaUrl = ApiService.extractUploadUrl(uploadResult);
+      if (mediaUrl == null || mediaUrl.isEmpty) throw Exception('上传失败');
+      final isImage = type == 'image';
+      final isVideo = type == 'video';
+      final msgType = isImage
+          ? 'image'
+          : isVideo
+          ? 'video'
+          : 'resource';
+      final body = jsonEncode({
+        'v': 2,
+        'text': '',
+        'media_kind': isImage
+            ? 'image'
+            : isVideo
+            ? 'video'
+            : 'file',
+        'file_name': picked.name,
+        'url': mediaUrl,
+        'media_url': mediaUrl,
+        'size': bytes.length,
+      });
+      final sent = widget.type == 'direct'
+          ? await api.sendDirectMessage(
+              toUid: widget.conversationId,
+              body: body,
+              msgType: msgType,
+              mediaUrl: mediaUrl,
+            )
+          : await api.sendGroupMessage(
+              groupId: widget.conversationId,
+              body: body,
+              msgType: msgType,
+              mediaUrl: mediaUrl,
+            );
+      if (!mounted) return;
+      setState(() => _addLocalMessage(sent));
+      await _saveCachedMessages();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _scheduleScrollToBottom();
+        if (mounted) _inputFocus.requestFocus();
+      });
+      widget.onMessageSent?.call();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(AppLocalizations.current.t('发送失败: $e'))),
+        );
+      }
+    }
+  }
+
   Future<void> _sendMediaFile(File file, String type) async {
     if (widget.type == 'direct' && !_isFriend) {
       final shouldSend = await _showFriendRequestDialog();
@@ -1533,9 +1622,7 @@ class _ChatPageState extends State<ChatPage>
       return;
     }
     final result = await FilePicker.pickFile();
-    final path = result?.path;
-    if (path != null && path.isNotEmpty)
-      await _sendMediaFile(File(path), 'file');
+    if (result != null) await _sendPickedFile(result, 'file');
   }
 
   // ★ 发红包
@@ -1997,10 +2084,7 @@ class _ChatPageState extends State<ChatPage>
               onTap: () async {
                 Navigator.pop(context);
                 final result = await FilePicker.pickFile();
-                final path = result?.path;
-                if (path != null && path.isNotEmpty) {
-                  await _sendMediaFile(File(path), 'file');
-                }
+                if (result != null) await _sendPickedFile(result, 'file');
               },
             ),
             ListTile(
@@ -2198,6 +2282,7 @@ class _ChatPageState extends State<ChatPage>
       ClipboardFileService.paths();
 
   Future<String?> _clipboardImageFile() async {
+    if (kIsWeb || !Platform.isWindows) return null;
     final temporaryDirectory = await getTemporaryDirectory();
     return ClipboardImageService().saveClipboardImage(
       '${temporaryDirectory.path}${Platform.pathSeparator}oldchat-paste-${DateTime.now().microsecondsSinceEpoch}.png',
@@ -2248,12 +2333,31 @@ class _ChatPageState extends State<ChatPage>
   }
 
   Future<void> _handleClipboardPaste() async {
+    if (kIsWeb) return;
     final paths = await _clipboardFilePaths();
     if (paths.isNotEmpty) {
       if (!await _confirmClipboardSend(paths)) return;
       for (final path in paths) {
         await _sendMediaFile(File(path), _mediaTypeForFile(path));
       }
+      return;
+    }
+    final textData = await Clipboard.getData(Clipboard.kTextPlain);
+    if (textData?.text != null && textData!.text!.isNotEmpty) {
+      final text = textData.text!;
+      final selection = _inputController.selection;
+      final start = selection.start >= 0
+          ? selection.start
+          : _inputController.text.length;
+      final end = selection.end >= 0 ? selection.end : start;
+      final value = _inputController.text;
+      final safeStart = start.clamp(0, value.length);
+      final safeEnd = end.clamp(safeStart, value.length);
+      _inputController.value = TextEditingValue(
+        text: value.replaceRange(safeStart, safeEnd, text),
+        selection: TextSelection.collapsed(offset: safeStart + text.length),
+      );
+      _updateMentionPopup();
       return;
     }
     final imagePath = await _clipboardImageFile();
@@ -2305,12 +2409,6 @@ class _ChatPageState extends State<ChatPage>
         setState(() => _mentionPopupVisible = false);
         return KeyEventResult.handled;
       }
-    }
-    if (event is KeyDownEvent &&
-        event.logicalKey == LogicalKeyboardKey.keyV &&
-        HardwareKeyboard.instance.isControlPressed) {
-      unawaited(_handleClipboardPaste());
-      return KeyEventResult.handled;
     }
     if (event is KeyDownEvent && event.logicalKey == LogicalKeyboardKey.enter) {
       if (HardwareKeyboard.instance.isShiftPressed) {

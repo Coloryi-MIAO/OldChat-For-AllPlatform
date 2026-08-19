@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:io';
 import 'package:flutter/material.dart';
 import '../utils/file_picker_compat.dart';
 import '../services/app_localizations.dart';
@@ -112,10 +111,10 @@ class _CheckinWallPageState extends State<CheckinWallPage> {
     setState(() => _uploadingMedia = true);
     try {
       for (final selected in selectedFiles) {
-        final path = selected.path;
-        if (path == null || path.isEmpty) continue;
+        final bytes = await filePickerBytes(selected);
+        if (bytes == null || bytes.isEmpty) continue;
         final form = FormData.fromMap({
-          'file': await MultipartFile.fromFile(path, filename: selected.name),
+          'file': MultipartFile.fromBytes(bytes, filename: selected.name),
         });
         final uploaded = await ApiService().uploadFile(form);
         final raw = ApiService.extractUploadUrl(uploaded);

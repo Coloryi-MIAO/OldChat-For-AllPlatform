@@ -43,6 +43,8 @@ class _HomePageState extends State<HomePage> {
   Timer? _unreadReloadTimer;
   Timer? _systemNotificationTimer;
   Timer? _realtimePollTimer;
+  Timer? _messageBatchTimer;
+  final List<Message> _pendingRealtimeMessages = <Message>[];
   bool _unreadPollInFlight = false;
   bool _conversationPollInFlight = false;
   bool _systemNotificationBaselineReady = false;
@@ -391,6 +393,8 @@ class _HomePageState extends State<HomePage> {
     _unreadReloadTimer?.cancel();
     _systemNotificationTimer?.cancel();
     _realtimePollTimer?.cancel();
+    _messageBatchTimer?.cancel();
+    _pendingRealtimeMessages.clear();
     _recentSaveTimer?.cancel();
     _searchController.dispose();
     super.dispose();
@@ -485,60 +489,72 @@ class _HomePageState extends State<HomePage> {
       ),
     );
 
-    final key = msg.groupId == null
-        ? 'direct:${msg.fromUid}'
-        : 'group:${msg.groupId}';
-    final targetConversation = _conversationByKey(key);
-    setState(() {
-      if (targetConversation != null) _mergeMessageIntoHome(msg);
-      if (targetConversation != null && !isCurrentConversation) {
-        _unreadCounts[key] = (_unreadCounts[key] ?? 0) + 1;
-        _realtimeUnreadPending[key] = _unreadCounts[key]!;
-      }
-      _totalUnread = _unreadCounts.values
-          .fold(0, (sum, count) => sum + count)
-          .clamp(0, 1 << 30);
-      final all = [..._groups, ..._friends];
-      final index = all.indexWhere(
-        (conversation) =>
-            conversation.id == (msg.groupId ?? msg.fromUid) &&
-            conversation.type == (msg.groupId == null ? 'direct' : 'group'),
-      );
-      if (index >= 0) {
-        final conversation = all[index];
-        final updated = conversation.copyWith(
-          lastMessage: msg,
-          unreadCount: isCurrentConversation
-              ? conversation.unreadCount
-              : conversation.unreadCount + 1,
-        );
-        if (conversation.type == 'group') {
-          _groups[_groups.indexOf(conversation)] = updated;
-        } else {
-          _friends[_friends.indexOf(conversation)] = updated;
+    final key = '$conversationType:$conversationId';
+    _pendingRealtimeMessages.add(msg);
+    _messageBatchTimer ??= Timer(const Duration(milliseconds: 40), () {
+      _messageBatchTimer = null;
+      if (!mounted || _pendingRealtimeMessages.isEmpty) return;
+      final pending = List<Message>.from(_pendingRealtimeMessages);
+      _pendingRealtimeMessages.clear();
+      setState(() {
+        for (final queued in pending) {
+          final queuedType = queued.groupId == null ? 'direct' : 'group';
+          final queuedId = queued.groupId ?? queued.fromUid;
+          final queuedKey = '$queuedType:$queuedId';
+          final queuedConversation = _conversationByKey(queuedKey);
+          final queuedCurrent =
+              _currentConversation != null &&
+              _currentConversation!.id == queuedId &&
+              _currentConversation!.type == queuedType;
+          if (queuedConversation != null) _mergeMessageIntoHome(queued);
+          if (queuedConversation != null && !queuedCurrent) {
+            _unreadCounts[queuedKey] = (_unreadCounts[queuedKey] ?? 0) + 1;
+            _realtimeUnreadPending[queuedKey] = _unreadCounts[queuedKey]!;
+          }
+          final all = [..._groups, ..._friends];
+          final index = all.indexWhere(
+            (conversation) =>
+                conversation.id == queuedId && conversation.type == queuedType,
+          );
+          if (index >= 0) {
+            final conversation = all[index];
+            final updated = conversation.copyWith(
+              lastMessage: queued,
+              unreadCount: queuedCurrent
+                  ? conversation.unreadCount
+                  : conversation.unreadCount + 1,
+            );
+            if (queuedType == 'group') {
+              _groups[_groups.indexOf(conversation)] = updated;
+            } else {
+              _friends[_friends.indexOf(conversation)] = updated;
+            }
+            _rememberRecent(updated, force: true);
+          } else {
+            _rememberMessageConversation(queued);
+          }
         }
-        _rememberRecent(updated, force: true);
-      } else {
-        _rememberMessageConversation(msg);
-      }
-      _totalUnread = _unreadCounts.values
-          .fold(0, (sum, count) => sum + count)
-          .clamp(0, 1 << 30);
+        _totalUnread = _unreadCounts.values
+            .fold(0, (sum, count) => sum + count)
+            .clamp(0, 1 << 30);
+      });
     });
 
     _unreadReloadTimer?.cancel();
     _unreadReloadTimer = Timer(const Duration(milliseconds: 500), () {
-      if (mounted)
+      if (mounted) {
         unawaited(
           _loadUnreadCounts(excludeKey: isCurrentConversation ? key : null),
         );
+      }
     });
   }
 
   void _startRealtimePolling() {
     _realtimePollTimer?.cancel();
-    _realtimePollTimer = Timer.periodic(const Duration(seconds: 30), (_) {
-      if (!mounted || _unreadPollInFlight || WebSocketService().isConnected) return;
+    _realtimePollTimer = Timer.periodic(const Duration(seconds: 10), (_) {
+      if (!mounted || _unreadPollInFlight || WebSocketService().isConnected)
+        return;
       unawaited(_loadUnreadCounts());
       if (!_conversationPollInFlight) unawaited(_refreshConversationPreviews());
     });
@@ -547,7 +563,7 @@ class _HomePageState extends State<HomePage> {
   void _startSystemNotificationPolling() {
     _systemNotificationTimer?.cancel();
     unawaited(_pollSystemNotifications());
-    _systemNotificationTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+    _systemNotificationTimer = Timer.periodic(const Duration(seconds: 15), (_) {
       if (mounted && !WebSocketService().isConnected) {
         unawaited(_pollSystemNotifications());
       }
@@ -698,8 +714,13 @@ class _HomePageState extends State<HomePage> {
         final next = friends.isEmpty && _friends.isNotEmpty
             ? _friends
             : _mergeConversationUpdates(_friends, friends)
-                .where((item) => friends.any((incoming) => _conversationKey(incoming) == _conversationKey(item)))
-                .toList();
+                  .where(
+                    (item) => friends.any(
+                      (incoming) =>
+                          _conversationKey(incoming) == _conversationKey(item),
+                    ),
+                  )
+                  .toList();
         changed = !_sameConversationSnapshot(_friends, next);
         if (changed) _friends = next;
       }
@@ -707,8 +728,13 @@ class _HomePageState extends State<HomePage> {
         final next = groups.isEmpty && _groups.isNotEmpty
             ? _groups
             : _mergeConversationUpdates(_groups, groups)
-                .where((item) => groups.any((incoming) => _conversationKey(incoming) == _conversationKey(item)))
-                .toList();
+                  .where(
+                    (item) => groups.any(
+                      (incoming) =>
+                          _conversationKey(incoming) == _conversationKey(item),
+                    ),
+                  )
+                  .toList();
         final groupChanged = !_sameConversationSnapshot(_groups, next);
         changed = changed || groupChanged;
         if (groupChanged) _groups = next;
@@ -814,8 +840,12 @@ class _HomePageState extends State<HomePage> {
               )
               .where((item) => item.id.trim().isNotEmpty)
               .toList();
-          _friends = friends.isEmpty && _friends.isNotEmpty ? _friends : mergedFriends;
-          _groups = groups.isEmpty && _groups.isNotEmpty ? _groups : mergedGroups;
+          _friends = friends.isEmpty && _friends.isNotEmpty
+              ? _friends
+              : mergedFriends;
+          _groups = groups.isEmpty && _groups.isNotEmpty
+              ? _groups
+              : mergedGroups;
           final validKeys = {
             ..._friends,
             ..._groups,
@@ -840,10 +870,12 @@ class _HomePageState extends State<HomePage> {
         });
         final userId = context.read<AuthService>().userId;
         if (userId != null) {
-          unawaited(CacheService().writeJson(
-            CacheService().scoped(userId, 'conversations'),
-            [..._groups, ..._friends].map((c) => c.toJson()).toList(),
-          ));
+          unawaited(
+            CacheService().writeJson(
+              CacheService().scoped(userId, 'conversations'),
+              [..._groups, ..._friends].map((c) => c.toJson()).toList(),
+            ),
+          );
           _scheduleRecentPersist();
           unawaited(_loadPinnedState());
         }
@@ -1171,7 +1203,8 @@ class _HomePageState extends State<HomePage> {
     _rememberRecent(conv, incrementOpen: true);
     if (mounted) setState(() {});
     await _loadUnreadCounts();
-    if (Platform.isAndroid || Platform.isIOS || kIsWeb) {
+    if (!mounted) return;
+    if (kIsWeb || Platform.isAndroid || Platform.isIOS) {
       await Navigator.pushNamed(
         context,
         '/chat',
@@ -1181,7 +1214,6 @@ class _HomePageState extends State<HomePage> {
           'title': conv.name ?? '聊天',
         },
       );
-      return;
     }
   }
 

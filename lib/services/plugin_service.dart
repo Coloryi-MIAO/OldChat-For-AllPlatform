@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
@@ -299,9 +298,8 @@ class PluginService extends ChangeNotifier {
     };
   }
 
-  Future<Map<String, dynamic>> importPluginFile(File file) async {
+  Future<Map<String, dynamic>> importPluginBytes(Uint8List bytes) async {
     await load();
-    final bytes = await file.readAsBytes();
     if (bytes.length > 4 * 1024 * 1024) {
       throw Exception('插件包不能超过 4 MiB');
     }
@@ -546,11 +544,14 @@ class PluginService extends ChangeNotifier {
       final result = Map<String, dynamic>.from(value);
       final nested = result['red_packet'] ?? result['redPacket'];
       if (nested is Map) return normalize(nested);
-      final id = result['packet_id'] ??
+      final id =
+          result['packet_id'] ??
           result['packetId'] ??
           result['red_packet_id'] ??
           result['redPacketId'] ??
-          (result['packet'] is Map ? (result['packet'] as Map)['id'] : result['id']);
+          (result['packet'] is Map
+              ? (result['packet'] as Map)['id']
+              : result['id']);
       if (id == null || id.toString().trim().isEmpty) return null;
       result['packet_id'] = id.toString().trim();
       return result;
@@ -573,7 +574,9 @@ class PluginService extends ChangeNotifier {
       }
     }
     final type = message.msgType.toLowerCase();
-    if (type.contains('redpacket') || type.contains('red_packet') || type.contains('red-pack')) {
+    if (type.contains('redpacket') ||
+        type.contains('red_packet') ||
+        type.contains('red-pack')) {
       final match = RegExp(
         r"""(?:packet[_-]?id|red[_-]?packet[_-]?id)\s*[=:]\s*["']?([A-Za-z0-9._-]+)""",
         caseSensitive: false,
@@ -615,6 +618,10 @@ class PluginService extends ChangeNotifier {
     if (plugin['id'] == 'oldchat.message-counter') {
       await _countMessage(plugin);
       return;
+    }
+    final cipScript = plugin['cip_main']?.toString();
+    if (cipScript != null && cipScript.trim().isNotEmpty) {
+      await executeCip(plugin['id'].toString(), cipScript, event: event);
     }
     final rules = plugin['rules'];
     if (rules is! List) return;
@@ -836,24 +843,28 @@ class PluginService extends ChangeNotifier {
         ? Map<String, dynamic>.from(plugin['config'])
         : <String, dynamic>{};
     if (config['auto_claim'] != true) return;
-    final packetId = (packet['packet_id'] ??
-            packet['packetId'] ??
-            packet['red_packet_id'] ??
-            packet['redPacketId'] ??
-            packet['id'])
-        ?.toString()
-        .trim() ?? '';
+    final packetId =
+        (packet['packet_id'] ??
+                packet['packetId'] ??
+                packet['red_packet_id'] ??
+                packet['redPacketId'] ??
+                packet['id'])
+            ?.toString()
+            .trim() ??
+        '';
     if (packetId.isEmpty) return;
     if (_claimedPacketIds.contains(packetId) ||
         _redPacketRetryAfter[packetId]?.isAfter(DateTime.now()) == true ||
-        !_claimingPacketIds.add(packetId)) return;
+        !_claimingPacketIds.add(packetId))
+      return;
     try {
       final allowedTypes = config['conversation_types'] is List
           ? (config['conversation_types'] as List)
                 .map((value) => value.toString())
                 .toSet()
           : {'direct', 'group'};
-      if (!allowedTypes.contains(event['conversation_type']?.toString())) return;
+      if (!allowedTypes.contains(event['conversation_type']?.toString()))
+        return;
       final remainingCount = _intValue(
         packet['remaining_count'] ?? packet['remainingCount'],
         1,
@@ -869,19 +880,23 @@ class PluginService extends ChangeNotifier {
           currentUid != null &&
           currentUid.isNotEmpty &&
           senderUid.isNotEmpty &&
-          senderUid == currentUid) return;
+          senderUid == currentUid)
+        return;
       final amount = _packetAmount(packet);
       final minAmount = _doubleValue(config['min_amount'], 0);
       final maxAmount = _doubleValue(config['max_amount'], 0);
       if (amount != null && amount < minAmount) return;
       if (amount != null && maxAmount > 0 && amount > maxAmount) return;
-      if (config['only_unclaimed'] == true && _packetAlreadyClaimed(packet)) return;
+      if (config['only_unclaimed'] == true && _packetAlreadyClaimed(packet))
+        return;
       final status = (packet['status'] ?? '').toString().toLowerCase();
       if (config['skip_expired'] == true &&
-          {'expired', 'closed', 'finished'}.contains(status)) return;
+          {'expired', 'closed', 'finished'}.contains(status))
+        return;
       if (config['skip_claimed'] == true &&
           (_packetAlreadyClaimed(packet) ||
-              {'claimed', 'already_claimed'}.contains(status))) return;
+              {'claimed', 'already_claimed'}.contains(status)))
+        return;
       final maxPerMinute = _intValue(config['max_per_minute'], 3).clamp(1, 30);
       final dailyLimit = _intValue(config['daily_limit'], 30).clamp(1, 500);
       final now = DateTime.now();
@@ -890,10 +905,12 @@ class PluginService extends ChangeNotifier {
       );
       if (_redPacketClaims.length >= maxPerMinute) return;
       final today = _redPacketClaims
-          .where((time) =>
-              time.year == now.year &&
-              time.month == now.month &&
-              time.day == now.day)
+          .where(
+            (time) =>
+                time.year == now.year &&
+                time.month == now.month &&
+                time.day == now.day,
+          )
           .length;
       if (today >= dailyLimit) return;
       await claimRedPacket(plugin['id'].toString(), packetId);
@@ -915,7 +932,8 @@ class PluginService extends ChangeNotifier {
       await ApiService().claimRedPacket(packetId);
     } on Exception catch (error) {
       final message = error.toString().toLowerCase();
-      final terminal = message.contains('400') ||
+      final terminal =
+          message.contains('400') ||
           message.contains('404') ||
           message.contains('expired') ||
           message.contains('claimed');
@@ -924,8 +942,9 @@ class PluginService extends ChangeNotifier {
         _claimedPacketIds.add(packetId);
         await _save();
       } else if (transient) {
-        _redPacketRetryAfter[packetId] =
-            DateTime.now().add(const Duration(seconds: 20));
+        _redPacketRetryAfter[packetId] = DateTime.now().add(
+          const Duration(seconds: 20),
+        );
       }
       rethrow;
     }
@@ -1115,9 +1134,8 @@ class PluginService extends ChangeNotifier {
     );
   }
 
-  Future<Map<String, dynamic>> importCipFile(File file) async {
+  Future<Map<String, dynamic>> importCipBytes(Uint8List bytes) async {
     await load();
-    final bytes = await file.readAsBytes();
     if (bytes.length > 2 * 1024 * 1024) throw Exception('CIP 文件不能超过 2 MiB');
     final archive = ZipDecoder().decodeBytes(bytes);
     if (archive.length > 128) throw Exception('CIP 文件最多包含 128 个条目');
@@ -1180,7 +1198,11 @@ class PluginService extends ChangeNotifier {
     return plugin;
   }
 
-  Future<void> executeCip(String id, String mainLua) async {
+  Future<void> executeCip(
+    String id,
+    String mainLua, {
+    Map<String, dynamic>? event,
+  }) async {
     await load();
     final plugin = _plugins[id];
     if (plugin == null || plugin['enabled'] != true) {
@@ -1197,6 +1219,16 @@ class PluginService extends ChangeNotifier {
     final storagePrefix = 'cip:${plugin['id']}:';
     final state = LuaState.newState();
     state.openLibs();
+    if (event != null) {
+      state.pushString(event['type']?.toString() ?? 'message.received');
+      state.setGlobal('event_type');
+      state.pushString(event['text']?.toString() ?? '');
+      state.setGlobal('event_text');
+      state.pushString(event['conversation_id']?.toString() ?? '');
+      state.setGlobal('conversation_id');
+      state.pushString(event['from_uid']?.toString() ?? '');
+      state.setGlobal('from_uid');
+    }
     for (final name in const [
       'io',
       'os',
@@ -1215,6 +1247,12 @@ class PluginService extends ChangeNotifier {
     int toast(LuaState ls) {
       final text = ls.optString(1, '') ?? '';
       _log(plugin, 'CIP: $text');
+      unawaited(
+        NotificationService().showNotification(
+          title: plugin['name']?.toString() ?? 'CIP',
+          body: text,
+        ),
+      );
       return 0;
     }
 
@@ -1416,6 +1454,7 @@ class PluginService extends ChangeNotifier {
     });
     final status = await state.doStringAsync(mainLua);
     if (!status) throw Exception('CIP 执行失败：脚本语法或宿主调用无效');
+    _log(plugin, 'CIP 执行完成');
   }
 
   bool _packetAlreadyClaimed(Map packet) {

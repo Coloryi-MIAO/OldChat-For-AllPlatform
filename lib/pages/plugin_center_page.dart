@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'dart:io';
 import '../utils/file_picker_compat.dart';
 import 'package:provider/provider.dart';
 import '../services/app_localizations.dart';
@@ -68,7 +67,8 @@ class _PluginCenterPageState extends State<PluginCenterPage> {
         .where((value) => value == 'direct' || value == 'group')
         .toSet();
     if (conversationTypes.isEmpty) conversationTypes.add('direct');
-    var cooldownSeconds = int.tryParse('${config['cooldown_seconds'] ?? 60}') ?? 60;
+    var cooldownSeconds =
+        int.tryParse('${config['cooldown_seconds'] ?? 60}') ?? 60;
     final maxPerMinuteController = TextEditingController(text: '$maxPerMinute');
     final dailyLimitController = TextEditingController(text: '$dailyLimit');
     final cooldownController = TextEditingController(text: '$cooldownSeconds');
@@ -158,7 +158,9 @@ class _PluginCenterPageState extends State<PluginCenterPage> {
                             decimal: true,
                           ),
                           decoration: InputDecoration(
-                            labelText: AppLocalizations.current.t('最高红包金额，0为不限'),
+                            labelText: AppLocalizations.current.t(
+                              '最高红包金额，0为不限',
+                            ),
                           ),
                           controller: TextEditingController(text: '$maxAmount'),
                           onChanged: (value) =>
@@ -168,8 +170,9 @@ class _PluginCenterPageState extends State<PluginCenterPage> {
                           contentPadding: EdgeInsets.zero,
                           title: Text(AppLocalizations.current.t('仅领取未领取红包')),
                           value: onlyUnclaimed,
-                          onChanged: (value) =>
-                              setDialogState(() => onlyUnclaimed = value ?? true),
+                          onChanged: (value) => setDialogState(
+                            () => onlyUnclaimed = value ?? true,
+                          ),
                         ),
                         CheckboxListTile(
                           contentPadding: EdgeInsets.zero,
@@ -315,16 +318,20 @@ class _PluginCenterPageState extends State<PluginCenterPage> {
       withData: false,
     );
     final selectedFiles = filePickerFiles(result);
-    final path = selectedFiles.isNotEmpty ? selectedFiles.first.path : null;
-    if (path == null || path.isEmpty) return;
-    final extension = path.split('.').last.toLowerCase();
+    if (selectedFiles.isEmpty) return;
+    final selected = selectedFiles.first;
+    final extension = selected.name.split('.').last.toLowerCase();
     if (extension != 'oldchat-plugin') {
-      _show(AppLocalizations.current.t('仅支持 .oldchat-plugin 文件；CIP 请在 CIP 中心导入'));
+      _show(
+        AppLocalizations.current.t('仅支持 .oldchat-plugin 文件；CIP 请在 CIP 中心导入'),
+      );
       return;
     }
     setState(() => _busy = true);
     try {
-      await _service.importPluginFile(File(path));
+      final bytes = await filePickerBytes(selected);
+      if (bytes == null || bytes.isEmpty) throw Exception('无法读取插件文件');
+      await _service.importPluginBytes(bytes);
       _show(AppLocalizations.current.t('插件已导入并保存到本地'));
     } catch (error) {
       _show('${AppLocalizations.current.t('导入失败')}：$error');
@@ -381,10 +388,12 @@ class _PluginCenterPageState extends State<PluginCenterPage> {
         padding: const EdgeInsets.all(16),
         children: [
           ..._service.plugins
-              .where((plugin) =>
-                  plugin['id'] != 'oldchat.function-buttons' &&
-                  !(plugin['cip_main'] is String &&
-                      (plugin['cip_main'] as String).trim().isNotEmpty))
+              .where(
+                (plugin) =>
+                    plugin['id'] != 'oldchat.function-buttons' &&
+                    !(plugin['cip_main'] is String &&
+                        (plugin['cip_main'] as String).trim().isNotEmpty),
+              )
               .map(_buildPlugin),
           if (_service.pendingActions.isNotEmpty) ...[
             const SizedBox(height: 18),

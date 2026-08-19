@@ -3,6 +3,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:window_manager/window_manager.dart';
@@ -201,21 +202,39 @@ class NotificationService {
       );
     }
 
-    // 非 Windows 平台（Android）的初始化
-    if (!Platform.isWindows) {
-      const androidSettings = AndroidInitializationSettings(
-        '@mipmap/ic_launcher',
-      );
-      await _notifications.initialize(
-        const InitializationSettings(android: androidSettings),
-        onDidReceiveNotificationResponse: _onNotificationTap,
-      );
-      final androidPlugin = _notifications
-          .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin
-          >();
-      await androidPlugin?.requestNotificationsPermission();
-    }
+    // Mobile and web notifications use the Flutter local notification backend.
+    if (kIsWeb) return;
+    const androidSettings = AndroidInitializationSettings(
+      '@mipmap/ic_launcher',
+    );
+    const darwinSettings = DarwinInitializationSettings();
+    const linuxSettings = LinuxInitializationSettings(
+      defaultActionName: 'open',
+    );
+    await _notifications.initialize(
+      const InitializationSettings(
+        android: androidSettings,
+        iOS: darwinSettings,
+        macOS: darwinSettings,
+        linux: linuxSettings,
+      ),
+      onDidReceiveNotificationResponse: _onNotificationTap,
+    );
+    final androidPlugin = _notifications
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >();
+    await androidPlugin?.requestNotificationsPermission();
+    final iosPlugin = _notifications
+        .resolvePlatformSpecificImplementation<
+          IOSFlutterLocalNotificationsPlugin
+        >();
+    await iosPlugin?.requestPermissions(alert: true, badge: true, sound: true);
+    final macPlugin = _notifications
+        .resolvePlatformSpecificImplementation<
+          MacOSFlutterLocalNotificationsPlugin
+        >();
+    await macPlugin?.requestPermissions(alert: true, badge: true, sound: true);
   }
 
   Future<void> setEnabled(bool value) async {
@@ -370,24 +389,40 @@ class NotificationService {
       return;
     }
 
-    // 非 Windows 平台（Android）通知
-    if (!Platform.isWindows) {
-      const androidDetails = AndroidNotificationDetails(
-        'chat_channel',
-        '聊天消息',
-        channelDescription: '收到新消息时通知',
-        importance: Importance.high,
-        priority: Priority.high,
-        enableVibration: true,
-        playSound: true,
-      );
+    if (kIsWeb) return;
+    const androidDetails = AndroidNotificationDetails(
+      'chat_channel',
+      '聊天消息',
+      channelDescription: '收到新消息时通知',
+      importance: Importance.high,
+      priority: Priority.high,
+      enableVibration: true,
+      playSound: true,
+    );
+    const darwinDetails = DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
+    );
+    const linuxDetails = LinuxNotificationDetails(
+      urgency: LinuxNotificationUrgency.normal,
+      transient: true,
+    );
+    try {
       await _notifications.show(
         DateTime.now().millisecondsSinceEpoch ~/ 1000,
         title,
         body,
-        const NotificationDetails(android: androidDetails),
+        const NotificationDetails(
+          android: androidDetails,
+          iOS: darwinDetails,
+          macOS: darwinDetails,
+          linux: linuxDetails,
+        ),
         payload: payload,
       );
+    } catch (error) {
+      debugPrint('[系统通知] 平台通知插件不可用：$error');
     }
 
     // 任务栏闪烁（窗口不可见时）
@@ -471,9 +506,18 @@ class NotificationService {
     } on FormatException {
       display = message;
     }
+    final location = type == 'group'
+        ? AppLocalizations.current.text('群聊', 'Group')
+        : AppLocalizations.current.text('私聊', 'Direct');
+    final conversationLine = id.isEmpty ? '' : '$location - $id\n';
+    final senderLine = fromUid == null || fromUid.trim().isEmpty
+        ? fromName
+        : '$fromName - ${fromUid.trim()}';
+    final toastBody =
+        '$conversationLine$senderLine\n${display.length > 240 ? '${display.substring(0, 240)}…' : display}';
     await showNotification(
-      title: AppLocalizations.current.t('来自 $fromName 的消息'),
-      body: display.length > 100 ? '${display.substring(0, 100)}...' : display,
+      title: AppLocalizations.current.text('新消息', 'New message'),
+      body: toastBody,
       payload: payload,
       withFlash: withFlash,
     );

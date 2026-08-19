@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../utils/file_picker_compat.dart';
+import 'package:dio/dio.dart';
 import '../services/app_localizations.dart';
 import '../services/api_service.dart';
 
@@ -118,7 +120,10 @@ class _PublicCourtPageState extends State<PublicCourtPage> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(AppLocalizations.current.t('加载失败：$_error')),
-                  TextButton(onPressed: _load, child: Text(AppLocalizations.current.t('重试'))),
+                  TextButton(
+                    onPressed: _load,
+                    child: Text(AppLocalizations.current.t('重试')),
+                  ),
                 ],
               ),
             )
@@ -198,6 +203,7 @@ class _PublicCourtCasePageState extends State<PublicCourtCasePage> {
   final _api = ApiService();
   final _statementController = TextEditingController();
   final _discussionController = TextEditingController();
+  PlatformFile? _evidenceFile;
   Map<String, dynamic> _case = {};
   List<Map<String, dynamic>> _discussions = [];
   Map<String, dynamic> _votes = {};
@@ -306,30 +312,67 @@ class _PublicCourtCasePageState extends State<PublicCourtCasePage> {
     }
   }
 
+  Future<void> _pickEvidence() async {
+    final result = await FilePicker.pickFiles(
+      type: FileType.image,
+      allowMultiple: false,
+    );
+    final files = filePickerFiles(result);
+    if (files.isEmpty || !mounted) return;
+    setState(() => _evidenceFile = files.first);
+  }
+
+  Future<String> _uploadEvidence() async {
+    final file = _evidenceFile;
+    if (file == null) return '';
+    final bytes = await filePickerBytes(file);
+    if (bytes == null || bytes.isEmpty) throw Exception('无法读取证据图片');
+    final result = await _api.uploadFile(
+      FormData.fromMap({
+        'file': MultipartFile.fromBytes(bytes, filename: file.name),
+      }),
+    );
+    return ApiService.extractUploadUrl(result) ?? '';
+  }
+
   Future<void> _vote(String vote) async {
-    final apiVote = vote == 'support'
-        ? 'ban'
-        : vote == 'oppose'
-        ? 'keep'
-        : vote;
+    final reason = _statementController.text.trim();
+    if (reason.isEmpty || _sending) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(AppLocalizations.current.t('请先写下观点'))),
+      );
+      return;
+    }
+    setState(() => _sending = true);
     try {
+      final evidence = await _uploadEvidence();
+      final apiVote = vote == 'support'
+          ? 'ban'
+          : vote == 'oppose'
+          ? 'keep'
+          : vote;
       await _api.votePublicCourtCase(
         widget.caseId,
         apiVote,
-        reason: '',
-        evidence: '',
+        reason: reason,
+        evidence: evidence,
       );
+      _statementController.clear();
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(AppLocalizations.current.t('投票成功'))));
+        setState(() => _evidenceFile = null);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(AppLocalizations.current.t('观点与投票已提交'))),
+        );
         _load();
       }
     } catch (error) {
-      if (mounted)
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(AppLocalizations.current.t('投票失败：$error'))));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(AppLocalizations.current.t('投票失败：$error'))),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _sending = false);
     }
   }
 
@@ -341,16 +384,16 @@ class _PublicCourtCasePageState extends State<PublicCourtCasePage> {
       await _api.submitPublicCourtDiscussion(widget.caseId, text);
       _discussionController.clear();
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(AppLocalizations.current.t('讨论已提交'))));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(AppLocalizations.current.t('讨论已提交'))),
+        );
         _load();
       }
     } catch (error) {
       if (mounted)
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(AppLocalizations.current.t('提交讨论失败：$error'))));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(AppLocalizations.current.t('提交讨论失败：$error'))),
+        );
     } finally {
       if (mounted) setState(() => _sending = false);
     }
@@ -364,16 +407,17 @@ class _PublicCourtCasePageState extends State<PublicCourtCasePage> {
       await _api.submitPublicCourtStatement(widget.caseId, text);
       _statementController.clear();
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(AppLocalizations.current.t('陈述已提交'))));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(AppLocalizations.current.t('陈述已提交'))),
+        );
         _load();
       }
     } catch (error) {
-      if (mounted)
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(AppLocalizations.current.t('提交失败：$error'))));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(AppLocalizations.current.t('提交失败：$error'))),
+        );
+      }
     } finally {
       if (mounted) setState(() => _sending = false);
     }
@@ -396,10 +440,19 @@ class _PublicCourtCasePageState extends State<PublicCourtCasePage> {
       'body',
       'report_reason',
     ]);
-    final reporter = _text(_case, const ['reporter_name', 'reporter', 'plaintiff', '原告']);
+    final reporter = _text(_case, const [
+      'reporter_name',
+      'reporter',
+      'plaintiff',
+      '原告',
+    ]);
     final defendant = _text(_case, const ['defendant_name', 'defendant', '被告']);
     final evidence = _text(_case, const ['report_evidence', 'evidence']);
-    final defense = _text(_case, const ['defense_reason', 'defense', 'defendant_reason']);
+    final defense = _text(_case, const [
+      'defense_reason',
+      'defense',
+      'defendant_reason',
+    ]);
     return Scaffold(
       appBar: AppBar(
         title: Text(title),
@@ -414,7 +467,10 @@ class _PublicCourtCasePageState extends State<PublicCourtCasePage> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(AppLocalizations.current.t('加载失败：$_error')),
-                  TextButton(onPressed: _load, child: Text(AppLocalizations.current.t('重试'))),
+                  TextButton(
+                    onPressed: _load,
+                    child: Text(AppLocalizations.current.t('重试')),
+                  ),
                 ],
               ),
             )
@@ -441,14 +497,57 @@ class _PublicCourtCasePageState extends State<PublicCourtCasePage> {
                           '案件 #${_text(_case, const ['id', 'case_id'], widget.caseId)}',
                           style: const TextStyle(fontWeight: FontWeight.bold),
                         ),
-                        Text(context.tr.text('状态：${_text(_case, const ['status'], '未知')}', 'Status: ${_text(_case, const ['status'], 'Unknown')}')),
-                        Text(context.tr.text('举报人：${reporter.isEmpty ? '未知' : reporter}', 'Reporter: ${reporter.isEmpty ? 'Unknown' : reporter}')),
-                        Text(context.tr.text('被告：${defendant.isEmpty ? '未知' : defendant}', 'Defendant: ${defendant.isEmpty ? 'Unknown' : defendant}')),
-                        Text(context.tr.text('举报理由：${_text(_case, const ['report_reason', 'reason'], '无')}', 'Report reason: ${_text(_case, const ['report_reason', 'reason'], 'None')}')),
-                        Text(context.tr.text('辩护理由：${defense.isEmpty ? '未辩护' : defense}', 'Defense: ${defense.isEmpty ? 'No defense' : defense}')),
-                        if (evidence.isNotEmpty) Text(context.tr.text('举报证据：$evidence', 'Evidence: $evidence')),
-                        if (_case['verdict'] != null) Text(context.tr.text('裁决：${_case['verdict']}', 'Verdict: ${_case['verdict']}')),
-                        if (_case['ban_hours'] != null) Text(context.tr.text('封禁时长：${_case['ban_hours']} 小时', 'Ban duration: ${_case['ban_hours']} hours')),
+                        Text(
+                          context.tr.text(
+                            '状态：${_text(_case, const ['status'], '未知')}',
+                            'Status: ${_text(_case, const ['status'], 'Unknown')}',
+                          ),
+                        ),
+                        Text(
+                          context.tr.text(
+                            '举报人：${reporter.isEmpty ? '未知' : reporter}',
+                            'Reporter: ${reporter.isEmpty ? 'Unknown' : reporter}',
+                          ),
+                        ),
+                        Text(
+                          context.tr.text(
+                            '被告：${defendant.isEmpty ? '未知' : defendant}',
+                            'Defendant: ${defendant.isEmpty ? 'Unknown' : defendant}',
+                          ),
+                        ),
+                        Text(
+                          context.tr.text(
+                            '举报理由：${_text(_case, const ['report_reason', 'reason'], '无')}',
+                            'Report reason: ${_text(_case, const ['report_reason', 'reason'], 'None')}',
+                          ),
+                        ),
+                        Text(
+                          context.tr.text(
+                            '辩护理由：${defense.isEmpty ? '未辩护' : defense}',
+                            'Defense: ${defense.isEmpty ? 'No defense' : defense}',
+                          ),
+                        ),
+                        if (evidence.isNotEmpty)
+                          Text(
+                            context.tr.text(
+                              '举报证据：$evidence',
+                              'Evidence: $evidence',
+                            ),
+                          ),
+                        if (_case['verdict'] != null)
+                          Text(
+                            context.tr.text(
+                              '裁决：${_case['verdict']}',
+                              'Verdict: ${_case['verdict']}',
+                            ),
+                          ),
+                        if (_case['ban_hours'] != null)
+                          Text(
+                            context.tr.text(
+                              '封禁时长：${_case['ban_hours']} 小时',
+                              'Ban duration: ${_case['ban_hours']} hours',
+                            ),
+                          ),
                       ],
                     ),
                   ),
@@ -462,29 +561,9 @@ class _PublicCourtCasePageState extends State<PublicCourtCasePage> {
                       ),
                     ),
                   ),
-                Row(
-                  children: [
-                    Expanded(
-                      child: FilledButton.icon(
-                        onPressed: () => _vote('ban'),
-                        icon: const Icon(Icons.thumb_up_alt_outlined),
-                        label: Text(AppLocalizations.current.t('支持')),
-                      ),
-                    ),
-                    SizedBox(width: 8),
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: () => _vote('keep'),
-                        icon: const Icon(Icons.thumb_down_alt_outlined),
-                        label: Text(AppLocalizations.current.t('反对')),
-                      ),
-                    ),
-                  ],
-                ),
-                SizedBox(height: 16),
                 Text(
-                  '提交陈述',
-                  style: TextStyle(fontWeight: FontWeight.bold),
+                  AppLocalizations.current.t('写下观点后选择投票，可选上传图片'),
+                  style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 8),
                 TextField(
@@ -492,19 +571,42 @@ class _PublicCourtCasePageState extends State<PublicCourtCasePage> {
                   minLines: 3,
                   maxLines: 6,
                   decoration: InputDecoration(
-                    border: OutlineInputBorder(),
+                    border: const OutlineInputBorder(),
                     hintText: AppLocalizations.current.t('写下你的观点'),
                   ),
                 ),
                 const SizedBox(height: 8),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: FilledButton(
-                    onPressed: _sending ? null : _sendStatement,
-                    child: Text(_sending ? '提交中…' : '提交'),
+                Row(
+                  children: [
+                    OutlinedButton.icon(
+                      onPressed: _sending ? null : _pickEvidence,
+                      icon: const Icon(Icons.image_outlined),
+                      label: Text(
+                        _evidenceFile == null
+                            ? AppLocalizations.current.t('上传图片')
+                            : _evidenceFile!.name,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: FilledButton.icon(
+                        onPressed: _sending ? null : () => _vote('ban'),
+                        icon: const Icon(Icons.thumb_up_alt_outlined),
+                        label: Text(AppLocalizations.current.t('支持并提交')),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: _sending ? null : () => _vote('keep'),
+                    icon: const Icon(Icons.thumb_down_alt_outlined),
+                    label: Text(AppLocalizations.current.t('反对并提交')),
                   ),
                 ),
-                SizedBox(height: 16),
+                const SizedBox(height: 16),
                 Text(
                   '讨论 (${_discussions.length})',
                   style: const TextStyle(fontWeight: FontWeight.bold),
@@ -528,7 +630,10 @@ class _PublicCourtCasePageState extends State<PublicCourtCasePage> {
                   ),
                 ),
                 if (_discussions.isEmpty)
-                  Text(AppLocalizations.current.t('暂无讨论'), style: TextStyle(color: Colors.grey)),
+                  Text(
+                    AppLocalizations.current.t('暂无讨论'),
+                    style: TextStyle(color: Colors.grey),
+                  ),
                 ..._discussions.map(
                   (item) => Card(
                     margin: const EdgeInsets.only(bottom: 8),

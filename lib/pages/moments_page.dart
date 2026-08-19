@@ -1,4 +1,5 @@
-import 'dart:io';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import '../services/app_localizations.dart';
 import 'package:intl/intl.dart';
@@ -35,11 +36,11 @@ class _MomentsPageState extends State<MomentsPage>
   String? _errorMessage;
   final TextEditingController _postController = TextEditingController();
   final TextEditingController _commentController = TextEditingController();
-  File? _selectedImageFile;
+  XFile? _selectedImageFile;
   String? _uploadedImageUrl;
   bool _posting = false;
   String? _commentingMomentId;
-  final List<File> _selectedImageFiles = [];
+  final List<XFile> _selectedImageFiles = [];
   final List<String> _uploadedImageUrls = [];
   bool _isVisible = true;
 
@@ -109,31 +110,50 @@ class _MomentsPageState extends State<MomentsPage>
       final api = ApiService();
       Map<String, dynamic> data;
       if (widget.uid != null) {
-        data = await api.getUserMoments(widget.uid!,
-            offset: _offset, limit: _limit);
+        data = await api.getUserMoments(
+          widget.uid!,
+          offset: _offset,
+          limit: _limit,
+        );
       } else {
         data = await api.getMoments(offset: _offset, limit: _limit);
       }
       if (data['error'] != null) throw Exception(data['error']);
-      final rawMoments = data['moments'] ??
-          (data['response'] is Map ? data['response']['moments'] : data['response']) ??
+      final rawMoments =
+          data['moments'] ??
+          (data['response'] is Map
+              ? data['response']['moments']
+              : data['response']) ??
           (data['data'] is Map ? data['data']['moments'] : data['data']) ??
           data['items'] ??
           data['list'] ??
           data;
       final newMoments = rawMoments is List
-          ? rawMoments.whereType<Map>().map((e) => Moment.fromJson(Map<String, dynamic>.from(e))).toList()
+          ? rawMoments
+                .whereType<Map>()
+                .map((e) => Moment.fromJson(Map<String, dynamic>.from(e)))
+                .toList()
           : rawMoments is Map && rawMoments['moments'] is List
-              ? (rawMoments['moments'] as List).whereType<Map>().map((e) => Moment.fromJson(Map<String, dynamic>.from(e))).toList()
-              : <Moment>[];
-      final hasMore = data['has_more'] == true ||
+          ? (rawMoments['moments'] as List)
+                .whereType<Map>()
+                .map((e) => Moment.fromJson(Map<String, dynamic>.from(e)))
+                .toList()
+          : <Moment>[];
+      final hasMore =
+          data['has_more'] == true ||
           data['hasMore'] == true ||
-          (data['pagination'] is Map && data['pagination']['has_more'] == true) ||
+          (data['pagination'] is Map &&
+              data['pagination']['has_more'] == true) ||
           newMoments.length >= _limit;
-      final merged = initial ? newMoments : <Moment>[..._moments, ...newMoments];
+      final merged = initial
+          ? newMoments
+          : <Moment>[..._moments, ...newMoments];
       final byId = <String, Moment>{};
       for (final item in merged) {
-        byId[item.id.isEmpty ? '${item.uid}:${item.createdAt}:${item.body}' : item.id] = item;
+        byId[item.id.isEmpty
+                ? '${item.uid}:${item.createdAt}:${item.body}'
+                : item.id] =
+            item;
       }
       final uniqueMoments = byId.values.toList()
         ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
@@ -187,7 +207,8 @@ class _MomentsPageState extends State<MomentsPage>
     try {
       final api = ApiService();
       final data = await api.getMomentComments(momentId, limit: 100);
-      final comments = (data['comments'] as List?)
+      final comments =
+          (data['comments'] as List?)
               ?.map((e) => MomentComment.fromJson(e))
               .toList() ??
           [];
@@ -210,7 +231,9 @@ class _MomentsPageState extends State<MomentsPage>
       body: moment.body,
       imageUrl: moment.imageUrl,
       imageUrls: moment.imageUrls,
-      likes: nextLiked ? moment.likes + 1 : (moment.likes - 1).clamp(0, 1 << 30),
+      likes: nextLiked
+          ? moment.likes + 1
+          : (moment.likes - 1).clamp(0, 1 << 30),
       comments: moment.comments,
       isLiked: nextLiked,
       createdAt: moment.createdAt,
@@ -289,7 +312,10 @@ class _MomentsPageState extends State<MomentsPage>
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: Text(AppLocalizations.current.t('删除'), style: TextStyle(color: Colors.red)),
+            child: Text(
+              AppLocalizations.current.t('删除'),
+              style: TextStyle(color: Colors.red),
+            ),
           ),
         ],
       ),
@@ -373,7 +399,7 @@ class _MomentsPageState extends State<MomentsPage>
                         setDialogState(() {
                           _selectedImageFiles
                             ..clear()
-                            ..addAll(results.map((item) => File(item.path)));
+                            ..addAll(results);
                           _uploadedImageUrls.clear();
                         });
                       },
@@ -406,11 +432,25 @@ class _MomentsPageState extends State<MomentsPage>
                       separatorBuilder: (_, __) => const SizedBox(width: 8),
                       itemBuilder: (_, index) => ClipRRect(
                         borderRadius: BorderRadius.circular(8),
-                        child: Image.file(
-                          _selectedImageFiles[index],
-                          width: 92,
-                          height: 92,
-                          fit: BoxFit.cover,
+                        child: FutureBuilder<Uint8List>(
+                          future: _selectedImageFiles[index].readAsBytes(),
+                          builder: (_, snapshot) {
+                            if (!snapshot.hasData) {
+                              return const SizedBox(
+                                width: 92,
+                                height: 92,
+                                child: Center(
+                                  child: CircularProgressIndicator(),
+                                ),
+                              );
+                            }
+                            return Image.memory(
+                              snapshot.data!,
+                              width: 92,
+                              height: 92,
+                              fit: BoxFit.cover,
+                            );
+                          },
                         ),
                       ),
                     ),
@@ -431,7 +471,10 @@ class _MomentsPageState extends State<MomentsPage>
                           _uploadedImageUrls.clear();
                           for (final file in _selectedImageFiles) {
                             final formData = FormData.fromMap({
-                              'file': await MultipartFile.fromFile(file.path),
+                              'file': MultipartFile.fromBytes(
+                                await file.readAsBytes(),
+                                filename: file.name,
+                              ),
                             });
                             final result = await api.uploadFile(formData);
                             final url = ApiService.extractUploadUrl(result);
@@ -446,7 +489,11 @@ class _MomentsPageState extends State<MomentsPage>
                         } catch (e) {
                           if (context.mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text(AppLocalizations.current.t('上传失败: $e'))),
+                              SnackBar(
+                                content: Text(
+                                  AppLocalizations.current.t('上传失败: $e'),
+                                ),
+                              ),
                             );
                           }
                         }
@@ -475,7 +522,10 @@ class _MomentsPageState extends State<MomentsPage>
       if (imageUrls.isEmpty && _selectedImageFiles.isNotEmpty) {
         for (final file in _selectedImageFiles) {
           final formData = FormData.fromMap({
-            'file': await MultipartFile.fromFile(file.path),
+            'file': MultipartFile.fromBytes(
+              await file.readAsBytes(),
+              filename: file.name,
+            ),
           });
           final result = await api.uploadFile(formData);
           final url = ApiService.extractUploadUrl(result);
@@ -490,13 +540,15 @@ class _MomentsPageState extends State<MomentsPage>
         _selectedImageFiles.clear();
         _uploadedImageUrls.clear();
       });
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(AppLocalizations.current.t('发布成功'))));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(AppLocalizations.current.t('发布成功'))),
+      );
       await _loadMoments(initial: true);
     } catch (e) {
       if (mounted)
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(AppLocalizations.current.t('发布失败: $e'))));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(AppLocalizations.current.t('发布失败: $e'))),
+        );
     } finally {
       if (mounted) setState(() => _posting = false);
     }
@@ -517,7 +569,10 @@ class _MomentsPageState extends State<MomentsPage>
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(AppLocalizations.current.t('写评论'), style: TextStyle(fontWeight: FontWeight.bold)),
+              Text(
+                AppLocalizations.current.t('写评论'),
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
               SizedBox(height: 8),
               TextField(
                 controller: _commentController,
@@ -616,7 +671,8 @@ class _MomentsPageState extends State<MomentsPage>
                         itemCount: comments.length,
                         itemBuilder: (context, index) {
                           final comment = comments[index];
-                          final commentName = comment.displayName ??
+                          final commentName =
+                              comment.displayName ??
                               comment.username ??
                               comment.uid;
                           final avatarUrl = resolveMediaUrl(comment.avatarUrl);
@@ -624,24 +680,32 @@ class _MomentsPageState extends State<MomentsPage>
                             leading: CircleAvatar(
                               radius: 16,
                               backgroundImage: avatarUrl.isNotEmpty
-                                  ? ImageCacheService.instance.provider(avatarUrl, cacheWidth: 96)
+                                  ? ImageCacheService.instance.provider(
+                                      avatarUrl,
+                                      cacheWidth: 96,
+                                    )
                                   : null,
                               child: avatarUrl.isEmpty
-                                  ? Text(commentName.isNotEmpty
-                                      ? commentName.substring(0, 1)
-                                      : '?')
+                                  ? Text(
+                                      commentName.isNotEmpty
+                                          ? commentName.substring(0, 1)
+                                          : '?',
+                                    )
                                   : null,
                             ),
                             title: Text(
                               commentName,
-                              style:
-                                  const TextStyle(fontWeight: FontWeight.w600),
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                             subtitle: Text(comment.text),
                             trailing: Text(
                               _formatTime(comment.createdAt),
                               style: const TextStyle(
-                                  fontSize: 10, color: Colors.grey),
+                                fontSize: 10,
+                                color: Colors.grey,
+                              ),
                             ),
                           );
                         },
@@ -721,12 +785,18 @@ class _MomentsPageState extends State<MomentsPage>
                   onTap: () => _navigateToUser(moment.uid),
                   child: CircleAvatar(
                     radius: 20,
-                    backgroundImage:
-                        avatarUrl.isNotEmpty ? ImageCacheService.instance.provider(resolveMediaUrl(avatarUrl), cacheWidth: 96) : null,
+                    backgroundImage: avatarUrl.isNotEmpty
+                        ? ImageCacheService.instance.provider(
+                            resolveMediaUrl(avatarUrl),
+                            cacheWidth: 96,
+                          )
+                        : null,
                     child: avatarUrl.isEmpty
-                        ? Text(displayName.isNotEmpty
-                            ? displayName.substring(0, 1)
-                            : '?')
+                        ? Text(
+                            displayName.isNotEmpty
+                                ? displayName.substring(0, 1)
+                                : '?',
+                          )
                         : null,
                   ),
                 ),
@@ -740,12 +810,16 @@ class _MomentsPageState extends State<MomentsPage>
                         Text(
                           displayName,
                           style: const TextStyle(
-                              fontWeight: FontWeight.w600, fontSize: 14),
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14,
+                          ),
                         ),
                         Text(
                           _formatTime(moment.createdAt),
-                          style:
-                              TextStyle(fontSize: 11, color: Colors.grey[600]),
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Colors.grey[600],
+                          ),
                         ),
                       ],
                     ),
@@ -757,7 +831,10 @@ class _MomentsPageState extends State<MomentsPage>
                     itemBuilder: (context) => [
                       PopupMenuItem(
                         value: 'delete',
-                        child: Text(AppLocalizations.current.t('删除'), style: TextStyle(color: Colors.red)),
+                        child: Text(
+                          AppLocalizations.current.t('删除'),
+                          style: TextStyle(color: Colors.red),
+                        ),
                       ),
                     ],
                     onSelected: (_) => _deleteMoment(moment),
@@ -837,7 +914,9 @@ class _MomentsPageState extends State<MomentsPage>
                             child: Text(
                               commentName,
                               style: const TextStyle(
-                                  fontWeight: FontWeight.w600, fontSize: 13),
+                                fontWeight: FontWeight.w600,
+                                fontSize: 13,
+                              ),
                             ),
                           ),
                           const SizedBox(width: 4),
@@ -947,78 +1026,77 @@ class _MomentsPageState extends State<MomentsPage>
       body: _loading
           ? Center(child: CircularProgressIndicator())
           : _hasError
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.error_outline,
-                          size: 64, color: Colors.grey[400]),
-                      SizedBox(height: 16),
-                      Text(AppLocalizations.current.t('加载失败: $_errorMessage'),
-                          style: TextStyle(color: Colors.grey[600])),
-                      const SizedBox(height: 16),
-                      ElevatedButton(
-                        onPressed: () => _loadMoments(initial: true),
-                        child: Text(AppLocalizations.current.t('重试')),
-                      ),
-                    ],
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.error_outline, size: 64, color: Colors.grey[400]),
+                  SizedBox(height: 16),
+                  Text(
+                    AppLocalizations.current.t('加载失败: $_errorMessage'),
+                    style: TextStyle(color: Colors.grey[600]),
                   ),
-                )
-              : _moments.isEmpty
-                  ? Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.photo_album,
-                              size: 64, color: Colors.grey[400]),
-                          SizedBox(height: 16),
-                          Text(
-                            widget.uid != null ? 'TA还没有动态' : '暂无动态，发布一条吧',
-                            style: TextStyle(color: Colors.grey[600]),
-                          ),
-                          if (isMyMoments) const SizedBox(height: 16),
-                          if (isMyMoments)
-                            ElevatedButton.icon(
-                              onPressed: _showPostDialog,
-                              icon: const Icon(Icons.add),
-                              label: Text(AppLocalizations.current.t('发布动态')),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: primaryColor,
-                                foregroundColor: Colors.white,
-                              ),
-                            ),
-                        ],
-                      ),
-                    )
-                  : RefreshIndicator(
-                      onRefresh: () => _loadMoments(initial: true),
-                      child: ListView.builder(
-                        padding: const EdgeInsets.all(12),
-                        itemCount: _moments.length + (_hasMore ? 1 : 0),
-                        itemBuilder: (context, index) {
-                          if (index == _moments.length) {
-                            if (_isLoadingMore) {
-                              return Padding(
-                                padding: EdgeInsets.all(16),
-                                child:
-                                    Center(child: CircularProgressIndicator()),
-                              );
-                            }
-                            return Padding(
-                              padding: const EdgeInsets.all(16),
-                              child: Center(
-                                child: TextButton(
-                                  onPressed: () => _loadMoments(initial: false),
-                                  child: Text(AppLocalizations.current.t('加载更多')),
-                                ),
-                              ),
-                            );
-                          }
-                          final moment = _moments[index];
-                          return _buildMomentCard(moment, primaryColor, userId);
-                        },
+                  const SizedBox(height: 16),
+                  ElevatedButton(
+                    onPressed: () => _loadMoments(initial: true),
+                    child: Text(AppLocalizations.current.t('重试')),
+                  ),
+                ],
+              ),
+            )
+          : _moments.isEmpty
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.photo_album, size: 64, color: Colors.grey[400]),
+                  SizedBox(height: 16),
+                  Text(
+                    widget.uid != null ? 'TA还没有动态' : '暂无动态，发布一条吧',
+                    style: TextStyle(color: Colors.grey[600]),
+                  ),
+                  if (isMyMoments) const SizedBox(height: 16),
+                  if (isMyMoments)
+                    ElevatedButton.icon(
+                      onPressed: _showPostDialog,
+                      icon: const Icon(Icons.add),
+                      label: Text(AppLocalizations.current.t('发布动态')),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: primaryColor,
+                        foregroundColor: Colors.white,
                       ),
                     ),
+                ],
+              ),
+            )
+          : RefreshIndicator(
+              onRefresh: () => _loadMoments(initial: true),
+              child: ListView.builder(
+                padding: const EdgeInsets.all(12),
+                itemCount: _moments.length + (_hasMore ? 1 : 0),
+                itemBuilder: (context, index) {
+                  if (index == _moments.length) {
+                    if (_isLoadingMore) {
+                      return Padding(
+                        padding: EdgeInsets.all(16),
+                        child: Center(child: CircularProgressIndicator()),
+                      );
+                    }
+                    return Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Center(
+                        child: TextButton(
+                          onPressed: () => _loadMoments(initial: false),
+                          child: Text(AppLocalizations.current.t('加载更多')),
+                        ),
+                      ),
+                    );
+                  }
+                  final moment = _moments[index];
+                  return _buildMomentCard(moment, primaryColor, userId);
+                },
+              ),
+            ),
     );
   }
 }
@@ -1057,7 +1135,11 @@ class _MomentGalleryPageState extends State<_MomentGalleryPage> {
       appBar: AppBar(
         backgroundColor: Colors.black,
         foregroundColor: Colors.white,
-        title: Text(AppLocalizations.current.t('${_currentIndex + 1} / ${widget.urls.length}')),
+        title: Text(
+          AppLocalizations.current.t(
+            '${_currentIndex + 1} / ${widget.urls.length}',
+          ),
+        ),
       ),
       body: PageView.builder(
         controller: _controller,
@@ -1071,11 +1153,8 @@ class _MomentGalleryPageState extends State<_MomentGalleryPage> {
               height: double.infinity,
               cacheWidth: 1400,
               fit: BoxFit.contain,
-              errorBuilder: (_, __, ___) => const Icon(
-                Icons.broken_image,
-                color: Colors.white,
-                size: 64,
-              ),
+              errorBuilder: (_, __, ___) =>
+                  const Icon(Icons.broken_image, color: Colors.white, size: 64),
             ),
           ),
         ),

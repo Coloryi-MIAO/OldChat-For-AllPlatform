@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import '../utils/file_picker_compat.dart';
 import 'package:flutter/material.dart';
 
@@ -41,11 +39,12 @@ class _CipPageState extends State<CipPage> {
       withData: false,
     );
     final selectedFiles = filePickerFiles(result);
-    final path = selectedFiles.isNotEmpty ? selectedFiles.first.path : null;
-    if (path == null || path.isEmpty) return;
+    if (selectedFiles.isEmpty) return;
     setState(() => _busy = true);
     try {
-      await _service.importCipFile(File(path));
+      final bytes = await filePickerBytes(selectedFiles.first);
+      if (bytes == null || bytes.isEmpty) throw Exception('无法读取 CIP 文件');
+      await _service.importCipBytes(bytes);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(context.tr.t('CIP 已导入，请在 CIP 中心启用后运行'))),

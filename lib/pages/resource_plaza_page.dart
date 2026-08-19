@@ -290,12 +290,13 @@ class _ResourcePlazaPageState extends State<ResourcePlazaPage> {
 
   Future<void> _upload() async {
     final result = await FilePicker.pickFile();
-    final path = result?.path;
-    if (path == null || path.isEmpty) return;
+    if (result == null) return;
+    final bytes = await filePickerBytes(result);
+    if (bytes == null || bytes.isEmpty) return;
     setState(() => _uploading = true);
     try {
       final form = FormData.fromMap({
-        'file': await MultipartFile.fromFile(path),
+        'file': MultipartFile.fromBytes(bytes, filename: result.name),
       });
       await ApiService().uploadResource(form);
       if (mounted) {

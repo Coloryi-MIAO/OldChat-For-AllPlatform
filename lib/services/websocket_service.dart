@@ -1,8 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io' show WebSocket, WebSocketException;
-import 'package:web_socket_channel/web_socket_channel.dart';  // ← 必须导入
-import 'package:web_socket_channel/io.dart';                 // ← 必须导入
+import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:web_socket_channel/status.dart' as status;
 import '../utils/constants.dart';
 import '../models/message.dart';
@@ -29,10 +27,8 @@ class WebSocketService {
   final AuthService _auth = AuthService();
   Timer? _reconnectTimer;
   int _reconnectAttempts = 0;
-  static const int _maxReconnectAttempts = 1000000;
   static const Duration _reconnectDelay = Duration(seconds: 5);
   bool _isReconnecting = false;
-  int _refreshAttempts = 0;
 
   OnEventCallback? onEvent;
   final Set<OnMessageCallback> _directListeners = <OnMessageCallback>{};
@@ -87,24 +83,13 @@ class WebSocketService {
       final wsUri = baseUri.replace(
         scheme: baseUri.scheme == 'https' ? 'wss' : 'ws',
         path: Constants.wsPath,
-        queryParameters: {
-          'sid': session.sessionId!,
-        },
+        queryParameters: {'token': token, 'sid': session.sessionId!},
       );
       print('WebSocket: Connecting to $wsUri');
 
-      final headers = <String, String>{
-        'Authorization': 'Bearer $token',
-      };
-
-      final socket = await WebSocket.connect(
-        wsUri.toString(),
-        headers: headers,
-      );
+      final channel = WebSocketChannel.connect(wsUri);
+      await channel.ready.timeout(const Duration(seconds: 12));
       print('WebSocket: Socket connected');
-
-      // 使用 IOWebSocketChannel 包装
-      final channel = IOWebSocketChannel(socket);
       _channel = channel;
 
       channel.stream.listen(
@@ -128,15 +113,8 @@ class WebSocketService {
 
       _connected = true;
       _reconnectAttempts = 0;
-      _refreshAttempts = 0;
       _isReconnecting = false;
       print('WebSocket: Connected');
-    } on WebSocketException catch (e) {
-      _connecting = false;
-      _channel = null;
-      print('WebSocket: WebSocketException - $e');
-      WsSessionService().reset();
-      _scheduleReconnect();
     } catch (e) {
       _connecting = false;
       _channel = null;
@@ -197,7 +175,6 @@ class WebSocketService {
       if (recovered) {
         print('WebSocket: 认证恢复成功，重新连接...');
         _reconnectAttempts = 0;
-        _refreshAttempts = 0;
         disconnect();
         await connect();
         return;
@@ -346,7 +323,10 @@ class WebSocketService {
         ),
       );
       unawaited(
-        PluginService().dispatchMessage(message, conversationId: conversationId),
+        PluginService().dispatchMessage(
+          message,
+          conversationId: conversationId,
+        ),
       );
     }
     _emit(_directListeners, message);
@@ -368,7 +348,10 @@ class WebSocketService {
         ),
       );
       unawaited(
-        PluginService().dispatchMessage(message, conversationId: conversationId),
+        PluginService().dispatchMessage(
+          message,
+          conversationId: conversationId,
+        ),
       );
     }
     _emit(_groupListeners, message);
