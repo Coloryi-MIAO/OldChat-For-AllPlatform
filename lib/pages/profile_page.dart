@@ -763,7 +763,7 @@ class _ProfilePageState extends State<ProfilePage> {
               final m = _myMoments[index];
               return ListTile(
                 leading: const Icon(Icons.photo_album, color: Colors.orange),
-                title: Text(m['body'] ?? '无内容'),
+                title: Text((m['body'] ?? AppLocalizations.current.t('无内容')).toString()),
                 subtitle: Text(
                   AppLocalizations.current.text(
                     '喜欢 ${m['likes'] ?? 0}',

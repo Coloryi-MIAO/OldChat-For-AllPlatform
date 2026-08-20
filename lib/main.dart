@@ -179,7 +179,7 @@ class _WindowCloseListener extends WindowListener {
         barrierDismissible: false,
         builder: (dialogContext) => StatefulBuilder(
           builder: (context, setDialogState) => AlertDialog(
-            title: Text('关闭 ${Constants.appName}'),
+            title: Text('${context.tr.t('关闭')} ${Constants.appName}'),
             content: Row(
               children: [
                 Checkbox(
@@ -187,21 +187,21 @@ class _WindowCloseListener extends WindowListener {
                   onChanged: (value) =>
                       setDialogState(() => dontShowAgain = value ?? false),
                 ),
-                const Expanded(child: Text('不再提示')),
+                Expanded(child: Text(context.tr.t('不再提示'))),
               ],
             ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(dialogContext, 'cancel'),
-                child: const Text('取消'),
+                child: Text(context.tr.t('取消')),
               ),
               TextButton(
                 onPressed: () => Navigator.pop(dialogContext, 'minimize'),
-                child: const Text('最小化到托盘'),
+                child: Text(context.tr.t('最小化到托盘')),
               ),
               FilledButton(
                 onPressed: () => Navigator.pop(dialogContext, 'exit'),
-                child: const Text('直接关闭'),
+                child: Text(context.tr.t('直接关闭')),
               ),
             ],
           ),

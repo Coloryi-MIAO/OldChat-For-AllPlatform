@@ -1007,7 +1007,7 @@ class _MomentsPageState extends State<MomentsPage>
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.uid != null ? 'TA的动态' : '动态'),
+        title: Text(AppLocalizations.current.t(widget.uid != null ? 'TA的动态' : '动态')),
         backgroundColor: primaryColor,
         foregroundColor: Colors.white,
         actions: [

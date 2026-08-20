@@ -83,7 +83,7 @@ class _UserProfilePageState extends State<UserProfilePage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(isMe ? '我的资料' : '用户资料'),
+        title: Text(AppLocalizations.current.t(isMe ? '我的资料' : '用户资料')),
         backgroundColor: primaryColor,
         foregroundColor: Colors.white,
         actions: [

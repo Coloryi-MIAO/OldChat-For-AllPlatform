@@ -328,7 +328,7 @@ class _CheckinWallPageState extends State<CheckinWallPage> {
                             OutlinedButton.icon(
                               onPressed: _uploadingMedia ? null : _pickMedia,
                               icon: const Icon(Icons.image_outlined),
-                              label: Text(_uploadingMedia ? '上传中…' : '图片'),
+                              label: Text(AppLocalizations.current.t(_uploadingMedia ? '上传中…' : '图片')),
                             ),
                             const SizedBox(width: 8),
                             OutlinedButton.icon(

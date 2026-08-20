@@ -96,7 +96,7 @@ class _RequestListPageState extends State<RequestListPage> {
       }
       if (mounted) {
         setState(() => _items.remove(item));
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(accept ? '已接受申请' : '已拒绝申请')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppLocalizations.current.t(accept ? '已接受申请' : '已拒绝申请'))));
       }
     } catch (error) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppLocalizations.current.t('处理失败：$error'))));
@@ -105,7 +105,7 @@ class _RequestListPageState extends State<RequestListPage> {
 
   @override
   Widget build(BuildContext context) {
-    final title = widget.groups ? '群聊申请' : '好友申请';
+    final title = AppLocalizations.current.t(widget.groups ? '群聊申请' : '好友申请');
     return Scaffold(
       appBar: AppBar(title: Text(title), actions: [IconButton(onPressed: _load, icon: const Icon(Icons.refresh))]),
       body: _loading

@@ -151,7 +151,7 @@ class _DownloadDialogState extends State<DownloadDialog> {
         if (!_downloading)
           FilledButton(
             onPressed: () => Navigator.of(context).pop(_path),
-            child: Text(_path == null && !_cancelled ? '重试' : '关闭'),
+            child: Text(AppLocalizations.current.t(_path == null && !_cancelled ? '重试' : '关闭')),
           ),
       ],
     );

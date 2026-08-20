@@ -143,7 +143,7 @@ class _EmojiPlazaPageState extends State<EmojiPlazaPage> {
         if (index >= 0) _emojis[index] = emoji.copyWith(isLiked: !alreadySaved);
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(alreadySaved ? '已取消本地收藏' : '已保存到本地')),
+        SnackBar(content: Text(AppLocalizations.current.t(alreadySaved ? '已取消本地收藏' : '已保存到本地'))),
       );
     } catch (error) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppLocalizations.current.t('收藏操作失败：$error'))));

@@ -157,7 +157,7 @@ class _DownloadProgressDialogState extends State<DownloadProgressDialog> {
                     _start();
                   }
                 : () => Navigator.pop(context, _path),
-            child: Text(_path == null ? '重试' : '完成'),
+            child: Text(AppLocalizations.current.t(_path == null ? '重试' : '完成')),
           ),
       ],
     );

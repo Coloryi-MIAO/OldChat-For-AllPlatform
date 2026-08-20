@@ -117,7 +117,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
       });
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(accept ? '已接受群聊申请' : '已拒绝群聊申请')));
+      ).showSnackBar(SnackBar(content: Text(AppLocalizations.current.t(accept ? '已接受群聊申请' : '已拒绝群聊申请'))));
     } catch (e) {
       if (mounted)
         ScaffoldMessenger.of(
@@ -241,7 +241,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
 
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(accept ? '已接受好友申请' : '已拒绝')));
+      ).showSnackBar(SnackBar(content: Text(AppLocalizations.current.t(accept ? '已接受好友申请' : '已拒绝'))));
 
       await _loadNotifications(initial: true);
     } catch (e) {
@@ -413,7 +413,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
             child: ListTile(
               leading: const CircleAvatar(child: Icon(Icons.group)),
               title: Text(AppLocalizations.current.t('$fromName 申请加入 $groupName')),
-              subtitle: Text(request['message']?.toString() ?? '群聊申请'),
+              subtitle: Text(request['message']?.toString() ?? AppLocalizations.current.t('群聊申请')),
               trailing: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
