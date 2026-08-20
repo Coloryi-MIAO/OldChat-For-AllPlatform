@@ -20,7 +20,7 @@ if [[ ! -f "$p12" ]]; then
   openssl x509 -req -sha256 -days 36500 -in "$csr" -signkey "$key" -out "$cert" \
     -extfile <(printf 'basicConstraints=critical,CA:FALSE\nkeyUsage=critical,digitalSignature\nextendedKeyUsage=codeSigning\n')
   openssl pkcs12 -export -inkey "$key" -in "$cert" -out "$p12" \
-    -name "$identity" -passout "pass:$password"
+    -name "$identity" -passout "pass:$password" -legacy
   chmod 600 "$key" "$p12"
   chmod 644 "$cert"
 fi
