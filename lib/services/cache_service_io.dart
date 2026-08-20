@@ -21,7 +21,7 @@ class CacheService {
     final appData = Platform.environment['APPDATA'];
     final root = appData == null || appData.isEmpty
         ? _defaultDocumentsRoot()
-        : '$appData${Platform.pathSeparator}OldChat_For_AllPlatform';
+        : '$appData${Platform.pathSeparator}OldChatForAllPlatform';
     return '$root${Platform.pathSeparator}accounts${Platform.pathSeparator}$userId';
   }
 

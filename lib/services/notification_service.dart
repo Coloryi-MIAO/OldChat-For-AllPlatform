@@ -72,7 +72,7 @@ class NotificationService {
       final root = appData == null || appData.isEmpty
           ? await getApplicationSupportDirectory()
           : Directory(
-              '$appData${Platform.pathSeparator}OldChat_For_AllPlatform',
+              '$appData${Platform.pathSeparator}OldChatForAllPlatform',
             );
       final accountRoot = Directory(
         '${root.path}${Platform.pathSeparator}accounts${Platform.pathSeparator}${AccountStorage.instance.userId}',

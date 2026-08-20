@@ -141,7 +141,7 @@ class AccountStorage {
     final appData = Platform.isWindows ? Platform.environment['APPDATA'] : null;
     final root = appData == null || appData.isEmpty
         ? await getApplicationSupportDirectory()
-        : Directory('$appData${Platform.pathSeparator}OldChat_For_AllPlatform');
+        : Directory('$appData${Platform.pathSeparator}OldChatForAllPlatform');
     final safeId = id.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_');
     return Directory(
       '${root.path}${Platform.pathSeparator}accounts${Platform.pathSeparator}$safeId',

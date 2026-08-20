@@ -1,8 +1,8 @@
-$ErrorActionPreference = 'Stop'
 param(
   [Parameter(Mandatory = $true)][ValidateSet('x64', 'arm64')][string]$Architecture,
   [Parameter(Mandatory = $true)][string]$Output
 )
+$ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 Set-Location $root
 if ($Architecture -eq 'arm64') {

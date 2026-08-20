@@ -8,7 +8,7 @@ bool startupIsSupported() => Platform.isWindows;
 
 const _runPath = r'Software\Microsoft\Windows\CurrentVersion\Run';
 const _valueName = 'OldChat For AllPlatform';
-const _appDataDirectory = 'OldChat_For_AllPlatform';
+const _appDataDirectory = 'OldChatForAllPlatform';
 
 bool startupIsEnabled() {
   if (!Platform.isWindows) return false;

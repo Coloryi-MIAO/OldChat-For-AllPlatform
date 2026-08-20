@@ -31,7 +31,7 @@ android {
             val signingDir = rootProject.file("../signing")
             storeFile = signingDir.resolve("oldchatrelease.p12")
             storePassword = providers.environmentVariable("OLDCHATANDROIDSTOREPASSWORD").orNull ?: "oldchatlocalbuild"
-            keyAlias = providers.environmentVariable("OLDCHATANDROIDKEYALIAS").orNull ?: "oldchat-release"
+            keyAlias = providers.environmentVariable("OLDCHATANDROIDKEYALIAS").orNull ?: "oldchatrelease"
             keyPassword = providers.environmentVariable("OLDCHATANDROIDKEYPASSWORD").orNull ?: "oldchatlocalbuild"
             storeType = "PKCS12"
         }

@@ -9,7 +9,7 @@ root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$root"
 arch="${1:-$(uname -m)}"
 out="${2:-build/packages}"
-export MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-10.13}"
+export MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-10.15}"
 flutter build macos --release
 app="build/macos/Build/Products/Release/OldChatForAllPlatform.app"
 [[ -d "$app" ]] || { echo "Flutter did not produce $app" >&2; exit 1; }
