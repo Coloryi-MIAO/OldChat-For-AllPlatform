@@ -10,7 +10,7 @@ dependencies {
 
 android {
     namespace = "com.coloryi.oldchat_for_allplatform"
-    compileSdk = flutter.compileSdkVersion
+    compileSdk = 36
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
