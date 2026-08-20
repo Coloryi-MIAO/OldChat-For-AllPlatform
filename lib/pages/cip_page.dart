@@ -14,6 +14,7 @@ class CipPage extends StatefulWidget {
 class _CipPageState extends State<CipPage> {
   final _service = PluginService();
   bool _busy = false;
+  String? _lastResult;
 
   @override
   void initState() {
@@ -68,6 +69,7 @@ class _CipPageState extends State<CipPage> {
     try {
       await _service.executeCip(plugin['id'].toString(), script);
       if (mounted) {
+        setState(() => _lastResult = context.tr.t('CIP 已执行'));
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text(context.tr.t('CIP 已执行'))));

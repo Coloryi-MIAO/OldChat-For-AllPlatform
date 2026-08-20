@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:dio/dio.dart';
 import '../services/app_localizations.dart';
 
 import '../models/channel.dart';
@@ -8,6 +9,7 @@ import '../services/api_service.dart';
 import '../services/image_cache_service.dart';
 import '../utils/url_helper.dart';
 import '../widgets/cached_image.dart';
+import '../utils/file_picker_compat.dart';
 
 class ChannelPage extends StatefulWidget {
   final ChannelInfo channel;
@@ -126,12 +128,48 @@ class _ChannelPageState extends State<ChannelPage> {
     if (text.isEmpty || _sending) return;
     setState(() => _sending = true);
     try {
-      await _api.sendChannelPost(_channel.id, text);
+      await _api.sendChannelPost(_channel.id, text, mediaUrl: null);
       _postController.clear();
       if (mounted) _message('已发布');
       await _loadPosts();
     } catch (error) {
       if (mounted) _message('发布失败：$error');
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  Future<void> _pickPostMedia() async {
+    final result = await FilePicker.pickFiles(
+      type: FileType.image,
+      allowMultiple: false,
+      withData: true,
+    );
+    final files = filePickerFiles(result);
+    if (files.isEmpty || !mounted) return;
+    final bytes = await filePickerBytes(files.first);
+    if (bytes == null || bytes.isEmpty) {
+      _message(AppLocalizations.current.t('无法读取图片'));
+      return;
+    }
+    try {
+      setState(() => _sending = true);
+      final upload = await _api.uploadFile(
+        FormData.fromMap({
+          'file': MultipartFile.fromBytes(bytes, filename: files.first.name),
+        }),
+      );
+      final url = ApiService.extractUploadUrl(upload);
+      if (url == null || url.isEmpty) throw Exception('上传失败');
+      await _api.sendChannelPost(
+        _channel.id,
+        _postController.text,
+        mediaUrl: url,
+      );
+      _postController.clear();
+      await _loadPosts();
+    } catch (error) {
+      if (mounted) _message('${AppLocalizations.current.t('发布失败')}：$error');
     } finally {
       if (mounted) setState(() => _sending = false);
     }
@@ -236,7 +274,11 @@ class _ChannelPageState extends State<ChannelPage> {
                     ),
                     FilledButton(
                       onPressed: _busy ? null : _toggleSubscription,
-                      child: Text(_channel.subscribed ? '已订阅' : '订阅'),
+                      child: Text(
+                        AppLocalizations.current.t(
+                          _channel.subscribed ? '已订阅' : '订阅',
+                        ),
+                      ),
                     ),
                   ],
                 ),
@@ -258,6 +300,11 @@ class _ChannelPageState extends State<ChannelPage> {
                       ),
                     ),
                     const SizedBox(width: 8),
+                    IconButton(
+                      onPressed: _sending ? null : _pickPostMedia,
+                      icon: const Icon(Icons.image_outlined),
+                      tooltip: AppLocalizations.current.t('上传图片'),
+                    ),
                     IconButton(
                       onPressed: _sending ? null : _sendPost,
                       icon: const Icon(Icons.send),

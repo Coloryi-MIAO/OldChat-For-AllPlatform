@@ -299,7 +299,10 @@ class _SettingsPageState extends State<SettingsPage> {
             _buildSwitchTile(
               icon: Icons.notifications,
               title: AppLocalizations.current.t('桌面通知'),
-              subtitle: AppLocalizations.current.t('收到新消息时显示 Windows 通知'),
+              subtitle: context.tr.text(
+                '根据系统显示通知（Windows Toast、macOS/Linux 桌面通知、Android/iOS 通知或浏览器通知）',
+                'Use the system notification channel: Windows Toast, macOS/Linux desktop, Android/iOS, or browser notifications',
+              ),
               value: _desktopNotificationsEnabled,
               onChanged: (v) async {
                 setState(() => _desktopNotificationsEnabled = v);

@@ -1205,15 +1205,27 @@ class _HomePageState extends State<HomePage> {
     await _loadUnreadCounts();
     if (!mounted) return;
     if (kIsWeb || Platform.isAndroid || Platform.isIOS) {
-      await Navigator.pushNamed(
+      if (!mounted) return;
+      setState(() => _currentConversation = null);
+      await Navigator.push(
         context,
-        '/chat',
-        arguments: {
-          'uid': conv.id,
-          'type': conv.type,
-          'title': conv.name ?? '聊天',
-        },
+        MaterialPageRoute(
+          builder: (_) => ChatPage(
+            conversationId: conv.id,
+            type: conv.type,
+            title: conv.name ?? context.tr.chat,
+            embed: false,
+            onMessageSent: () {
+              unawaited(_loadConversations());
+              unawaited(_loadUnreadCounts());
+            },
+          ),
+        ),
       );
+      if (mounted) {
+        unawaited(_loadConversations());
+        unawaited(_loadUnreadCounts());
+      }
     }
   }
 

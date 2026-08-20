@@ -9,10 +9,11 @@ import 'package:path_provider/path_provider.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:win_toast/win_toast.dart';
 import 'package:flutter_desktop_notifications/flutter_desktop_notifications.dart';
-
+import 'web_notification_service.dart';
 import 'app_localizations.dart';
 import 'account_storage.dart';
 import 'auth_service.dart';
+import 'profile_name_resolver.dart';
 import '../pages/chat_page.dart';
 import '../utils/constants.dart';
 import '../utils/navigation.dart';
@@ -34,6 +35,7 @@ class NotificationService {
     appName: Constants.appName,
     appId: Constants.appAumid,
   );
+  static final WebNotificationService _webNotifier = WebNotificationService();
 
   static void setWindowVisible(bool visible) {
     _windowIsVisible = visible;
@@ -120,7 +122,7 @@ class NotificationService {
   Future<void> init() async {
     await AccountStorage.instance.load();
     final storage = AccountStorage.instance;
-    await _initToastLog();
+    if (!kIsWeb) await _initToastLog();
     _enabled = storage.getBool(Constants.desktopNotificationsKey) ?? true;
     _taskbarFlashEnabled = storage.getBool(Constants.taskbarFlashKey) ?? true;
 
@@ -203,7 +205,10 @@ class NotificationService {
     }
 
     // Mobile and web notifications use the Flutter local notification backend.
-    if (kIsWeb) return;
+    if (kIsWeb) {
+      await _webNotifier.init();
+      return;
+    }
     const androidSettings = AndroidInitializationSettings(
       '@mipmap/ic_launcher',
     );
@@ -281,8 +286,10 @@ class NotificationService {
       openConversationFromNotification(response.payload);
 
   void openConversationFromNotification(String? payload) {
-    windowManager.show();
-    windowManager.focus();
+    if (!kIsWeb) {
+      windowManager.show();
+      windowManager.focus();
+    }
     if (payload == null || payload.isEmpty) return;
     final parts = payload.split('|');
     if (parts.length != 2) return;
@@ -323,7 +330,11 @@ class NotificationService {
     String? payload,
     bool withFlash = false,
   }) async {
-    if (Platform.isWindows) {
+    if (kIsWeb) {
+      await _webNotifier.show(title: title, body: body, payload: payload);
+      return;
+    }
+    if (!kIsWeb && Platform.isWindows) {
       final notificationId = 'oldchat-${DateTime.now().microsecondsSinceEpoch}';
       var shown = false;
       if (_winToastInitialized) {
@@ -389,7 +400,18 @@ class NotificationService {
       return;
     }
 
-    if (kIsWeb) return;
+    if (kIsWeb) {
+      final shown = await _webNotifier.show(
+        title: title,
+        body: body,
+        payload: payload,
+      );
+      if (!shown)
+        debugPrint(
+          '[Web notification] Browser permission denied or unavailable',
+        );
+      return;
+    }
     const androidDetails = AndroidNotificationDetails(
       'chat_channel',
       '聊天消息',
@@ -458,7 +480,7 @@ class NotificationService {
   /// 测试 Windows Toast 通知
   Future<void> testWindowsToast() async {
     await showNotification(
-      title: AppLocalizations.current.t(Constants.appName),
+      title: AppLocalizations.current.t('Windows 通知测试'),
       body: AppLocalizations.current.t('Windows 通知测试成功'),
       withFlash: true,
     );
@@ -510,11 +532,14 @@ class NotificationService {
         ? AppLocalizations.current.text('群聊', 'Group')
         : AppLocalizations.current.text('私聊', 'Direct');
     final conversationLine = id.isEmpty ? '' : '$location - $id\n';
-    final senderLine = fromUid == null || fromUid.trim().isEmpty
+    final resolvedSender = fromUid == null || fromUid.trim().isEmpty
         ? fromName
-        : '$fromName - ${fromUid.trim()}';
+        : await ProfileNameResolver.resolve(fromUid, fallback: fromName);
+    final resolvedSenderLine = fromUid == null || fromUid.trim().isEmpty
+        ? resolvedSender
+        : '$resolvedSender - ${fromUid.trim()}';
     final toastBody =
-        '$conversationLine$senderLine\n${display.length > 240 ? '${display.substring(0, 240)}…' : display}';
+        '$conversationLine$resolvedSenderLine\n${display.length > 240 ? '${display.substring(0, 240)}…' : display}';
     await showNotification(
       title: AppLocalizations.current.text('新消息', 'New message'),
       body: toastBody,

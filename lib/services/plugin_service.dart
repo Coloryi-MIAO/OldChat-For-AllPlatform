@@ -360,6 +360,16 @@ class PluginService extends ChangeNotifier {
     final rejected = requested.difference(allowedPermissions);
     if (rejected.isNotEmpty)
       throw Exception('插件包含不支持的权限：${rejected.join(', ')}');
+    final existing = _plugins[plugin['id'] as String];
+    if (existing != null) {
+      plugin['enabled'] = existing['enabled'] == true;
+      plugin['config'] = existing['config'] is Map
+          ? Map<String, dynamic>.from(existing['config'] as Map)
+          : plugin['config'];
+      plugin['logs'] = existing['logs'] is List
+          ? List<String>.from(existing['logs'] as List)
+          : plugin['logs'];
+    }
     _plugins[plugin['id'] as String] = plugin;
     await _save();
     notifyListeners();
@@ -1343,6 +1353,15 @@ class PluginService extends ChangeNotifier {
       return 1;
     }
 
+    int widgetResult(LuaState ls) {
+      if (ls.getTop() > 0) {
+        ls.pushValue(1);
+        return 1;
+      }
+      ls.pushNil();
+      return 1;
+    }
+
     void installTable(String name, Map<String, DartFunction> functions) {
       state.newTable();
       for (final entry in functions.entries) {
@@ -1380,6 +1399,7 @@ class PluginService extends ChangeNotifier {
       'list': widgetFactory,
       'spacer': widgetFactory,
     });
+    state.register('ui_result', widgetResult);
     state.registerAsync('app_file_pick', (LuaState ls) async {
       if (!permissions.contains('files.local')) return deniedCapability(ls);
       try {

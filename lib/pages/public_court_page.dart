@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import '../utils/file_picker_compat.dart';
 import 'package:dio/dio.dart';
+import '../widgets/cached_image.dart';
+import '../utils/url_helper.dart';
 import '../services/app_localizations.dart';
 import '../services/api_service.dart';
+import '../services/image_cache_service.dart';
 
 class PublicCourtPage extends StatefulWidget {
   const PublicCourtPage({super.key});
@@ -16,6 +19,8 @@ class _PublicCourtPageState extends State<PublicCourtPage> {
   List<Map<String, dynamic>> _cases = [];
   bool _loading = true;
   String? _error;
+  final Map<String, String> _caseNames = {};
+  final Map<String, String> _caseAvatars = {};
 
   @override
   void initState() {
@@ -75,8 +80,38 @@ class _PublicCourtPageState extends State<PublicCourtPage> {
           data['data'] ??
           data;
       if (!mounted) return;
+      final cases = _list(raw);
+      final profileUids = cases
+          .map(
+            (item) => _text(item, const [
+              'reporter_uid',
+              'reporter_id',
+              'plaintiff_uid',
+              'user_id',
+              'uid',
+            ]),
+          )
+          .where((uid) => uid.isNotEmpty)
+          .toSet();
+      await Future.wait(
+        profileUids.take(20).map((uid) async {
+          final profile = await _api
+              .getUserProfile(uid)
+              .catchError((_) => <String, dynamic>{});
+          if (profile.isEmpty) return;
+          _caseNames[uid] =
+              (profile['display_name'] ??
+                      profile['nickname'] ??
+                      profile['username'] ??
+                      uid)
+                  .toString();
+          _caseAvatars[uid] = (profile['avatar_url'] ?? profile['avatar'] ?? '')
+              .toString();
+        }),
+      );
+      if (!mounted) return;
       setState(() {
-        _cases = _list(raw);
+        _cases = cases;
         _loading = false;
       });
     } catch (error) {
@@ -150,8 +185,37 @@ class _PublicCourtPageState extends State<PublicCourtPage> {
                   'report_reason',
                 ]);
                 final status = _text(item, const ['status', 'state']);
+                final reporterUid = _text(item, const [
+                  'reporter_uid',
+                  'reporter_id',
+                  'plaintiff_uid',
+                  'user_id',
+                  'uid',
+                ]);
+                final reporterName =
+                    _caseNames[reporterUid] ??
+                    _text(item, const [
+                      'reporter_name',
+                      'reporter',
+                      'plaintiff',
+                      '原告',
+                    ], '用户');
+                final reporterAvatar = resolveMediaUrl(
+                  _caseAvatars[reporterUid],
+                );
                 return Card(
                   child: ListTile(
+                    leading: CircleAvatar(
+                      backgroundImage: reporterAvatar.isEmpty
+                          ? null
+                          : ImageCacheService.instance.provider(
+                              reporterAvatar,
+                              cacheWidth: 96,
+                            ),
+                      child: reporterAvatar.isEmpty
+                          ? const Icon(Icons.person)
+                          : null,
+                    ),
                     title: Text(
                       title,
                       maxLines: 2,
@@ -160,6 +224,10 @@ class _PublicCourtPageState extends State<PublicCourtPage> {
                     subtitle: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        Text(
+                          reporterName,
+                          style: TextStyle(color: Colors.grey[700]),
+                        ),
                         if (summary.isNotEmpty)
                           Text(
                             summary,
@@ -210,6 +278,8 @@ class _PublicCourtCasePageState extends State<PublicCourtCasePage> {
   bool _loading = true;
   bool _sending = false;
   String? _error;
+  final Map<String, String> _caseNames = {};
+  final Map<String, String> _caseAvatars = {};
 
   @override
   void initState() {
@@ -275,6 +345,40 @@ class _PublicCourtCasePageState extends State<PublicCourtCasePage> {
       final caseData = results[0];
       final voteData = results[1];
       final discussionData = results[2];
+      final mergedCase = <String, dynamic>{
+        ..._case,
+        ...caseData,
+        if (caseData['data'] is Map)
+          ...Map<String, dynamic>.from(caseData['data']),
+        if (caseData['case'] is Map)
+          ...Map<String, dynamic>.from(caseData['case']),
+        if (caseData['case_detail'] is Map)
+          ...Map<String, dynamic>.from(caseData['case_detail']),
+        if (caseData['detail'] is Map)
+          ...Map<String, dynamic>.from(caseData['detail']),
+      };
+      final reporterUid = _text(mergedCase, const [
+        'reporter_uid',
+        'reporter_id',
+        'plaintiff_uid',
+        'user_id',
+        'uid',
+      ]);
+      if (reporterUid.isNotEmpty) {
+        final profile = await _api
+            .getUserProfile(reporterUid)
+            .catchError((_) => <String, dynamic>{});
+        if (profile.isNotEmpty) {
+          _caseNames[reporterUid] =
+              (profile['display_name'] ??
+                      profile['nickname'] ??
+                      profile['username'] ??
+                      reporterUid)
+                  .toString();
+          _caseAvatars[reporterUid] =
+              (profile['avatar_url'] ?? profile['avatar'] ?? '').toString();
+        }
+      }
       final raw =
           discussionData['discussions'] ??
           discussionData['items'] ??
@@ -282,18 +386,7 @@ class _PublicCourtCasePageState extends State<PublicCourtCasePage> {
           discussionData;
       if (!mounted) return;
       setState(() {
-        _case = {
-          ..._case,
-          ...caseData,
-          if (caseData['data'] is Map)
-            ...Map<String, dynamic>.from(caseData['data']),
-          if (caseData['case'] is Map)
-            ...Map<String, dynamic>.from(caseData['case']),
-          if (caseData['case_detail'] is Map)
-            ...Map<String, dynamic>.from(caseData['case_detail']),
-          if (caseData['detail'] is Map)
-            ...Map<String, dynamic>.from(caseData['detail']),
-        };
+        _case = mergedCase;
         _votes = {
           ..._votes,
           ...voteData,
@@ -446,6 +539,14 @@ class _PublicCourtCasePageState extends State<PublicCourtCasePage> {
       'plaintiff',
       '原告',
     ]);
+    final reporterUid = _text(_case, const [
+      'reporter_uid',
+      'reporter_id',
+      'plaintiff_uid',
+      'user_id',
+      'uid',
+    ]);
+    final reporterAvatar = resolveMediaUrl(_caseAvatars[reporterUid]);
     final defendant = _text(_case, const ['defendant_name', 'defendant', '被告']);
     final evidence = _text(_case, const ['report_evidence', 'evidence']);
     final defense = _text(_case, const [
@@ -509,6 +610,21 @@ class _PublicCourtCasePageState extends State<PublicCourtCasePage> {
                             'Reporter: ${reporter.isEmpty ? 'Unknown' : reporter}',
                           ),
                         ),
+                        if (reporterAvatar.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8),
+                            child: Row(
+                              children: [
+                                CircleAvatar(
+                                  radius: 18,
+                                  backgroundImage: ImageCacheService.instance
+                                      .provider(reporterAvatar, cacheWidth: 96),
+                                ),
+                                const SizedBox(width: 8),
+                                Text(reporter.isEmpty ? reporterUid : reporter),
+                              ],
+                            ),
+                          ),
                         Text(
                           context.tr.text(
                             '被告：${defendant.isEmpty ? '未知' : defendant}',
@@ -638,12 +754,54 @@ class _PublicCourtCasePageState extends State<PublicCourtCasePage> {
                   (item) => Card(
                     margin: const EdgeInsets.only(bottom: 8),
                     child: ListTile(
-                      title: Text(
-                        _text(item, const [
-                          'display_name',
-                          'username',
-                          'uid',
-                        ], '用户'),
+                      leading: Builder(
+                        builder: (context) {
+                          final uid = _text(item, const [
+                            'uid',
+                            'user_id',
+                            'author_uid',
+                          ]);
+                          final avatar = resolveMediaUrl(
+                            item['avatar_url'] ??
+                                item['avatar'] ??
+                                _caseAvatars[uid],
+                          );
+                          final name =
+                              _caseNames[uid] ??
+                              _text(item, const [
+                                'display_name',
+                                'username',
+                                'uid',
+                              ], '用户');
+                          return CircleAvatar(
+                            backgroundImage: avatar.isEmpty
+                                ? null
+                                : ImageCacheService.instance.provider(
+                                    avatar,
+                                    cacheWidth: 72,
+                                  ),
+                            child: avatar.isEmpty
+                                ? const Icon(Icons.person)
+                                : null,
+                          );
+                        },
+                      ),
+                      title: Builder(
+                        builder: (context) {
+                          final uid = _text(item, const [
+                            'uid',
+                            'user_id',
+                            'author_uid',
+                          ]);
+                          return Text(
+                            _caseNames[uid] ??
+                                _text(item, const [
+                                  'display_name',
+                                  'username',
+                                  'uid',
+                                ], '用户'),
+                          );
+                        },
                       ),
                       subtitle: Text(
                         _text(item, const ['content', 'text', 'body'], ''),

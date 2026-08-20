@@ -2131,7 +2131,7 @@ class ApiService {
       );
       return _unwrapEnvelopeMap(response.data);
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('加载公开案件详情失败', e);
     }
   }
 
@@ -2142,13 +2142,22 @@ class ApiService {
     String evidence = '',
   }) async {
     try {
+      final normalizedReason = reason.trim();
+      final normalizedEvidence = evidence.trim();
       final response = await _dio.post(
         Constants.apiPath('/v1/public-court/cases/$caseId/vote'),
-        data: {'vote': vote, 'reason': reason, 'evidence': evidence},
+        data: {
+          'vote': vote,
+          'decision': vote,
+          'reason': normalizedReason,
+          'statement': normalizedReason,
+          'evidence': normalizedEvidence,
+          'evidence_url': normalizedEvidence,
+        },
       );
-      return _asMap(response.data);
+      return _unwrapEnvelopeMap(response.data);
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('提交公开法庭投票失败', e);
     }
   }
 
@@ -2161,9 +2170,9 @@ class ApiService {
         Constants.apiPath('/v1/public-court/cases/$caseId/statement'),
         data: {'reason': text, 'evidence': ''},
       );
-      return _asMap(response.data);
+      return _unwrapEnvelopeMap(response.data);
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('提交公开法庭陈述失败', e);
     }
   }
 
@@ -2606,8 +2615,12 @@ class ApiService {
           'channel_id': channelId,
           'body': text.trim(),
           'content_text': text.trim(),
-          'msg_type': 'text',
-          'type': 'text',
+          'msg_type': mediaUrl != null && mediaUrl.trim().isNotEmpty
+              ? 'image'
+              : 'text',
+          'type': mediaUrl != null && mediaUrl.trim().isNotEmpty
+              ? 'image'
+              : 'text',
           if (mediaUrl != null && mediaUrl.trim().isNotEmpty)
             'media_url': mediaUrl.trim(),
         },

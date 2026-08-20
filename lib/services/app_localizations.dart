@@ -27,6 +27,11 @@ class AppLocalizations {
     '搜索聊天记录': 'Search chat history',
     '输入关键词后搜索聊天记录': 'Enter keywords to search chat history',
     '关闭': 'Close',
+    '我已认真阅读并完全同意《用户服务协议与免责声明》':
+        'I have carefully read and fully agree to the User Service Agreement and Disclaimer',
+    '我已完整阅读并同意《用户服务协议与免责声明》':
+        'I have read and agree to the User Service Agreement and Disclaimer',
+    '阅读《用户服务协议与免责声明》': 'Read the User Service Agreement and Disclaimer',
     '搜索': 'Search',
     '群成员': 'Group members',
     '查看成员、身份与资料': 'View members, roles, and profiles',
@@ -410,6 +415,7 @@ class AppLocalizations {
     '退出': 'Exit',
     '聊天': 'Chat',
     'Windows 通知测试成功': 'Windows notification test succeeded',
+    'Windows 通知测试': 'Windows notification test',
     '测试通知未发送：WinToast 未初始化':
         'Test notification was not sent: WinToast is not initialized',
     '关键词提醒：': 'Keyword alert: ',
@@ -420,7 +426,30 @@ class AppLocalizations {
     '更新 UID 失败': 'Failed to update UID',
     'CIP 导入失败': 'CIP import failed',
     'CIP 执行失败': 'CIP execution failed',
+    'CIP 已执行': 'CIP executed',
+    '运行': 'Run',
+    '已启用': 'Enabled',
+    '已停用': 'Disabled',
+    '请先写下观点': 'Write your viewpoint before voting',
+    '观点与投票已提交': 'Viewpoint and vote submitted',
+    '无法读取证据图片': 'Unable to read the evidence image',
+    '《用户服务协议与免责声明》': 'User Service Agreement and Disclaimer',
+    '我已阅读并同意': 'I have read and agree',
+    '我已认真阅读并完全同意《用户服务协议与免责声明》':
+        'I have carefully read and fully agree to the User Service Agreement and Disclaimer',
+    '我已完整阅读并同意《用户服务协议与免责声明》':
+        'I have read and agree to the User Service Agreement and Disclaimer',
+    '协议加载失败': 'Failed to load the agreement',
     '空消息': 'Empty message',
+    '我已认真阅读并完全同意《用户服务协议与免责声明》':
+        'I have carefully read and fully agree to the User Service Agreement and Disclaimer',
+    '我已完整阅读并同意《用户服务协议与免责声明》':
+        'I have read and agree to the complete User Service Agreement and Disclaimer',
+    '无法读取图片': 'Unable to read the image',
+    '上传图片': 'Upload image',
+    '已订阅': 'Subscribed',
+    '订阅': 'Subscribe',
+    '发布失败': 'Failed to publish',
   };
 
   String get settings => t('设置');

@@ -65,7 +65,9 @@ class _LoginPageState extends State<LoginPage>
     final prefs = _prefs!;
     final savedUsername = prefs.getString(Constants.savedUsernameKey) ?? '';
     final savedPassword = prefs.getString(Constants.savedPasswordKey) ?? '';
-    final remember = prefs.getBool(Constants.rememberPasswordKey) ?? savedPassword.isNotEmpty;
+    final remember =
+        prefs.getBool(Constants.rememberPasswordKey) ??
+        savedPassword.isNotEmpty;
     if (!mounted) return;
     setState(() {
       _usernameController.text = savedUsername;
@@ -108,6 +110,14 @@ class _LoginPageState extends State<LoginPage>
       final text = await rootBundle.loadString(
         'assets/legal/user_service_agreement.txt',
       );
+      final localizedText = AppLocalizations.current.isEnglish
+          ? text
+                .replaceAll(
+                  '用户服务协议与免责声明',
+                  'User Service Agreement and Disclaimer',
+                )
+                .replaceAll('用户', 'user')
+          : text;
       if (!mounted) return;
       await showDialog<void>(
         context: context,
@@ -116,29 +126,35 @@ class _LoginPageState extends State<LoginPage>
           builder: (dialogContext, setDialogState) {
             refreshDialog = setDialogState;
             return AlertDialog(
-          title: const Text('《用户服务协议与免责声明》'),
-          content: SizedBox(
-            width: 620,
-            height: 520,
-            child: SingleChildScrollView(child: SelectableText(text)),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('关闭'),
-            ),
-            if (_agreementSeconds >= 30)
-              FilledButton(
-                onPressed: () {
-                  setState(() => _registrationAgreement = true);
-                  Navigator.pop(dialogContext);
-                },
-                child: const Text('我已阅读并同意'),
-              )
-            else
-              Text('请继续阅读，还需 ${30 - _agreementSeconds} 秒'),
-          ],
-        );
+              title: Text(AppLocalizations.current.t('《用户服务协议与免责声明》')),
+              content: SizedBox(
+                width: 620,
+                height: 520,
+                child: SingleChildScrollView(
+                  child: SelectableText(localizedText),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: Text(AppLocalizations.current.t('关闭')),
+                ),
+                if (_agreementSeconds >= 30)
+                  FilledButton(
+                    onPressed: () {
+                      setState(() => _registrationAgreement = true);
+                      Navigator.pop(dialogContext);
+                    },
+                    child: Text(AppLocalizations.current.t('我已阅读并同意')),
+                  )
+                else
+                  Text(
+                    AppLocalizations.current.isEnglish
+                        ? 'Please continue reading; ${30 - _agreementSeconds} seconds remaining'
+                        : '请继续阅读，还需 ${30 - _agreementSeconds} 秒',
+                  ),
+              ],
+            );
           },
         ),
       );
@@ -146,9 +162,11 @@ class _LoginPageState extends State<LoginPage>
       refreshDialog = null;
     } catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('协议加载失败：$error')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${AppLocalizations.current.t('协议加载失败')}：$error'),
+          ),
+        );
       }
     }
   }
@@ -570,16 +588,21 @@ class _LoginPageState extends State<LoginPage>
               ),
             ],
           ),
-          CheckboxListTile(
-            value: _loginAgreement,
-            onChanged: (value) =>
-                setState(() => _loginAgreement = value ?? false),
-            dense: true,
-            contentPadding: EdgeInsets.zero,
-            controlAffinity: ListTileControlAffinity.leading,
-            title: GestureDetector(
-              onTap: _openAgreement,
-              child: const Text('我已认真阅读并完全同意《用户服务协议与免责声明》'),
+          Material(
+            color: Colors.transparent,
+            child: CheckboxListTile(
+              value: _loginAgreement,
+              onChanged: (value) =>
+                  setState(() => _loginAgreement = value ?? false),
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              controlAffinity: ListTileControlAffinity.leading,
+              title: GestureDetector(
+                onTap: _openAgreement,
+                child: Text(
+                  AppLocalizations.current.t('我已认真阅读并完全同意《用户服务协议与免责声明》'),
+                ),
+              ),
             ),
           ),
           const SizedBox(height: 8),
@@ -655,21 +678,27 @@ class _LoginPageState extends State<LoginPage>
             border: OutlineInputBorder(),
           ),
         ),
-        CheckboxListTile(
-          value: _registrationAgreement && _agreementSeconds >= 30,
-          onChanged: _agreementSeconds >= 30
-              ? (value) =>
-                    setState(() => _registrationAgreement = value ?? false)
-              : null,
-          dense: true,
-          contentPadding: EdgeInsets.zero,
-          controlAffinity: ListTileControlAffinity.leading,
-          title: GestureDetector(
-            onTap: _openAgreement,
-            child: Text(
-              _agreementSeconds < 30
-                  ? '阅读《用户服务协议与免责声明》${_agreementSeconds == 0 ? '' : '（还需 ${30 - _agreementSeconds} 秒）'}'
-                  : '我已完整阅读并同意《用户服务协议与免责声明》',
+        Material(
+          color: Colors.transparent,
+          child: CheckboxListTile(
+            value: _registrationAgreement && _agreementSeconds >= 30,
+            onChanged: _agreementSeconds >= 30
+                ? (value) =>
+                      setState(() => _registrationAgreement = value ?? false)
+                : null,
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            controlAffinity: ListTileControlAffinity.leading,
+            title: GestureDetector(
+              onTap: _openAgreement,
+              child: Text(
+                _agreementSeconds < 30
+                    ? AppLocalizations.current.text(
+                        '阅读《用户服务协议与免责声明》${_agreementSeconds == 0 ? '' : '（还需 ${30 - _agreementSeconds} 秒）'}',
+                        'Read the User Service Agreement and Disclaimer${_agreementSeconds == 0 ? '' : ' (${30 - _agreementSeconds}s remaining)'}',
+                      )
+                    : AppLocalizations.current.t('我已完整阅读并同意《用户服务协议与免责声明》'),
+              ),
             ),
           ),
         ),

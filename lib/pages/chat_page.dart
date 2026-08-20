@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/gestures.dart';
 import 'package:dio/dio.dart';
 import 'package:path_provider/path_provider.dart';
 import '../services/clipboard_file_service.dart';
@@ -1548,6 +1549,69 @@ class _ChatPageState extends State<ChatPage>
     }
   }
 
+  Future<void> _sendPickedFileBytes(XFile picked, String type) async {
+    final bytes = await picked.readAsBytes();
+    if (bytes.isEmpty) return;
+    await _sendPickedBytes(bytes, picked.name, type);
+  }
+
+  Future<void> _sendPickedBytes(
+    Uint8List bytes,
+    String fileName,
+    String type,
+  ) async {
+    if (widget.type == 'direct' && !_isFriend) {
+      final shouldSend = await _showFriendRequestDialog();
+      if (shouldSend) await _sendFriendRequest(widget.conversationId);
+      return;
+    }
+    try {
+      final api = ApiService();
+      final uploadResult = await api.uploadFile(
+        FormData.fromMap({
+          'file': MultipartFile.fromBytes(bytes, filename: fileName),
+        }),
+      );
+      final mediaUrl = ApiService.extractUploadUrl(uploadResult);
+      if (mediaUrl == null || mediaUrl.isEmpty) throw Exception('上传失败');
+      final isImage = type == 'image';
+      final isVideo = type == 'video';
+      final msgType = isImage ? 'image' : isVideo ? 'video' : 'resource';
+      final body = jsonEncode({
+        'v': 2,
+        'text': '',
+        'media_kind': isImage ? 'image' : isVideo ? 'video' : 'file',
+        'file_name': fileName,
+        'url': mediaUrl,
+        'media_url': mediaUrl,
+        'size': bytes.length,
+      });
+      final sent = widget.type == 'direct'
+          ? await api.sendDirectMessage(
+              toUid: widget.conversationId,
+              body: body,
+              msgType: msgType,
+              mediaUrl: mediaUrl,
+            )
+          : await api.sendGroupMessage(
+              groupId: widget.conversationId,
+              body: body,
+              msgType: msgType,
+              mediaUrl: mediaUrl,
+            );
+      if (!mounted) return;
+      setState(() => _addLocalMessage(sent));
+      await _saveCachedMessages();
+      WidgetsBinding.instance.addPostFrameCallback((_) => _scheduleScrollToBottom());
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(AppLocalizations.current.t('发送失败: $error'))),
+        );
+      }
+    }
+  }
+
   Future<void> _sendMediaFile(File file, String type) async {
     if (widget.type == 'direct' && !_isFriend) {
       final shouldSend = await _showFriendRequestDialog();
@@ -2063,7 +2127,7 @@ class _ChatPageState extends State<ChatPage>
                 final result = await picker.pickImage(
                   source: ImageSource.gallery,
                 );
-                if (result != null) _sendMediaFile(File(result.path), 'image');
+                if (result != null) _sendPickedFileBytes(result, 'image');
               },
             ),
             ListTile(
@@ -2075,7 +2139,7 @@ class _ChatPageState extends State<ChatPage>
                 final result = await picker.pickVideo(
                   source: ImageSource.gallery,
                 );
-                if (result != null) _sendMediaFile(File(result.path), 'video');
+                if (result != null) _sendPickedFileBytes(result, 'video');
               },
             ),
             ListTile(
@@ -2333,7 +2397,6 @@ class _ChatPageState extends State<ChatPage>
   }
 
   Future<void> _handleClipboardPaste() async {
-    if (kIsWeb) return;
     final paths = await _clipboardFilePaths();
     if (paths.isNotEmpty) {
       if (!await _confirmClipboardSend(paths)) return;
@@ -2375,6 +2438,13 @@ class _ChatPageState extends State<ChatPage>
   }
 
   KeyEventResult _handleComposerKeyEvent(FocusNode node, KeyEvent event) {
+    if (event is KeyDownEvent &&
+        (HardwareKeyboard.instance.isControlPressed ||
+            HardwareKeyboard.instance.isMetaPressed) &&
+        event.logicalKey == LogicalKeyboardKey.keyV) {
+      unawaited(_handleClipboardPaste());
+      return KeyEventResult.handled;
+    }
     if (event is KeyDownEvent && _mentionPopupVisible) {
       final members = _filteredMentionMembers(_currentMentionQuery());
       if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
@@ -2686,6 +2756,7 @@ class _ChatPageState extends State<ChatPage>
                                   keyboardType: TextInputType.multiline,
                                   textInputAction: TextInputAction.newline,
                                   onChanged: (_) => _updateMentionPopup(),
+                                  onTapOutside: (_) => _inputFocus.unfocus(),
                                   inputFormatters: [
                                     LengthLimitingTextInputFormatter(2000),
                                   ],
