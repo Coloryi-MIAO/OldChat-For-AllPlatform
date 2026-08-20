@@ -24,6 +24,7 @@ jobs:
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
+          architecture: x64
           cache: true
       - run: flutter pub get
       - run: flutter analyze lib --no-fatal-infos --no-fatal-warnings
@@ -38,6 +39,7 @@ jobs:
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
+          architecture: x64
           cache: true
       - uses: actions/setup-java@v4
         with:
@@ -79,6 +81,7 @@ jobs:
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
+          architecture: x64
           cache: true
       - run: sudo apt-get update && sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libayatana-appindicator3-dev libmpv-dev dpkg-dev rpm gpg zip
       - run: flutter pub get
@@ -110,6 +113,7 @@ jobs:
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
+          architecture: x64
           cache: true
       - run: flutter pub get
       - name: Build and package Windows
@@ -137,6 +141,7 @@ jobs:
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
+          architecture: x64
           cache: true
       - run: flutter pub get
       - run: sed -i.bak "s/MACOSX_DEPLOYMENT_TARGET = .*/MACOSX_DEPLOYMENT_TARGET = 10.13/" macos/Runner/Configs/AppInfo.xcconfig
@@ -161,6 +166,7 @@ jobs:
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
+          architecture: x64
           cache: true
       - run: flutter pub get
       - name: Build offline development-signed IPA
@@ -184,6 +190,7 @@ jobs:
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
+          architecture: x64
           cache: true
       - run: flutter pub get
       - run: flutter build web --release
