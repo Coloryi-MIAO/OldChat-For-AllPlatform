@@ -1,13 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter/gestures.dart';
 import 'package:dio/dio.dart';
-import 'package:path_provider/path_provider.dart';
-import '../services/clipboard_file_service.dart';
+import '../services/clipboard_media_service.dart';
 import 'package:image_picker/image_picker.dart';
 import '../utils/file_picker_compat.dart';
 import 'package:intl/intl.dart';
@@ -21,7 +19,6 @@ import '../services/plugin_service.dart';
 import '../services/notification_service.dart';
 import '../services/image_cache_service.dart';
 import '../services/local_emoji_service.dart';
-import '../services/clipboard_image_service.dart';
 import '../widgets/cached_image.dart';
 
 import '../models/message.dart';
@@ -423,13 +420,15 @@ class _ChatPageState extends State<ChatPage>
   void _insertRealtimeMessages(List<Message> messages) {
     final newOnes = <Message>[];
     for (final message in messages) {
-      unawaited(
-        PluginService().dispatchMessage(
-          message,
-          conversationId: message.groupId ?? message.fromUid,
-        ),
-      );
       if (_messageMap.containsKey(message.id)) continue;
+      if (message.fromUid != context.read<AuthService>().userId) {
+        unawaited(
+          PluginService().dispatchMessage(
+            message,
+            conversationId: message.groupId ?? message.fromUid,
+          ),
+        );
+      }
       _messageMap[message.id] = message;
       _updatePollCursor(message);
       newOnes.add(message);
@@ -599,6 +598,12 @@ class _ChatPageState extends State<ChatPage>
       }
     } catch (e) {
       if (widget.type == 'group' && e.toString().contains('(404)')) {
+        if (mounted) {
+          setState(() {
+            _loading = false;
+            _isLoadingMore = false;
+          });
+        }
         widget.onConversationUnavailable?.call();
         return;
       }
@@ -1612,73 +1617,6 @@ class _ChatPageState extends State<ChatPage>
     }
   }
 
-  Future<void> _sendMediaFile(File file, String type) async {
-    if (widget.type == 'direct' && !_isFriend) {
-      final shouldSend = await _showFriendRequestDialog();
-      if (shouldSend) await _sendFriendRequest(widget.conversationId);
-      return;
-    }
-    try {
-      final api = ApiService();
-      final formData = FormData.fromMap({
-        'file': await MultipartFile.fromFile(
-          file.path,
-          filename: file.uri.pathSegments.last,
-        ),
-      });
-      final uploadResult = await api.uploadFile(formData);
-      final mediaUrl = ApiService.extractUploadUrl(uploadResult);
-      if (mediaUrl == null || mediaUrl.isEmpty) throw Exception('上传失败');
-      final isImage = type == 'image';
-      final isVideo = type == 'video';
-      final msgType = isImage
-          ? 'image'
-          : isVideo
-          ? 'video'
-          : 'resource';
-      final fileName = file.uri.pathSegments.last;
-      final body = jsonEncode({
-        'v': 2,
-        'text': '',
-        'media_kind': isImage
-            ? 'image'
-            : isVideo
-            ? 'video'
-            : 'file',
-        'file_name': fileName,
-        'url': mediaUrl,
-        'media_url': mediaUrl,
-        'size': await file.length(),
-      });
-      final sent = widget.type == 'direct'
-          ? await api.sendDirectMessage(
-              toUid: widget.conversationId,
-              body: body,
-              msgType: msgType,
-              mediaUrl: mediaUrl,
-            )
-          : await api.sendGroupMessage(
-              groupId: widget.conversationId,
-              body: body,
-              msgType: msgType,
-              mediaUrl: mediaUrl,
-            );
-      if (!mounted) return;
-      setState(() => _addLocalMessage(sent));
-      await _saveCachedMessages();
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _scheduleScrollToBottom();
-        if (mounted) _inputFocus.requestFocus();
-      });
-      widget.onMessageSent?.call();
-    } catch (e) {
-      if (mounted)
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(AppLocalizations.current.t('发送失败: $e'))),
-        );
-    }
-  }
-
   Future<void> _sendAnyFile() async {
     if (widget.type == 'direct' && !_isFriend) {
       final shouldSend = await _showFriendRequestDialog();
@@ -2342,17 +2280,6 @@ class _ChatPageState extends State<ChatPage>
     });
   }
 
-  Future<List<String>> _clipboardFilePaths() async =>
-      ClipboardFileService.paths();
-
-  Future<String?> _clipboardImageFile() async {
-    if (kIsWeb || !Platform.isWindows) return null;
-    final temporaryDirectory = await getTemporaryDirectory();
-    return ClipboardImageService().saveClipboardImage(
-      '${temporaryDirectory.path}${Platform.pathSeparator}oldchat-paste-${DateTime.now().microsecondsSinceEpoch}.png',
-    );
-  }
-
   String _mediaTypeForFile(String path) {
     final lower = path.toLowerCase();
     if (RegExp(r'\.(png|jpe?g|gif|webp|bmp|heic|avif)$').hasMatch(lower))
@@ -2362,24 +2289,21 @@ class _ChatPageState extends State<ChatPage>
     return 'file';
   }
 
-  Future<bool> _confirmClipboardSend(List<String> paths) async {
-    final names = paths
-        .map((path) => path.split(RegExp(r'[\\/]')).last)
-        .where((name) => name.isNotEmpty)
-        .toList();
+  Future<bool> _confirmClipboardSend(List<String> names) async {
+    final visibleNames = names.where((name) => name.isNotEmpty).toList();
     if (!mounted) return false;
     return await showDialog<bool>(
           context: context,
           builder: (dialogContext) => AlertDialog(
             title: Text(AppLocalizations.current.t('发送剪贴板内容？')),
             content: Text(
-              paths.length == 1
-                  ? '检测到剪贴板中的${_mediaTypeForFile(paths.first) == 'image'
+              visibleNames.length == 1
+                  ? '检测到剪贴板中的${_mediaTypeForFile(visibleNames.first) == 'image'
                         ? '图片'
-                        : _mediaTypeForFile(paths.first) == 'video'
+                        : _mediaTypeForFile(visibleNames.first) == 'video'
                         ? '视频'
-                        : '文件'}：\n${names.first}'
-                  : '检测到剪贴板中的 ${paths.length} 个文件：\n${names.take(8).join('\n')}${names.length > 8 ? '\n……' : ''}',
+                        : '文件'}：\n${visibleNames.first}'
+                  : '检测到剪贴板中的 ${visibleNames.length} 个文件：\n${visibleNames.take(8).join('\n')}${visibleNames.length > 8 ? '\n……' : ''}',
             ),
             actions: [
               TextButton(
@@ -2397,11 +2321,13 @@ class _ChatPageState extends State<ChatPage>
   }
 
   Future<void> _handleClipboardPaste() async {
-    final paths = await _clipboardFilePaths();
-    if (paths.isNotEmpty) {
-      if (!await _confirmClipboardSend(paths)) return;
-      for (final path in paths) {
-        await _sendMediaFile(File(path), _mediaTypeForFile(path));
+    final media = await clipboardFileMedia();
+    if (media.isNotEmpty) {
+      if (!await _confirmClipboardSend(media.map((item) => item.name).toList())) {
+        return;
+      }
+      for (final item in media) {
+        await _sendPickedBytes(item.bytes, item.name, _mediaTypeForFile(item.name));
       }
       return;
     }
@@ -2423,17 +2349,11 @@ class _ChatPageState extends State<ChatPage>
       _updateMentionPopup();
       return;
     }
-    final imagePath = await _clipboardImageFile();
-    if (imagePath != null) {
-      try {
-        if (await _confirmClipboardSend([imagePath]))
-          await _sendMediaFile(File(imagePath), 'image');
-      } finally {
-        try {
-          await File(imagePath).delete();
-        } catch (_) {}
+    final image = await clipboardImageMedia();
+    if (image != null) {
+      if (await _confirmClipboardSend([image.name])) {
+        await _sendPickedBytes(image.bytes, image.name, 'image');
       }
-      return;
     }
   }
 
@@ -2442,6 +2362,7 @@ class _ChatPageState extends State<ChatPage>
         (HardwareKeyboard.instance.isControlPressed ||
             HardwareKeyboard.instance.isMetaPressed) &&
         event.logicalKey == LogicalKeyboardKey.keyV) {
+      if (kIsWeb) return KeyEventResult.ignored;
       unawaited(_handleClipboardPaste());
       return KeyEventResult.handled;
     }
