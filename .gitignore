@@ -38,3 +38,6 @@ windows/x86/
 linux/x64/
 macos/Pods/
 ios/Pods/
+
+# Local offline release signing material
+signing/

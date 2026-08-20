@@ -94,7 +94,7 @@ BEGIN
             VALUE "FileVersion", VERSION_AS_STRING "\0"
             VALUE "InternalName", "OldChat For AllPlatform" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2026 Coloryi. All rights reserved." "\0"
-            VALUE "OriginalFilename", "OldChat_For_AllPlatform.exe" "\0"
+            VALUE "OriginalFilename", "OldChatForAllPlatform.exe" "\0"
             VALUE "ProductName", "OldChat For AllPlatform" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END

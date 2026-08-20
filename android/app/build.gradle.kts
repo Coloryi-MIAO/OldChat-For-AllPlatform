@@ -1,6 +1,5 @@
 plugins {
     id("com.android.application")
-    // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
 
@@ -9,7 +8,7 @@ dependencies {
 }
 
 android {
-    namespace = "com.coloryi.oldchat_for_allplatform"
+    namespace = "com.coloryi.oldchatforallplatform"
     compileSdk = 36
     ndkVersion = flutter.ndkVersion
 
@@ -20,21 +19,27 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.coloryi.oldchat_for_allplatform"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
+        applicationId = "com.coloryi.oldchatforallplatform"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        create("oldchatrelease") {
+            val signingDir = rootProject.file("../signing")
+            storeFile = signingDir.resolve("oldchatrelease.p12")
+            storePassword = providers.environmentVariable("OLDCHATANDROIDSTOREPASSWORD").orNull ?: "oldchatlocalbuild"
+            keyAlias = providers.environmentVariable("OLDCHATANDROIDKEYALIAS").orNull ?: "oldchat-release"
+            keyPassword = providers.environmentVariable("OLDCHATANDROIDKEYPASSWORD").orNull ?: "oldchatlocalbuild"
+            storeType = "PKCS12"
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("oldchatrelease")
         }
     }
 }

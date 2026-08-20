@@ -1,10 +1,10 @@
 # Project-level configuration.
 cmake_minimum_required(VERSION 3.14)
-project(oldchat_for_allplatform LANGUAGES CXX)
+project(oldchatforallplatform LANGUAGES CXX)
 
 # The name of the executable created for the application. Change this to change
 # the on-disk name of your application.
-set(BINARY_NAME "OldChat_For_AllPlatform")
+set(BINARY_NAME "OldChatForAllPlatform")
 
 # Explicitly opt in to modern CMake behaviors to avoid warnings with recent
 # versions of CMake.
