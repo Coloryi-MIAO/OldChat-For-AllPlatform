@@ -48,7 +48,7 @@ jobs:
         shell: bash
         run: |
           chmod +x tools/create_android_signing.sh
-          tools/create_android_signing.sh
+          OLDCHATANDROIDKEYALIAS=oldchatrelease tools/create_android_signing.sh
       - run: flutter build apk --release --split-per-abi --target-platform android-arm,android-arm64,android-x64
       - name: Rename Android artifacts
         shell: bash
@@ -71,9 +71,6 @@ jobs:
           - arch: x64
             runner: ubuntu-24.04
             target: linux-x64
-          - arch: arm64
-            runner: ubuntu-24.04-arm
-            target: linux-arm64
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
@@ -103,8 +100,6 @@ jobs:
         include:
           - arch: x64
             runner: windows-2025
-          - arch: arm64
-            runner: windows-11-arm
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
@@ -128,8 +123,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - arch: arm64
-            runner: macos-14
           - arch: x64
             runner: macos-15-intel
     runs-on: ${{ matrix.runner }}
@@ -143,7 +136,7 @@ jobs:
       - run: flutter pub get
       - name: Build and package macOS
         env:
-          MACOSX_DEPLOYMENT_TARGET: '10.13'
+          MACOSX_DEPLOYMENT_TARGET: '10.15'
         run: |
           chmod +x tools/package_macos.sh
           tools/package_macos.sh ${{ matrix.arch }} dist/macos-${{ matrix.arch }}
@@ -163,19 +156,23 @@ jobs:
           channel: stable
           cache: true
       - run: flutter pub get
-      - name: Build IPA
+      - name: Build unsigned IPA when Apple signing is not configured
         run: |
-          if [[ -z "${IOS_EXPORT_OPTIONS_PLIST:-}" ]]; then
-            echo 'IOS_EXPORT_OPTIONS_PLIST secret is required for a signed IPA.' >&2
-            exit 1
+          if [[ -n "${IOS_EXPORT_OPTIONS_PLIST:-}" ]]; then
+            flutter build ipa --release --export-options-plist "$IOS_EXPORT_OPTIONS_PLIST"
+          else
+            flutter build ios --release --no-codesign
+            chmod +x tools/package_ios_unsigned.sh
+            tools/package_ios_unsigned.sh dist/ios
           fi
-          flutter build ipa --release --export-options-plist "$IOS_EXPORT_OPTIONS_PLIST"
         env:
           IOS_EXPORT_OPTIONS_PLIST: ${{ secrets.IOS_EXPORT_OPTIONS_PLIST }}
       - uses: actions/upload-artifact@v4
         with:
           name: oldchatios-ipa
-          path: build/ios/ipa/*.ipa
+          path: |
+            build/ios/ipa/*.ipa
+            dist/ios/*.ipa
 
   build-web:
     needs: analyze-and-test
