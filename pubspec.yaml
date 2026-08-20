@@ -45,7 +45,6 @@ dependencies:
   # 桌面功能
   window_manager: ^0.3.0
   tray_manager: ^0.5.2
-  flutter_native_timezone: ^2.0.0
   flutter_desktop_notifications: ^1.1.2
   path_provider: ^2.1.0
 
