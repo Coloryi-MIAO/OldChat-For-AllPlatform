@@ -139,6 +139,7 @@ jobs:
           channel: stable
           cache: true
       - run: flutter pub get
+      - run: sed -i.bak "s/MACOSX_DEPLOYMENT_TARGET = .*/MACOSX_DEPLOYMENT_TARGET = 10.13/" macos/Runner/Configs/AppInfo.xcconfig
       - name: Build and package macOS
         env:
           MACOSX_DEPLOYMENT_TARGET: '10.13'
