@@ -6,10 +6,11 @@ $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 Set-Location $root
 if ($Architecture -eq 'arm64') {
-  flutter build windows --release --target-platform windows-arm64
+  if ($env:RUNNER_ARCH -ne 'ARM64') { throw 'Windows ARM64 packaging must run on the windows-11-arm GitHub runner.' }
+  flutter build windows --release
   $bundle = 'build/windows/arm64/runner/Release'
 } else {
-  flutter build windows --release --target-platform windows-x64
+  flutter build windows --release
   $bundle = 'build/windows/x64/runner/Release'
 }
 New-Item -ItemType Directory -Force -Path $Output | Out-Null

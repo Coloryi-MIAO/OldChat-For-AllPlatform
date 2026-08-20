@@ -199,7 +199,7 @@ class _AboutPageState extends State<AboutPage> {
                             overflow: TextOverflow.ellipsis,
                           ),
                           Text(
-                            'WebView2：${_environment!.webView2Installed ? '可用' : '未确认'} · Media Kit：${_environment!.mediaKitConfigured ? '已配置' : '不可用'}',
+                            'WebView2：${_environment!.webView2Installed ? '可用' : '未确认'}',
                           ),
                         ],
                         const SizedBox(height: 8),

@@ -11,7 +11,7 @@ class Constants {
   static const String mediaFallbackServer = hiddenFallbackServer;
   static const String resourceBaseUrl = defaultBaseUrl;
   static const String appName = 'OldChat For AllPlatform';
-  static const String appAumid = 'Coloryi.OldChatForAllPlatform';
+  static const String appAumid = 'ColoryiOldChatForAllPlatform';
   static const String appClsid = '936C39FC-6BBC-4A57-B8F8-7C627E401B2F';
 
   static String _baseUrl = defaultBaseUrl;

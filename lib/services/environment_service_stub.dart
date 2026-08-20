@@ -8,7 +8,6 @@ class EnvironmentSnapshot {
   final int cacheBytes;
   final bool cacheExists;
   final bool webView2Installed;
-  final bool mediaKitConfigured;
   const EnvironmentSnapshot({
     required this.platform,
     required this.operatingSystem,
@@ -19,7 +18,6 @@ class EnvironmentSnapshot {
     required this.cacheBytes,
     required this.cacheExists,
     required this.webView2Installed,
-    required this.mediaKitConfigured,
   });
 }
 
@@ -35,6 +33,5 @@ class EnvironmentService {
         cacheBytes: 0,
         cacheExists: true,
         webView2Installed: false,
-        mediaKitConfigured: false,
       );
 }

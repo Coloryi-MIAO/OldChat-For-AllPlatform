@@ -10,8 +10,8 @@ case "$arch" in
   arm64) flutter_arch=arm64; deb_arch=arm64; rpm_arch=aarch64 ;;
   *) echo 'Usage: tools/package_linux.sh x64|arm64 [output-directory]' >&2; exit 2 ;;
 esac
-flutter build linux --release --target-platform "linux-$flutter_arch"
-bundle="build/linux/$flutter_arch/release/bundle"
+flutter build linux --release
+bundle="build/linux/${flutter_arch}/release/bundle"
 [[ -d "$bundle" ]] || { echo "Flutter did not produce $bundle" >&2; exit 1; }
 rm -rf "$out"
 mkdir -p "$out"

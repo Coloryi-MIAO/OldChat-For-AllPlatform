@@ -70,7 +70,8 @@ jobs:
         include:
           - arch: x64
             runner: ubuntu-24.04
-            target: linux-x64
+          - arch: arm64
+            runner: ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
@@ -81,7 +82,7 @@ jobs:
           cache: true
       - run: sudo apt-get update && sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libayatana-appindicator3-dev libmpv-dev dpkg-dev rpm gpg zip
       - run: flutter pub get
-      - run: flutter build linux --release --target-platform ${{ matrix.target }}
+      - run: flutter build linux --release
       - name: Build DEB and RPM
         run: |
           chmod +x tools/package_linux.sh tools/sign_linux.sh
@@ -100,6 +101,8 @@ jobs:
         include:
           - arch: x64
             runner: windows-2025
+          - arch: arm64
+            runner: windows-11-arm
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
@@ -115,7 +118,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: oldchatwindows-${{ matrix.arch }}
-          path: OldChatForAllPlatform-windows-${{ matrix.arch }}.zip
+          path: dist/windows-${{ matrix.arch }}
 
   build-macos:
     needs: analyze-and-test
@@ -125,6 +128,8 @@ jobs:
         include:
           - arch: x64
             runner: macos-15-intel
+          - arch: arm64
+            runner: macos-15
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
@@ -136,9 +141,10 @@ jobs:
       - run: flutter pub get
       - name: Build and package macOS
         env:
-          MACOSX_DEPLOYMENT_TARGET: '10.15'
+          MACOSX_DEPLOYMENT_TARGET: '10.13'
         run: |
           chmod +x tools/package_macos.sh
+          sed -i '' 's/MACOSX_DEPLOYMENT_TARGET = 10.15;/MACOSX_DEPLOYMENT_TARGET = 10.13;/g' macos/Runner.xcodeproj/project.pbxproj
           tools/package_macos.sh ${{ matrix.arch }} dist/macos-${{ matrix.arch }}
       - uses: actions/upload-artifact@v4
         with:
@@ -156,17 +162,11 @@ jobs:
           channel: stable
           cache: true
       - run: flutter pub get
-      - name: Build unsigned IPA when Apple signing is not configured
+      - name: Build offline development-signed IPA
         run: |
-          if [[ -n "${IOS_EXPORT_OPTIONS_PLIST:-}" ]]; then
-            flutter build ipa --release --export-options-plist "$IOS_EXPORT_OPTIONS_PLIST"
-          else
-            flutter build ios --release --no-codesign
-            chmod +x tools/package_ios_unsigned.sh
-            tools/package_ios_unsigned.sh dist/ios
-          fi
-        env:
-          IOS_EXPORT_OPTIONS_PLIST: ${{ secrets.IOS_EXPORT_OPTIONS_PLIST }}
+          flutter build ios --release --no-codesign
+          chmod +x tools/package_ios_unsigned.sh
+          tools/package_ios_unsigned.sh dist/ios
       - uses: actions/upload-artifact@v4
         with:
           name: oldchatios-ipa

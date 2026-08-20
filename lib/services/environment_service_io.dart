@@ -10,7 +10,6 @@ class EnvironmentSnapshot {
   final int cacheBytes;
   final bool cacheExists;
   final bool webView2Installed;
-  final bool mediaKitConfigured;
 
   const EnvironmentSnapshot({
     required this.platform,
@@ -22,7 +21,6 @@ class EnvironmentSnapshot {
     required this.cacheBytes,
     required this.cacheExists,
     required this.webView2Installed,
-    required this.mediaKitConfigured,
   });
 
   Map<String, dynamic> toJson() => {
@@ -35,7 +33,6 @@ class EnvironmentSnapshot {
     'cache_exists': cacheExists,
     'cache_bytes': cacheBytes,
     'webview2_installed': webView2Installed,
-    'media_kit_configured': mediaKitConfigured,
   };
 }
 
@@ -70,7 +67,6 @@ class EnvironmentService {
       cacheBytes: bytes,
       cacheExists: await cache.exists(),
       webView2Installed: webView2,
-      mediaKitConfigured: Platform.isWindows,
     );
   }
 }
