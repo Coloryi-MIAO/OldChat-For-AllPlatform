@@ -9,7 +9,7 @@ Key-Type: RSA
 Key-Length: 4096
 Name-Real: OldChat For AllPlatform Release
 Name-Email: release@oldchat.local
-Expire-Date: 100y
+Expire-Date: 0
 Key-Usage: sign
 %no-protection
 %commit
