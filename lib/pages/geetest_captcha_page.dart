@@ -1,8 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../services/app_localizations.dart';
+import '../utils/user_error.dart';
 import 'package:webview_windows/webview_windows.dart';
+import 'package:webview_flutter/webview_flutter.dart' as flutter_webview;
 
 class GeeTestCaptchaPage extends StatefulWidget {
   final String pageUrl;
@@ -15,6 +18,7 @@ class GeeTestCaptchaPage extends StatefulWidget {
 
 class _GeeTestCaptchaPageState extends State<GeeTestCaptchaPage> {
   final _controller = WebviewController();
+  flutter_webview.WebViewController? _flutterController;
   StreamSubscription? _messageSubscription;
   Timer? _pollTimer;
   bool _ready = false;
@@ -29,6 +33,22 @@ class _GeeTestCaptchaPageState extends State<GeeTestCaptchaPage> {
 
   Future<void> _initialize() async {
     try {
+      if (!kIsWeb && defaultTargetPlatform != TargetPlatform.windows &&
+          defaultTargetPlatform != TargetPlatform.macOS &&
+          defaultTargetPlatform != TargetPlatform.iOS &&
+          defaultTargetPlatform != TargetPlatform.android) {
+        if (mounted) setState(() => _error = AppLocalizations.current.t('当前系统没有可用的内置浏览器，请使用系统浏览器完成验证'));
+        return;
+      }
+      if (kIsWeb || defaultTargetPlatform != TargetPlatform.windows) {
+        final controller = flutter_webview.WebViewController()
+          ..setJavaScriptMode(flutter_webview.JavaScriptMode.unrestricted)
+          ..addJavaScriptChannel('OldChat', onMessageReceived: (message) => _onMessage(message.message))
+          ..loadRequest(Uri.parse(widget.pageUrl));
+        _flutterController = controller;
+        if (mounted) setState(() => _ready = true);
+        return;
+      }
       await _controller.initialize();
       await _controller.setPopupWindowPolicy(WebviewPopupWindowPolicy.allow);
       _messageSubscription = _controller.webMessage.listen(_onMessage);
@@ -40,13 +60,13 @@ class _GeeTestCaptchaPageState extends State<GeeTestCaptchaPage> {
       );
       Future<void>.delayed(const Duration(milliseconds: 900), _hidePageChrome);
     } catch (error) {
-      if (mounted) setState(() => _error = '人机验证加载失败：$error');
+      if (mounted) setState(() => _error = '${AppLocalizations.current.t('人机验证加载失败')}：${safeErrorMessage(error)}');
     }
   }
 
   Future<void> _hidePageChrome() async {
     try {
-      await _controller.executeScript('''(() => {
+      const script = '''(() => {
         const style = document.createElement('style');
         style.textContent = `
           html, body { background: transparent !important; overflow: hidden !important; }
@@ -55,16 +75,21 @@ class _GeeTestCaptchaPageState extends State<GeeTestCaptchaPage> {
           .turnstile-field { display: block !important; }
         `;
         document.head.appendChild(style);
-      })();''');
+      })();''';
+      if (_flutterController != null) {
+        await _flutterController!.runJavaScript(script);
+      } else {
+        await _controller.executeScript(script);
+      }
     } catch (_) {}
   }
 
   Future<void> _pollValidationResult() async {
     if (_submitted || !mounted) return;
     try {
-      final raw = await _controller.executeScript(
-        'JSON.stringify(window.__geetest || null)',
-      );
+      final raw = _flutterController != null
+          ? await _flutterController!.runJavaScriptReturningResult('JSON.stringify(window.__geetest || null)')
+          : await _controller.executeScript('JSON.stringify(window.__geetest || null)');
       dynamic decoded = raw;
       for (var i = 0; i < 2 && decoded is String; i++) {
         final text = decoded.trim();
@@ -122,9 +147,11 @@ class _GeeTestCaptchaPageState extends State<GeeTestCaptchaPage> {
         height: 280,
         child: _error != null
             ? Center(child: Text(_error!, textAlign: TextAlign.center))
-            : !_ready && !_controller.value.isInitialized
+            : !_ready && _flutterController == null && !_controller.value.isInitialized
                 ? Center(child: CircularProgressIndicator())
-                : Webview(_controller),
+                : _flutterController != null
+                    ? flutter_webview.WebViewWidget(controller: _flutterController!)
+                    : Webview(_controller),
       ),
       actions: [
         TextButton(

@@ -12,6 +12,7 @@ import '../services/auth_service.dart';
 import '../services/audio_service.dart';
 import '../utils/message_parser.dart';
 import '../utils/url_helper.dart';
+import '../utils/video_support.dart';
 import '../utils/image_saver.dart';
 import 'image_viewer.dart';
 import '../services/cache_service.dart';
@@ -1657,6 +1658,10 @@ class _InlineVideoPlayerState extends State<_InlineVideoPlayer> {
   }
 
   Future<void> _initialize() async {
+    if (!supportsEmbeddedVideo) {
+      if (mounted) setState(() => _error = AppLocalizations.current.t('当前系统没有内置视频播放器，请使用浏览器打开'));
+      return;
+    }
     if (widget.url.isEmpty) {
       if (mounted) setState(() => _error = '视频链接无效');
       return;

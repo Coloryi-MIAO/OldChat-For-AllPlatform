@@ -174,13 +174,6 @@ class _TrayManagerState extends State<TrayManager> with TrayListener {
     _isQuitting = true;
     print('Tray: 执行退出程序');
     _healthCheckTimer?.cancel();
-    // 清除 token
-    AuthService().clear().then((_) {
-      print('Tray: Token 已清除');
-    }).catchError((e) {
-      print('Tray: 清除 Token 失败: $e');
-    });
-
     // 销毁托盘
     try {
       trayManager.destroy();

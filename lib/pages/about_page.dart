@@ -8,6 +8,7 @@ import '../services/update_service.dart';
 import '../services/auth_service.dart';
 import '../widgets/update_dialog.dart';
 import '../utils/constants.dart';
+import '../services/legal_text.dart';
 
 class AboutPage extends StatefulWidget {
   const AboutPage({super.key});
@@ -78,6 +79,27 @@ class _AboutPageState extends State<AboutPage> {
     } finally {
       if (mounted) setState(() => _checking = false);
     }
+  }
+
+  Future<void> _showAgreement() async {
+    final text = LegalText.get(english: AppLocalizations.current.isEnglish);
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(AppLocalizations.current.t('《用户服务协议与免责声明》')),
+        content: SizedBox(
+          width: 700,
+          height: 560,
+          child: SingleChildScrollView(child: SelectableText(text)),
+        ),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: Text(AppLocalizations.current.t('关闭')),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _row(String label, String value) => Padding(
@@ -206,6 +228,15 @@ class _AboutPageState extends State<AboutPage> {
                           )
                         : const Icon(Icons.chevron_right),
                     onTap: _checking ? null : _checkForUpdate,
+                  ),
+                ),
+                Card(
+                  child: ListTile(
+                    leading: const Icon(Icons.description_outlined),
+                    title: Text(tr.text('用户服务协议与免责声明', 'User Service Agreement and Disclaimer')),
+                    subtitle: Text(tr.text('查看内置协议全文', 'View the built-in full agreement')),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: _showAgreement,
                   ),
                 ),
                 const SizedBox(height: 18),

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'account_storage.dart';
@@ -720,6 +721,11 @@ class ApiService {
 
   // ==================== 璁よ瘉 ====================
 
+  String _clientPlatformName() {
+    if (kIsWeb) return 'web';
+    return defaultTargetPlatform.name;
+  }
+
   Future<Map<String, dynamic>> login(String username, String password) async {
     try {
       final deviceId = await WsSessionService(http: true).getDeviceId();
@@ -732,7 +738,7 @@ class ApiService {
           'password': password,
           if (deviceId != null && deviceId.isNotEmpty) 'device_id': deviceId,
           'device_name': Constants.appName,
-          'platform': 'windows',
+          'platform': _clientPlatformName(),
           'app_version': '1.4.5-beta.5',
         },
       );
@@ -745,8 +751,12 @@ class ApiService {
             data['uid'] ??
             (user is Map ? user['uid'] ?? user['user_id'] : null);
         final refreshToken = data['refresh_token'];
+        if (token == null || token.toString().trim().isEmpty) {
+          throw Exception('服务器未返回登录令牌');
+        }
+        ApiService._loginRedirectScheduled = false;
         return {
-          'token': token,
+          'token': token.toString(),
           'userId': userId,
           'refresh_token': refreshToken,
         };

@@ -13,6 +13,7 @@ import '../services/download_service.dart';
 import '../services/image_cache_service.dart';
 import '../services/video_cache_service.dart';
 import '../utils/url_helper.dart';
+import '../utils/video_support.dart';
 
 class VideoPreview extends StatefulWidget {
   final String url;
@@ -83,6 +84,10 @@ class _VideoPreviewState extends State<VideoPreview> {
 
   Future<void> _tryInitialize() async {
     if (_loading) return;
+    if (!supportsEmbeddedVideo) {
+      if (mounted) setState(() => _error = AppLocalizations.current.t('当前系统没有内置视频播放器，请使用浏览器打开'));
+      return;
+    }
     _loading = true;
     final watch = Stopwatch()..start();
     final uri = Uri.tryParse(_resolvedUrl);
@@ -91,7 +96,6 @@ class _VideoPreviewState extends State<VideoPreview> {
       _loading = false;
       return;
     }
-
     try {
       final cache = VideoCacheService();
       final localFile = await cache.getCachedFile(_resolvedUrl);

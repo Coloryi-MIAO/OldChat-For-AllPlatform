@@ -132,7 +132,7 @@ class AuthService extends ChangeNotifier {
     await prefs.setBool(Constants.rememberPasswordKey, false);
   }
 
-  Future<void> clear() async {
+  Future<void> clear({bool clearCredentials = false}) async {
     _token = null;
     _userId = null;
     _refreshToken = null;
@@ -141,6 +141,14 @@ class AuthService extends ChangeNotifier {
     await prefs.remove(Constants.tokenKey);
     await prefs.remove(Constants.userIdKey);
     await prefs.remove(Constants.refreshTokenKey);
+    if (clearCredentials) {
+      _savedUsername = null;
+      _savedPassword = null;
+      await prefs.remove(Constants.savedUsernameKey);
+      await prefs.remove(Constants.savedPasswordKey);
+      await prefs.setBool(Constants.rememberPasswordKey, false);
+    }
+    WsSessionService(http: true).reset();
     notifyListeners();
   }
 
@@ -150,5 +158,5 @@ class AuthService extends ChangeNotifier {
     return prefs.getString(Constants.refreshTokenKey);
   }
 
-  bool get isLoggedIn => _token != null;
+  bool get isLoggedIn => _token != null && _token!.isNotEmpty;
 }

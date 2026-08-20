@@ -1,6 +1,5 @@
 import 'dart:async';
-import 'dart:convert';
-import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -11,6 +10,8 @@ import '../pages/home_page.dart';
 import '../utils/constants.dart';
 import '../services/app_localizations.dart';
 import 'geetest_captcha_page.dart';
+import '../services/legal_text.dart';
+import '../utils/user_error.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -35,9 +36,9 @@ class _LoginPageState extends State<LoginPage>
   bool _regLoading = false;
   bool _loginAgreement = false;
   bool _registrationAgreement = false;
-  DateTime? _agreementOpenedAt;
-  Timer? _agreementTimer;
-  int _agreementSeconds = 0;
+  DateTime? _registrationAgreementOpenedAt;
+  Timer? _registrationAgreementTimer;
+  int _registrationAgreementSeconds = 0;
 
   Map<String, dynamic>? _geeTestResult;
 
@@ -85,90 +86,80 @@ class _LoginPageState extends State<LoginPage>
     }
   }
 
-  Future<void> _openAgreement() async {
-    final now = DateTime.now();
-    if (_agreementOpenedAt == null ||
-        now.difference(_agreementOpenedAt!).inSeconds >= 30) {
-      _agreementOpenedAt = now;
-      _agreementSeconds = 0;
-      _registrationAgreement = false;
+  Future<void> _openAgreement({required bool forRegistration}) async {
+    if (forRegistration && !_registrationAgreement) {
+      _registrationAgreementOpenedAt ??= DateTime.now();
+      _registrationAgreementSeconds = 0;
+      _registrationAgreementTimer?.cancel();
     }
-    _agreementTimer?.cancel();
+    final localizedText = LegalText.get(english: AppLocalizations.current.isEnglish);
     void Function(VoidCallback)? refreshDialog;
-    _agreementTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (!mounted || _agreementOpenedAt == null) {
-        timer.cancel();
-        return;
-      }
-      final elapsed = DateTime.now().difference(_agreementOpenedAt!).inSeconds;
-      setState(() => _agreementSeconds = elapsed.clamp(0, 30));
-      refreshDialog?.call(() {});
-      if (elapsed >= 30) timer.cancel();
-    });
-    setState(() {});
-    try {
-      final text = await rootBundle.loadString(
-        'assets/legal/user_service_agreement.txt',
-      );
-      final localizedText = AppLocalizations.current.isEnglish
-          ? text
-                .replaceAll(
-                  '用户服务协议与免责声明',
-                  'User Service Agreement and Disclaimer',
-                )
-                .replaceAll('用户', 'user')
-          : text;
-      if (!mounted) return;
-      await showDialog<void>(
-        context: context,
-        barrierDismissible: false,
-        builder: (dialogContext) => StatefulBuilder(
-          builder: (dialogContext, setDialogState) {
-            refreshDialog = setDialogState;
-            return AlertDialog(
-              title: Text(AppLocalizations.current.t('《用户服务协议与免责声明》')),
-              content: SizedBox(
-                width: 620,
-                height: 520,
-                child: SingleChildScrollView(
-                  child: SelectableText(localizedText),
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(dialogContext),
-                  child: Text(AppLocalizations.current.t('关闭')),
-                ),
-                if (_agreementSeconds >= 30)
-                  FilledButton(
-                    onPressed: () {
-                      setState(() => _registrationAgreement = true);
-                      Navigator.pop(dialogContext);
-                    },
-                    child: Text(AppLocalizations.current.t('我已阅读并同意')),
-                  )
-                else
-                  Text(
-                    AppLocalizations.current.isEnglish
-                        ? 'Please continue reading; ${30 - _agreementSeconds} seconds remaining'
-                        : '请继续阅读，还需 ${30 - _agreementSeconds} 秒',
-                  ),
-              ],
-            );
-          },
-        ),
-      );
-      if (!mounted) return;
-      refreshDialog = null;
-    } catch (error) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('${AppLocalizations.current.t('协议加载失败')}：$error'),
-          ),
-        );
-      }
+    if (forRegistration) {
+      _registrationAgreementTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+        if (!mounted || _registrationAgreementOpenedAt == null) {
+          timer.cancel();
+          return;
+        }
+        final elapsed = DateTime.now().difference(_registrationAgreementOpenedAt!).inSeconds;
+        if (mounted) setState(() => _registrationAgreementSeconds = elapsed.clamp(0, 30));
+        refreshDialog?.call(() {});
+        if (elapsed >= 30) timer.cancel();
+      });
     }
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) {
+          refreshDialog = setDialogState;
+          final remaining = (30 - _registrationAgreementSeconds).clamp(0, 30);
+          return AlertDialog(
+            title: Text(AppLocalizations.current.t('《用户服务协议与免责声明》')),
+            content: SizedBox(
+              width: 620,
+              height: 520,
+              child: SingleChildScrollView(child: SelectableText(localizedText)),
+            ),
+            actions: [
+              if (forRegistration && _registrationAgreementSeconds < 30)
+                Text(AppLocalizations.current.isEnglish ? 'Please continue reading; $remaining seconds remaining' : '请继续阅读，还需 $remaining 秒'),
+              if (forRegistration && _registrationAgreementSeconds >= 30)
+                FilledButton(
+                  onPressed: () {
+                    setState(() => _registrationAgreement = true);
+                    Navigator.pop(dialogContext);
+                  },
+                  child: Text(AppLocalizations.current.t('我已阅读并同意')),
+                ),
+              if (forRegistration)
+                TextButton(
+                  onPressed: () {
+                    _registrationAgreementTimer?.cancel();
+                    setState(() {
+                      _registrationAgreement = false;
+                      _registrationAgreementOpenedAt = null;
+                      _registrationAgreementSeconds = 0;
+                    });
+                    Navigator.pop(dialogContext);
+                  },
+                  child: Text(AppLocalizations.current.t('取消')),
+                ),
+              if (!forRegistration)
+                FilledButton(
+                  onPressed: () {
+                    setState(() => _loginAgreement = true);
+                    Navigator.pop(dialogContext);
+                  },
+                  child: Text(AppLocalizations.current.t('我已阅读并同意')),
+                ),
+            ],
+          );
+        },
+      ),
+    );
+    _registrationAgreementTimer?.cancel();
+    if (forRegistration && mounted) setState(() {});
   }
 
   Future<void> _openGeeTest() async {
@@ -193,7 +184,7 @@ class _LoginPageState extends State<LoginPage>
     _regPasswordController.dispose();
     _regCaptchaController.dispose();
     _regEmailCodeController.dispose();
-    _agreementTimer?.cancel();
+    _registrationAgreementTimer?.cancel();
     super.dispose();
   }
 
@@ -232,16 +223,16 @@ class _LoginPageState extends State<LoginPage>
       }
 
       if (mounted) {
-        Navigator.pushReplacement(
-          context,
+        Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(builder: (_) => const HomePage()),
+          (route) => false,
         );
       }
     } catch (e) {
       if (mounted)
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('${context.tr.t('登录失败:')}$e')));
+        ).showSnackBar(SnackBar(content: Text('${context.tr.t('登录失败:')}${safeErrorMessage(e)}')));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -254,6 +245,10 @@ class _LoginPageState extends State<LoginPage>
     _regCaptchaController.clear();
     _regEmailCodeController.clear();
     _geeTestResult = null;
+    _registrationAgreement = false;
+    _registrationAgreementOpenedAt = null;
+    _registrationAgreementSeconds = 0;
+    _registrationAgreementTimer?.cancel();
     FocusScope.of(context).unfocus();
   }
 
@@ -275,8 +270,8 @@ class _LoginPageState extends State<LoginPage>
       return;
     }
     if (!_registrationAgreement ||
-        _agreementOpenedAt == null ||
-        DateTime.now().difference(_agreementOpenedAt!).inSeconds < 30) {
+        _registrationAgreementOpenedAt == null ||
+        DateTime.now().difference(_registrationAgreementOpenedAt!).inSeconds < 30) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(context.tr.t('请先完整阅读用户服务协议，至少 30 秒后才能注册'))),
       );
@@ -301,8 +296,8 @@ class _LoginPageState extends State<LoginPage>
         captchaResult: _geeTestResult,
         deviceId:
             await WsSessionService(http: true).getDeviceId() ??
-            'oldchat-windows',
-        deviceName: 'Flutter Client',
+            'oldchat-${defaultTargetPlatform.name}',
+        deviceName: 'OldChat ${defaultTargetPlatform.name}',
       );
       if (mounted) {
         _resetRegistrationForm();
@@ -322,7 +317,7 @@ class _LoginPageState extends State<LoginPage>
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('${context.tr.t('注册失败:')}$e')));
+        ).showSnackBar(SnackBar(content: Text('${context.tr.t('注册失败:')}${safeErrorMessage(e)}')));
       }
     } finally {
       if (mounted) setState(() => _regLoading = false);
@@ -598,7 +593,7 @@ class _LoginPageState extends State<LoginPage>
               contentPadding: EdgeInsets.zero,
               controlAffinity: ListTileControlAffinity.leading,
               title: GestureDetector(
-                onTap: _openAgreement,
+                onTap: () => _openAgreement(forRegistration: false),
                 child: Text(
                   AppLocalizations.current.t('我已认真阅读并完全同意《用户服务协议与免责声明》'),
                 ),
@@ -681,8 +676,8 @@ class _LoginPageState extends State<LoginPage>
         Material(
           color: Colors.transparent,
           child: CheckboxListTile(
-            value: _registrationAgreement && _agreementSeconds >= 30,
-            onChanged: _agreementSeconds >= 30
+            value: _registrationAgreement && _registrationAgreementSeconds >= 30,
+            onChanged: _registrationAgreementSeconds >= 30
                 ? (value) =>
                       setState(() => _registrationAgreement = value ?? false)
                 : null,
@@ -690,12 +685,12 @@ class _LoginPageState extends State<LoginPage>
             contentPadding: EdgeInsets.zero,
             controlAffinity: ListTileControlAffinity.leading,
             title: GestureDetector(
-              onTap: _openAgreement,
+              onTap: () => _openAgreement(forRegistration: true),
               child: Text(
-                _agreementSeconds < 30
+                _registrationAgreementSeconds < 30
                     ? AppLocalizations.current.text(
-                        '阅读《用户服务协议与免责声明》${_agreementSeconds == 0 ? '' : '（还需 ${30 - _agreementSeconds} 秒）'}',
-                        'Read the User Service Agreement and Disclaimer${_agreementSeconds == 0 ? '' : ' (${30 - _agreementSeconds}s remaining)'}',
+                        '阅读《用户服务协议与免责声明》${_registrationAgreementSeconds == 0 ? '' : '（还需 ${30 - _registrationAgreementSeconds} 秒）'}',
+                        'Read the User Service Agreement and Disclaimer${_registrationAgreementSeconds == 0 ? '' : ' (${30 - _registrationAgreementSeconds}s remaining)'}',
                       )
                     : AppLocalizations.current.t('我已完整阅读并同意《用户服务协议与免责声明》'),
               ),

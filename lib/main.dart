@@ -44,23 +44,11 @@ import 'services/update_service.dart';
 import 'theme/app_theme.dart';
 import 'widgets/update_dialog.dart';
 import 'services/startup_service.dart';
-import 'package:video_player_media_kit/video_player_media_kit.dart';
 
 void main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
   final desktop = !kIsWeb && (Platform.isWindows || Platform.isMacOS || Platform.isLinux);
   await StartupService.cleanupOnStartup();
-  try {
-    VideoPlayerMediaKit.ensureInitialized(
-      windows: Platform.isWindows,
-      macOS: Platform.isMacOS,
-      linux: Platform.isLinux,
-      android: Platform.isAndroid,
-      iOS: Platform.isIOS,
-    );
-  } catch (error) {
-    debugPrint('[媒体] 初始化隔离：$error');
-  }
   ImageCacheService.configure();
 
   // ★ 加载用户自定义 baseUrl
@@ -228,7 +216,6 @@ class _WindowCloseListener extends WindowListener {
       return;
     }
     await windowManager.setPreventClose(false);
-    await AuthService().clear();
     await windowManager.destroy();
     exit(0);
   }
@@ -270,9 +257,7 @@ class _WindowCloseListener extends WindowListener {
 }
 
 class _StartupGate extends StatefulWidget {
-  final bool isLoggedIn;
-
-  const _StartupGate({required this.isLoggedIn});
+  const _StartupGate();
 
   @override
   State<_StartupGate> createState() => _StartupGateState();
@@ -294,7 +279,7 @@ class _StartupGateState extends State<_StartupGate> {
   }
 
   Future<void> _checkAutomaticUpdate() async {
-    if (_updateChecked || !widget.isLoggedIn || !mounted) return;
+    if (_updateChecked || !AuthService().isLoggedIn || !mounted) return;
     _updateChecked = true;
     await AccountStorage.instance.load();
     if (!(AccountStorage.instance.getBool(Constants.autoUpdateKey) ?? true) || !mounted) return;
@@ -320,10 +305,11 @@ class _StartupGateState extends State<_StartupGate> {
 
   @override
   Widget build(BuildContext context) {
+    final isLoggedIn = context.watch<AuthService>().isLoggedIn;
     return Stack(
       fit: StackFit.expand,
       children: [
-        widget.isLoggedIn ? const HomePage() : const LoginPage(),
+        isLoggedIn ? const HomePage() : const LoginPage(),
         IgnorePointer(
           ignoring: !_visible,
           child: AnimatedOpacity(
@@ -402,7 +388,7 @@ class MyApp extends StatelessWidget {
             pink: themeController.isPink,
             fontFamily: themeController.fontFamily,
           ),
-          home: _StartupGate(isLoggedIn: auth.isLoggedIn),
+          home: const _StartupGate(),
           routes: {
             '/profile': (context) => const ProfilePage(),
             '/user_profile': (context) {
