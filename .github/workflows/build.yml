@@ -14,6 +14,8 @@ permissions:
 
 env:
   FLUTTER_VERSION: '3.44.8'
+  ANDROID_COMPILE_SDK: '36'
+  MACOSX_DEPLOYMENT_TARGET: '10.15'
 
 jobs:
   analyze-and-test:
@@ -26,7 +28,7 @@ jobs:
           channel: stable
           cache: true
       - run: flutter pub get
-      - run: flutter analyze lib --no-fatal-infos --no-fatal-warnings
+      - run: flutter analyze lib test --no-fatal-infos --no-fatal-warnings
       - run: flutter test
 
   build-android:
@@ -44,19 +46,15 @@ jobs:
           distribution: temurin
           java-version: '17'
       - run: flutter pub get
-      - name: Create offline release signing key
-        shell: bash
-        run: |
-          chmod +x tools/create_android_signing.sh
-          OLDCHATANDROIDKEYALIAS=oldchatrelease tools/create_android_signing.sh
+      - run: chmod +x tools/create_android_signing.sh && OLDCHATANDROIDKEYALIAS=oldchatrelease tools/create_android_signing.sh
       - run: flutter build apk --release --split-per-abi --target-platform android-arm,android-arm64,android-x64
       - name: Rename Android artifacts
         shell: bash
         run: |
           mkdir -p dist/android
-          cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk dist/android/OldChatForAllPlatform-android-v7a.apk
-          cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk dist/android/OldChatForAllPlatform-android-v8a.apk
-          cp build/app/outputs/flutter-apk/app-x86_64-release.apk dist/android/OldChatForAllPlatform-android-x64.apk
+          cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk dist/android/OldChatForAllPlatformandroidv7a.apk
+          cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk dist/android/OldChatForAllPlatformandroidv8a.apk
+          cp build/app/outputs/flutter-apk/app-x86_64-release.apk dist/android/OldChatForAllPlatformandroidx64.apk
       - uses: actions/upload-artifact@v4
         with:
           name: oldchatandroid
@@ -70,6 +68,8 @@ jobs:
         include:
           - arch: x64
             runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
@@ -80,15 +80,10 @@ jobs:
           cache: true
       - run: sudo apt-get update && sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libayatana-appindicator3-dev libmpv-dev dpkg-dev rpm gpg zip
       - run: flutter pub get
-      - run: flutter build linux --release
-      - name: Build DEB and RPM
-        run: |
-          chmod +x tools/package_linux.sh tools/sign_linux.sh
-          tools/package_linux.sh ${{ matrix.arch }} dist/linux-${{ matrix.arch }}
-          tools/sign_linux.sh dist/linux-${{ matrix.arch }}
+      - run: chmod +x tools/package_linux.sh tools/sign_linux.sh && tools/package_linux.sh ${{ matrix.arch }} dist/linux-${{ matrix.arch }} && tools/sign_linux.sh dist/linux-${{ matrix.arch }}
       - uses: actions/upload-artifact@v4
         with:
-          name: oldchatlinux-${{ matrix.arch }}
+          name: oldchatlinux${{ matrix.arch }}
           path: dist/linux-${{ matrix.arch }}
 
   build-windows:
@@ -99,6 +94,8 @@ jobs:
         include:
           - arch: x64
             runner: windows-2025
+          - arch: arm64
+            runner: windows-11-arm
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
@@ -110,11 +107,11 @@ jobs:
       - run: flutter pub get
       - name: Build and package Windows
         shell: pwsh
-        run: ./tools/package_windows.ps1 -Architecture '${{ matrix.arch }}' -Output 'dist/windows-${{ matrix.arch }}'
+        run: ./tools/package_windows.ps1 -Architecture '${{ matrix.arch }}' -Output 'dist/windows${{ matrix.arch }}'
       - uses: actions/upload-artifact@v4
         with:
-          name: oldchatwindows-${{ matrix.arch }}
-          path: dist/windows-${{ matrix.arch }}
+          name: oldchatwindows${{ matrix.arch }}
+          path: dist/windows${{ matrix.arch }}
 
   build-macos:
     needs: analyze-and-test
@@ -135,18 +132,16 @@ jobs:
           channel: stable
           cache: true
       - run: flutter pub get
-      - run: sed -i.bak "s/MACOSX_DEPLOYMENT_TARGET = .*/MACOSX_DEPLOYMENT_TARGET = 10.13/" macos/Runner/Configs/AppInfo.xcconfig
       - name: Build and package macOS
         env:
-          MACOSX_DEPLOYMENT_TARGET: '10.13'
+          MACOSX_DEPLOYMENT_TARGET: '10.15'
         run: |
-          chmod +x tools/package_macos.sh
-          sed -i '' 's/MACOSX_DEPLOYMENT_TARGET = 10.15;/MACOSX_DEPLOYMENT_TARGET = 10.13;/g' macos/Runner.xcodeproj/project.pbxproj
-          tools/package_macos.sh ${{ matrix.arch }} dist/macos-${{ matrix.arch }}
+          chmod +x tools/package_macos.sh tools/sign_apple_offline.sh
+          tools/package_macos.sh ${{ matrix.arch }} dist/macos${{ matrix.arch }}
       - uses: actions/upload-artifact@v4
         with:
-          name: oldchatmacos-${{ matrix.arch }}
-          path: dist/macos-${{ matrix.arch }}/*.dmg
+          name: oldchatmacos${{ matrix.arch }}
+          path: dist/macos${{ matrix.arch }}/*.dmg
 
   build-ios-ipa:
     needs: analyze-and-test
@@ -159,17 +154,16 @@ jobs:
           channel: stable
           cache: true
       - run: flutter pub get
-      - name: Build offline development-signed IPA
+      - name: Build unsigned development IPA
         run: |
+          chmod +x tools/sign_apple_offline.sh tools/package_ios.sh
+          ./tools/sign_apple_offline.sh
           flutter build ios --release --no-codesign
-          chmod +x tools/package_ios_unsigned.sh
-          tools/package_ios_unsigned.sh dist/ios
+          tools/package_ios.sh dist/ios
       - uses: actions/upload-artifact@v4
         with:
-          name: oldchatios-ipa
-          path: |
-            build/ios/ipa/*.ipa
-            dist/ios/*.ipa
+          name: oldchatiosipa
+          path: dist/ios/*.ipa
 
   build-web:
     needs: analyze-and-test
@@ -187,3 +181,41 @@ jobs:
         with:
           name: oldchatweb
           path: build/web
+
+  cross-compile-engine:
+    needs: analyze-and-test
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: android
+            runner: ubuntu-24.04
+          - platform: linux
+            runner: ubuntu-24.04
+          - platform: windows
+            runner: windows-2025
+          - platform: macos
+            runner: macos-15
+          - platform: ios
+            runner: macos-14
+          - platform: web
+            runner: ubuntu-24.04
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - uses: actions/setup-java@v4
+        if: matrix.platform == 'android'
+        with:
+          distribution: temurin
+          java-version: '17'
+      - run: flutter pub get
+      - name: Verify platform engine
+        shell: bash
+        run: |
+          chmod +x tools/verify_cross_compile_engine.sh
+          tools/verify_cross_compile_engine.sh '${{ matrix.platform }}'

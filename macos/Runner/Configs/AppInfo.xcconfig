@@ -12,4 +12,4 @@ PRODUCT_BUNDLE_IDENTIFIER = com.coloryi.oldchatforallplatform
 
 // The copyright displayed in application information
 PRODUCT_COPYRIGHT = Copyright © 2026 com.coloryi. All rights reserved.
-MACOSX_DEPLOYMENT_TARGET = 10.13
+MACOSX_DEPLOYMENT_TARGET = 10.15
