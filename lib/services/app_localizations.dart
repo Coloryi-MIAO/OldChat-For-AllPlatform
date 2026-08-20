@@ -135,7 +135,6 @@ class AppLocalizations {
     '人机验证已完成，点击重新验证': 'Verification complete; click to verify again',
     '上一张': 'Previous',
     '下一张': 'Next',
-    '红包': 'Red packet',
     '系统：\${_environment!.operatingSystem}':
         'System: \${_environment!.operatingSystem}',
     '模式：\${_environment!.buildMode} · \${_environment!.architecture}':
@@ -444,10 +443,6 @@ class AppLocalizations {
     '无法读取证据图片': 'Unable to read the evidence image',
     '《用户服务协议与免责声明》': 'User Service Agreement and Disclaimer',
     '我已阅读并同意': 'I have read and agree',
-    '我已认真阅读并完全同意《用户服务协议与免责声明》':
-        'I have carefully read and fully agree to the User Service Agreement and Disclaimer',
-    '我已完整阅读并同意《用户服务协议与免责声明》':
-        'I have read and agree to the complete User Service Agreement and Disclaimer',
     '无法读取图片': 'Unable to read the image',
     '上传图片': 'Upload image',
     '已订阅': 'Subscribed',
