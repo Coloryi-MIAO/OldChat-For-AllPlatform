@@ -712,7 +712,13 @@ class _LoginPageState extends State<LoginPage>
                   ? Icons.verified_user_outlined
                   : Icons.check_circle_outline,
             ),
-            label: Text(_geeTestResult == null ? '点击完成人机验证' : '人机验证已完成，点击重新验证'),
+            label: Text(
+              AppLocalizations.current.t(
+                _geeTestResult == null
+                    ? '点击完成人机验证'
+                    : '人机验证已完成，点击重新验证',
+              ),
+            ),
           ),
         ),
         SizedBox(height: 12),

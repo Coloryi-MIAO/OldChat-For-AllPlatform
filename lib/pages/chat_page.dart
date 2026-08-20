@@ -99,6 +99,9 @@ class _ChatPageState extends State<ChatPage>
   Timer? _cacheSaveTimer;
   bool _cacheSaveInFlight = false;
   bool _cacheSavePending = false;
+  Timer? _readReceiptTimer;
+  bool _readReceiptInFlight = false;
+  bool _readReceiptPending = false;
 
   @override
   void initState() {
@@ -194,6 +197,7 @@ class _ChatPageState extends State<ChatPage>
   void dispose() {
     _mentionFilterTimer?.cancel();
     _cacheSaveTimer?.cancel();
+    _readReceiptTimer?.cancel();
     unawaited(_flushCachedMessages());
     if (_routeSubscribed && _observedRoute != null) {
       routeObserver.unsubscribe(this);
@@ -285,6 +289,14 @@ class _ChatPageState extends State<ChatPage>
       return;
     if (widget.type == 'group' && msg.groupId != widget.conversationId) return;
     if (_messageMap.containsKey(msg.id)) return;
+    if (msg.fromUid != context.read<AuthService>().userId) {
+      unawaited(
+        PluginService().dispatchMessage(
+          msg,
+          conversationId: msg.groupId ?? msg.fromUid,
+        ),
+      );
+    }
     if (widget.type == 'direct' &&
         msg.fromUid == context.read<AuthService>().userId &&
         msg.threadId != widget.conversationId)
@@ -712,12 +724,15 @@ class _ChatPageState extends State<ChatPage>
     _markReadInFlight = true;
     try {
       if (!mounted) return;
+      var changed = false;
       setState(() {
+        final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
         for (var i = 0; i < _messages.length; i++) {
           final message = _messages[i];
           if (message.fromUid == context.read<AuthService>().userId ||
               (message.readAt ?? 0) > 0)
             continue;
+          changed = true;
           _messages[i] = Message(
             id: message.id,
             fromUid: message.fromUid,
@@ -733,7 +748,7 @@ class _ChatPageState extends State<ChatPage>
             durationMs: message.durationMs,
             createdAt: message.createdAt,
             deliveredAt: message.deliveredAt,
-            readAt: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+            readAt: now,
             readCount: message.readCount,
             burnAfterSeconds: message.burnAfterSeconds,
           );
@@ -742,12 +757,46 @@ class _ChatPageState extends State<ChatPage>
         _showUnreadButton = false;
         _rebuildMessageMap();
       });
-      await _saveCachedMessages();
+      if (changed) await _saveCachedMessages();
+      _queueReadReceipt();
     } finally {
       _markReadInFlight = false;
       if (_markReadPending && mounted && _isVisible) {
         _markReadPending = false;
         unawaited(_markConversationRead());
+      }
+    }
+  }
+
+  void _queueReadReceipt() {
+    if (!mounted || !_isVisible) return;
+    _readReceiptPending = true;
+    _readReceiptTimer?.cancel();
+    _readReceiptTimer = Timer(const Duration(milliseconds: 180), () {
+      unawaited(_flushReadReceipt());
+    });
+  }
+
+  Future<void> _flushReadReceipt() async {
+    if (_readReceiptInFlight || !_readReceiptPending || !mounted) return;
+    _readReceiptInFlight = true;
+    _readReceiptPending = false;
+    try {
+      if (widget.type == 'direct') {
+        await ApiService().markDirectRead(widget.conversationId);
+      } else if (widget.type == 'group') {
+        await ApiService().markGroupRead(widget.conversationId);
+      }
+    } catch (error) {
+      debugPrint('[read receipt] $error');
+      _readReceiptPending = true;
+    } finally {
+      _readReceiptInFlight = false;
+      if (_readReceiptPending && mounted && _isVisible) {
+        _readReceiptTimer?.cancel();
+        _readReceiptTimer = Timer(const Duration(seconds: 2), () {
+          unawaited(_flushReadReceipt());
+        });
       }
     }
   }
@@ -1469,10 +1518,19 @@ class _ChatPageState extends State<ChatPage>
               body: bodyJson,
               burnAfterSeconds: _pendingBurnAfterSeconds,
             );
+      if (sent.id.isEmpty) {
+        throw Exception(AppLocalizations.current.t('服务器返回的消息无效'));
+      }
       setState(() {
         _addLocalMessage(sent);
         _pendingBurnAfterSeconds = 0;
       });
+      unawaited(
+        PluginService().dispatchMessage(
+          sent,
+          conversationId: widget.conversationId,
+        ),
+      );
       await _saveCachedMessages();
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _inputFocus.requestFocus();

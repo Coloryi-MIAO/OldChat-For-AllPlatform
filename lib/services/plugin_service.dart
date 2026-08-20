@@ -52,6 +52,8 @@ class PluginService extends ChangeNotifier {
   final Set<String> _claimingPacketIds = {};
   final Map<String, DateTime> _redPacketRetryAfter = {};
   final List<void Function(Map<String, dynamic>)> _messageListeners = [];
+  final Map<String, Map<String, dynamic>> _uiResults =
+      <String, Map<String, dynamic>>{};
   bool _loaded = false;
   String? _loadedUserId;
 
@@ -74,6 +76,13 @@ class PluginService extends ChangeNotifier {
 
   bool get loaded => _loaded;
 
+  Map<String, dynamic>? uiResult(String id) => _uiResults[id];
+
+  void clearUiResult(String id) {
+    _uiResults.remove(id);
+    notifyListeners();
+  }
+
   Future<void> load() async {
     final userId = AuthService().userId ?? 'guest';
     await AccountStorage.instance.load(userId: userId);
@@ -86,6 +95,7 @@ class PluginService extends ChangeNotifier {
     _dispatchedMessageIds.clear();
     _claimingPacketIds.clear();
     _redPacketRetryAfter.clear();
+    _uiResults.clear();
     _loaded = true;
     _loadedUserId = userId;
     final storage = AccountStorage.instance;
@@ -1208,6 +1218,80 @@ class PluginService extends ChangeNotifier {
     return plugin;
   }
 
+  dynamic _luaValue(LuaState ls, int index, [int depth = 0]) {
+    if (depth > 8) return null;
+    if (ls.isNil(index)) return null;
+    if (ls.isString(index)) return ls.toStr(index);
+    if (ls.isBoolean(index)) return ls.toBoolean(index);
+    if (ls.isNumber(index)) return ls.toNumberX(index);
+    if (!ls.isTable(index)) return null;
+    final entries = <dynamic, dynamic>{};
+    ls.pushNil();
+    while (ls.next(index)) {
+      final key = ls.isNumber(-2) ? ls.toInteger(-2) : (ls.toStr(-2) ?? '');
+      final value = _luaValue(ls, -1, depth + 1);
+      if (value != null) entries[key] = value;
+      ls.pop(1);
+    }
+    final numericKeys = entries.keys.whereType<int>().toList()..sort();
+    if (numericKeys.isNotEmpty &&
+        numericKeys.length == entries.length &&
+        numericKeys.first == 1 &&
+        numericKeys.last == numericKeys.length) {
+      return numericKeys.map((key) => entries[key]).toList();
+    }
+    return entries.map((key, value) => MapEntry(key.toString(), value));
+  }
+
+  Map<String, dynamic>? _normalizeUiTree(Map<String, dynamic> raw) {
+    final type = (raw['type'] ?? raw['kind'] ?? 'text')
+        .toString()
+        .toLowerCase();
+    const allowed = {
+      'page',
+      'text',
+      'button',
+      'image',
+      'input',
+      'checkbox',
+      'list',
+      'spacer',
+      'column',
+      'row',
+    };
+    if (!allowed.contains(type)) return null;
+    final children = <Map<String, dynamic>>[];
+    final rawChildren = raw['children'] ?? raw['items'];
+    final childValues = rawChildren is List
+        ? rawChildren
+        : rawChildren is Map
+        ? rawChildren.values.toList()
+        : const <dynamic>[];
+    for (final child in childValues.whereType<Map>()) {
+      final normalized = _normalizeUiTree(Map<String, dynamic>.from(child));
+      if (normalized != null) children.add(normalized);
+    }
+    final result = <String, dynamic>{'type': type};
+    for (final key in const [
+      'text',
+      'label',
+      'value',
+      'placeholder',
+      'src',
+      'url',
+      'action',
+      'id',
+      'plugin_id',
+    ]) {
+      final value = raw[key];
+      if (value != null && value.toString().isNotEmpty)
+        result[key] = value.toString();
+    }
+    if (raw['checked'] is bool) result['checked'] = raw['checked'];
+    if (children.isNotEmpty) result['children'] = children;
+    return result;
+  }
+
   Future<void> executeCip(
     String id,
     String mainLua, {
@@ -1238,6 +1322,33 @@ class PluginService extends ChangeNotifier {
       state.setGlobal('conversation_id');
       state.pushString(event['from_uid']?.toString() ?? '');
       state.setGlobal('from_uid');
+      state.newTable();
+      final eventValues = <String, dynamic>{
+        'type': event['type'],
+        'conversation_type': event['conversation_type'],
+        'conversation_id': event['conversation_id'],
+        'message_id': event['message_id'],
+        'from_uid': event['from_uid'],
+        'text': event['text'],
+        'msg_type': event['msg_type'],
+        'created_at': event['created_at'],
+        'media_url': event['media_url'],
+        'action': event['action'],
+        'node_id': event['node_id'],
+        'value': event['value'],
+      };
+      for (final entry in eventValues.entries) {
+        if (entry.value == null) continue;
+        if (entry.value is num) {
+          state.pushNumber((entry.value as num).toDouble());
+        } else if (entry.value is bool) {
+          state.pushBoolean(entry.value as bool);
+        } else {
+          state.pushString(entry.value.toString());
+        }
+        state.setField(-2, entry.key);
+      }
+      state.setGlobal('event');
     }
     for (final name in const [
       'io',
@@ -1304,8 +1415,9 @@ class PluginService extends ChangeNotifier {
 
     int storageSet(LuaState ls) {
       if (!permissions.contains('storage') &&
-          !permissions.contains('storage.local'))
+          !permissions.contains('storage.local')) {
         return 0;
+      }
       final key = ls.optString(1, '') ?? '';
       final value = ls.optString(2, '') ?? '';
       unawaited(storage.setString('$storagePrefix$key', value));
@@ -1314,8 +1426,9 @@ class PluginService extends ChangeNotifier {
 
     int storageRemove(LuaState ls) {
       if (!permissions.contains('storage') &&
-          !permissions.contains('storage.local'))
+          !permissions.contains('storage.local')) {
         return 0;
+      }
       final key = ls.optString(1, '') ?? '';
       unawaited(storage.remove('$storagePrefix$key'));
 
@@ -1324,8 +1437,9 @@ class PluginService extends ChangeNotifier {
 
     int storageClear(LuaState ls) {
       if (!permissions.contains('storage') &&
-          !permissions.contains('storage.local'))
+          !permissions.contains('storage.local')) {
         return 0;
+      }
       for (final key in storage.keys.where(
         (key) => key.startsWith(storagePrefix),
       )) {
@@ -1354,11 +1468,23 @@ class PluginService extends ChangeNotifier {
     }
 
     int widgetResult(LuaState ls) {
-      if (ls.getTop() > 0) {
-        ls.pushValue(1);
+      if (ls.getTop() <= 0) {
+        ls.pushNil();
         return 1;
       }
-      ls.pushNil();
+      final result = _luaValue(ls, 1);
+      if (result is! Map) {
+        ls.pushNil();
+        return 1;
+      }
+      final normalized = _normalizeUiTree(Map<String, dynamic>.from(result));
+      if (normalized == null) {
+        ls.pushNil();
+        return 1;
+      }
+      _uiResults[id] = normalized;
+      notifyListeners();
+      ls.pushString(id);
       return 1;
     }
 
@@ -1400,6 +1526,11 @@ class PluginService extends ChangeNotifier {
       'spacer': widgetFactory,
     });
     state.register('ui_result', widgetResult);
+    state.register('ui_clear', (LuaState ls) {
+      _uiResults.remove(id);
+      notifyListeners();
+      return 0;
+    });
     state.registerAsync('app_file_pick', (LuaState ls) async {
       if (!permissions.contains('files.local')) return deniedCapability(ls);
       try {
@@ -1408,13 +1539,25 @@ class PluginService extends ChangeNotifier {
           allowMultiple: false,
         );
         final selectedFiles = filePickerFiles(result);
-        final path = selectedFiles.isNotEmpty ? selectedFiles.first.path : null;
-        if (path == null || path.isEmpty) {
+        final selected = selectedFiles.isNotEmpty ? selectedFiles.first : null;
+        if (selected == null) {
           ls.pushNil();
           ls.pushString('file selection cancelled');
           return 2;
         }
-        ls.pushString(path);
+        final bytes = await filePickerBytes(selected);
+        if (bytes == null || bytes.isEmpty) {
+          ls.pushNil();
+          ls.pushString('file selection failed: unable to read selected file');
+          return 2;
+        }
+        ls.pushString(
+          jsonEncode({
+            'name': selected.name,
+            'size': bytes.length,
+            'base64': base64Encode(bytes),
+          }),
+        );
         ls.pushNil();
       } catch (error) {
         ls.pushNil();

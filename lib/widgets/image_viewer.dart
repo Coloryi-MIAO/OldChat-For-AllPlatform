@@ -110,7 +110,7 @@ class _ImageViewerState extends State<ImageViewer> {
       icon: Icon(previous ? Icons.chevron_left : Icons.chevron_right, size: 42),
       color: Colors.white,
       disabledColor: Colors.white24,
-      tooltip: previous ? '上一张' : '下一张',
+      tooltip: AppLocalizations.current.t(previous ? '上一张' : '下一张'),
       style: IconButton.styleFrom(
         backgroundColor: Colors.black45,
         padding: const EdgeInsets.all(6),

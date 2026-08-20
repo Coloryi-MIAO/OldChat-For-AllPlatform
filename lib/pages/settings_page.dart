@@ -267,15 +267,15 @@ class _SettingsPageState extends State<SettingsPage> {
       body: ListView(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         children: [
-          _animatedCategory('通用', Icons.tune, [
+          _animatedCategory(context.tr.t('通用'), Icons.tune, [
             _buildFontSetting(theme, primary),
             _buildApiVersionSetting(primary),
             _buildServerSettings(primary),
             _buildChoiceTile(
               icon: Icons.language,
               title: tr.language,
-              subtitle: _language == 'zh' ? '中文' : 'English',
-              options: const ['中文', 'English'],
+              subtitle: _language == 'zh' ? context.tr.chinese : context.tr.english,
+              options: [context.tr.chinese, context.tr.english],
               selectedIndex: _language == 'zh' ? 0 : 1,
               onSelected: (index) async {
                 final value = index == 0 ? 'zh' : 'en';
@@ -285,7 +285,7 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
           ], 0),
           SizedBox(height: 12),
-          _animatedCategory('外观', Icons.palette_outlined, [
+          _animatedCategory(context.tr.t('外观'), Icons.palette_outlined, [
             _buildSwitchTile(
               icon: Icons.favorite,
               title: AppLocalizations.current.t('粉色主题'),
@@ -295,7 +295,7 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
           ], 1),
           const SizedBox(height: 12),
-          _animatedCategory('通知', Icons.notifications_none, [
+          _animatedCategory(context.tr.t('通知'), Icons.notifications_none, [
             _buildSwitchTile(
               icon: Icons.notifications,
               title: AppLocalizations.current.t('桌面通知'),
@@ -340,7 +340,7 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
           ], 2),
           const SizedBox(height: 12),
-          _animatedCategory('消息', Icons.forum_outlined, [
+          _animatedCategory(context.tr.t('消息'), Icons.forum_outlined, [
             _buildSwitchTile(
               icon: Icons.all_inbox_outlined,
               title: context.tr.t('多会话消息接收'),
@@ -375,7 +375,7 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
           ], 8),
           const SizedBox(height: 12),
-          _animatedCategory('窗口', Icons.window, [
+          _animatedCategory(context.tr.t('窗口'), Icons.window, [
             _buildSwitchTile(
               icon: Icons.close,
               title: AppLocalizations.current.t('关闭时确认'),
@@ -408,7 +408,7 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
           ], 3),
           SizedBox(height: 12),
-          _animatedCategory('存储', Icons.storage, [
+          _animatedCategory(context.tr.t('存储'), Icons.storage, [
             _buildInfoTile(
               icon: Icons.cached,
               title: AppLocalizations.current.t('缓存大小'),
@@ -435,7 +435,7 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
           ], 4),
           const SizedBox(height: 12),
-          _animatedCategory('下载', Icons.download, [
+          _animatedCategory(context.tr.t('下载'), Icons.download, [
             _buildSwitchTile(
               icon: Icons.settings_ethernet,
               title: AppLocalizations.current.t('Aria2 设置'),
@@ -478,7 +478,7 @@ class _SettingsPageState extends State<SettingsPage> {
             ],
           ], 5),
           SizedBox(height: 12),
-          _animatedCategory('插件', Icons.extension_outlined, [
+          _animatedCategory(context.tr.t('插件'), Icons.extension_outlined, [
             _buildInfoTile(
               icon: Icons.extension_outlined,
               title: AppLocalizations.current.t('插件中心'),
@@ -487,7 +487,7 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
           ], 6),
           const SizedBox(height: 12),
-          _animatedCategory('信息', Icons.info_outline, [
+          _animatedCategory(context.tr.t('信息'), Icons.info_outline, [
             _buildSwitchTile(
               icon: Icons.system_update_alt,
               title: AppLocalizations.current.t('自动检查更新'),
@@ -547,7 +547,7 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
           ], 7),
           const SizedBox(height: 12),
-          _animatedCategory('启动', Icons.hourglass_bottom, [
+          _animatedCategory(context.tr.t('启动'), Icons.hourglass_bottom, [
             _buildSwitchTile(
               icon: Icons.power_settings_new,
               title: context.tr.t('开机自启动'),

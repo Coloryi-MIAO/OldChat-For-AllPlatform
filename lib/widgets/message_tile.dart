@@ -996,7 +996,9 @@ class _MessageTileState extends State<MessageTile> {
               onPressed: widget.onMessageAction == null
                   ? null
                   : () => widget.onMessageAction!(msg, action, data),
-              child: Text(label.isEmpty ? '操作' : label),
+              child: Text(
+                AppLocalizations.current.t(label.isEmpty ? '操作' : label),
+              ),
             );
           }).toList(),
         ),
@@ -1086,7 +1088,10 @@ class _MessageTileState extends State<MessageTile> {
             colors: [Colors.red, Colors.redAccent],
           ),
         ),
-        child: Text('红包', style: TextStyle(color: Colors.white, fontSize: 16)),
+        child: Text(
+          AppLocalizations.current.t('红包'),
+          style: const TextStyle(color: Colors.white, fontSize: 16),
+        ),
       );
     }
 

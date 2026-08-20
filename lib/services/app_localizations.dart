@@ -127,6 +127,15 @@ class AppLocalizations {
     '导入 .oldchat-plugin / .cip': 'Import .oldchat-plugin / .cip',
     '通过并执行': 'Approve and execute',
     '拒绝': 'Reject',
+    'CIP 小程序': 'CIP applet',
+    '协议加载失败': 'Failed to load the agreement',
+    '空消息': 'Empty message',
+    '服务器返回的消息无效': 'The server returned an invalid message',
+    '点击完成人机验证': 'Complete human verification',
+    '人机验证已完成，点击重新验证': 'Verification complete; click to verify again',
+    '上一张': 'Previous',
+    '下一张': 'Next',
+    '红包': 'Red packet',
     '系统：\${_environment!.operatingSystem}':
         'System: \${_environment!.operatingSystem}',
     '模式：\${_environment!.buildMode} · \${_environment!.architecture}':
@@ -435,12 +444,6 @@ class AppLocalizations {
     '无法读取证据图片': 'Unable to read the evidence image',
     '《用户服务协议与免责声明》': 'User Service Agreement and Disclaimer',
     '我已阅读并同意': 'I have read and agree',
-    '我已认真阅读并完全同意《用户服务协议与免责声明》':
-        'I have carefully read and fully agree to the User Service Agreement and Disclaimer',
-    '我已完整阅读并同意《用户服务协议与免责声明》':
-        'I have read and agree to the User Service Agreement and Disclaimer',
-    '协议加载失败': 'Failed to load the agreement',
-    '空消息': 'Empty message',
     '我已认真阅读并完全同意《用户服务协议与免责声明》':
         'I have carefully read and fully agree to the User Service Agreement and Disclaimer',
     '我已完整阅读并同意《用户服务协议与免责声明》':
