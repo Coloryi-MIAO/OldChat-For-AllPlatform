@@ -15,9 +15,14 @@ if [[ "$arch" == "arm64" ]]; then
 else
   [[ "$(uname -m)" == "x86_64" ]] || { echo 'macOS x64 packaging requires an Intel runner.' >&2; exit 2; }
 fi
+chmod +x tools/sign_apple_offline.sh
+tools/sign_apple_offline.sh
 flutter build macos --release
 app="build/macos/Build/Products/Release/OldChatForAllPlatform.app"
 [[ -d "$app" ]] || { echo "Flutter did not produce $app" >&2; exit 1; }
+identity='OldChat For AllPlatform Offline Development'
+codesign --force --deep --timestamp=none --sign "$identity" "$app"
+codesign --verify --deep --strict "$app"
 mkdir -p "$out"
 hdiutil create -volname 'OldChat For AllPlatform' -srcfolder "$app" -ov -format UDZO "$out/OldChatForAllPlatformmacos$arch.dmg"
 printf 'macOS DMG: %s\n' "$out/OldChatForAllPlatformmacos$arch.dmg"
