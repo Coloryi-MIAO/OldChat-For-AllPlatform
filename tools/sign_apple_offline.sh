@@ -35,5 +35,8 @@ security unlock-keychain -p "$password" "$keychain"
 security import "$p12" -k "$keychain" -P "$password" -T /usr/bin/codesign -T /usr/bin/security >/dev/null
 security set-key-partition-list -S apple-tool:,apple: -s -k "$password" "$keychain" >/dev/null
 security default-keychain -s "$keychain"
-security list-keychains -d user -s "$keychain"
+security list-keychains -d user -s "$keychain"security find-identity -v -p codesigning "$keychain" 2>/dev/null | grep -Fq 'OldChat For AllPlatform Offline Development' || {
+  echo "Offline Apple signing identity was not installed: $identity" >&2
+  exit 1
+}
 printf '%s\n' "$identity"

@@ -6,7 +6,7 @@ cd "$root"
 out="${1:-dist/android}"
 chmod +x tools/create_android_signing.sh
 tools/create_android_signing.sh
-flutter build apk --release --split-per-abi --target-platform android-arm,android-arm64,android-x64
+flutter build apk --release --split-per-abi --target-platform android-arm,android-arm64,android-x64 -Pandroid.compileSdk=36 -Pandroid.targetSdk=36
 rm -rf "$out"
 mkdir -p "$out"
 cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk "$out/OldChatForAllPlatformandroidv7a.apk"

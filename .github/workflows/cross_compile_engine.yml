@@ -13,8 +13,8 @@ permissions:
   contents: read
 
 env:
-  FLUTTER_X64: '3.44.8'
-  FLUTTER_ARM64: '3.44.8'
+  FLUTTER_X64: '3.44.4'
+  FLUTTER_ARM64: '3.44.4'
 
 jobs:
   engine:
@@ -30,18 +30,10 @@ jobs:
             runner: ubuntu-24.04
             flutter: FLUTTER_X64
             architecture: x64
-          - platform: linux
-            runner: ubuntu-24.04-arm
-            flutter: FLUTTER_ARM64
-            architecture: arm64
           - platform: windows
             runner: windows-2025
             flutter: FLUTTER_X64
             architecture: x64
-          - platform: windows
-            runner: windows-11-arm
-            flutter: FLUTTER_ARM64
-            architecture: arm64
           - platform: macos
             runner: macos-15-intel
             flutter: FLUTTER_X64
@@ -82,7 +74,7 @@ jobs:
         shell: bash
         run: |
           case '${{ matrix.platform }}' in
-            android) flutter build apk --release --split-per-abi --target-platform android-arm,android-arm64,android-x64 --no-pub ;;
+            android) flutter build apk --release --split-per-abi --target-platform android-arm,android-arm64,android-x64 --no-pub -Pandroid.compileSdk=36 -Pandroid.targetSdk=36 ;;
             linux) flutter build linux --release --no-pub ;;
             windows) flutter build windows --release --no-pub ;;
             macos) MACOSX_DEPLOYMENT_TARGET=10.15 flutter build macos --release --no-pub ;;

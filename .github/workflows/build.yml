@@ -13,8 +13,8 @@ permissions:
   contents: read
 
 env:
-  FLUTTER_X64: '3.44.8'
-  FLUTTER_ARM64: '3.44.8'
+  FLUTTER_X64: '3.44.4'
+  FLUTTER_ARM64: '3.44.4'
   ANDROID_COMPILE_SDK: '36'
   MACOSX_DEPLOYMENT_TARGET: '10.15'
 
@@ -48,7 +48,7 @@ jobs:
           java-version: '17'
       - run: flutter pub get
       - run: chmod +x tools/create_android_signing.sh && OLDCHATANDROIDKEYALIAS=oldchatrelease tools/create_android_signing.sh
-      - run: flutter build apk --release --split-per-abi --target-platform android-arm,android-arm64,android-x64
+      - run: flutter build apk --release --split-per-abi --target-platform android-arm,android-arm64,android-x64 -Pandroid.compileSdk=36 -Pandroid.targetSdk=36
       - name: Rename Android artifacts
         shell: bash
         run: |
@@ -63,67 +63,43 @@ jobs:
 
   build-linux:
     needs: analyze-and-test
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - arch: x64
-            runner: ubuntu-24.04
-            flutter: FLUTTER_X64
-            architecture: x64
-          - arch: arm64
-            runner: ubuntu-24.04-arm
-            flutter: FLUTTER_ARM64
-            architecture: arm64
-    runs-on: ${{ matrix.runner }}
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: ${{ env[matrix.flutter] }}
-          architecture: ${{ matrix.architecture }}
+          flutter-version: ${{ env.FLUTTER_X64 }}
+          architecture: x64
           channel: stable
           cache: true
       - run: sudo apt-get update && sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libayatana-appindicator3-dev libmpv-dev dpkg-dev rpm gpg zip
       - run: flutter pub get
-      - run: chmod +x tools/package_linux.sh tools/sign_linux.sh && tools/package_linux.sh ${{ matrix.arch }} dist/linux${{ matrix.arch }} && tools/sign_linux.sh dist/linux${{ matrix.arch }}
-      - run: test -s 'dist/linux${{ matrix.arch }}/OldChatForAllPlatformlinux${{ matrix.arch }}.deb' && test -s 'dist/linux${{ matrix.arch }}/OldChatForAllPlatformlinux${{ matrix.arch }}.rpm'
+      - run: chmod +x tools/package_linux.sh tools/sign_linux.sh && tools/package_linux.sh x64 dist/linuxx64 && tools/sign_linux.sh dist/linuxx64
+      - run: test -s dist/linuxx64/OldChatForAllPlatformlinuxx64.deb && test -s dist/linuxx64/OldChatForAllPlatformlinuxx64.rpm
       - uses: actions/upload-artifact@v4
         with:
-          name: oldchatlinux${{ matrix.arch }}
-          path: dist/linux${{ matrix.arch }}
+          name: oldchatlinuxx64
+          path: dist/linuxx64
 
   build-windows:
     needs: analyze-and-test
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - arch: x64
-            runner: windows-2025
-            flutter: FLUTTER_X64
-            architecture: x64
-          - arch: arm64
-            runner: windows-11-arm
-            flutter: FLUTTER_ARM64
-            architecture: arm64
-    runs-on: ${{ matrix.runner }}
+    runs-on: windows-2025
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: ${{ env[matrix.flutter] }}
-          architecture: ${{ matrix.architecture }}
+          flutter-version: ${{ env.FLUTTER_X64 }}
+          architecture: x64
           channel: stable
           cache: true
       - run: flutter pub get
       - name: Build and package Windows
         shell: pwsh
-        run: ./tools/package_windows.ps1 -Architecture '${{ matrix.arch }}' -Output 'dist/windows${{ matrix.arch }}'
+        run: ./tools/package_windows.ps1 -Architecture 'x64' -Output 'dist/windowsx64'
       - uses: actions/upload-artifact@v4
         with:
-          name: oldchatwindows${{ matrix.arch }}
-          path: dist/windows${{ matrix.arch }}
+          name: oldchatwindowsx64
+          path: dist/windowsx64
 
   build-macos:
     needs: analyze-and-test

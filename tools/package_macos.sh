@@ -21,11 +21,12 @@ flutter build macos --release
 app="build/macos/Build/Products/Release/OldChatForAllPlatform.app"
 [[ -d "$app" ]] || { echo "Flutter did not produce $app" >&2; exit 1; }
 identity="${OLDCHAT_APPLE_SIGNING_IDENTITY:-OldChat For AllPlatform Offline Development}"
-security find-identity -v -p codesigning 2>/dev/null | grep -Fq "\"$identity\"" || {
+keychain="$root/signing/oldchat-offline.keychain-db"
+security find-identity -v -p codesigning "$keychain" 2>/dev/null | grep -Fq "$identity" || {
   echo "Offline Apple signing identity not found: $identity" >&2
   exit 1
 }
-codesign --force --deep --timestamp=none --sign "$identity" "$app"
+codesign --force --deep --timestamp=none --keychain "$keychain" --sign "$identity" "$app"
 codesign --verify --deep --strict --verbose=2 "$app"
 mkdir -p "$out"
 codesign --display --verbose=2 "$app" > "$out/OldChatForAllPlatformmacos$arch.signing.txt" 2>&1

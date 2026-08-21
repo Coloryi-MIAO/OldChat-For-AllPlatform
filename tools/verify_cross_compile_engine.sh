@@ -3,7 +3,7 @@ set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$root"
-flutter_version="${FLUTTER_VERSION:-3.44.8}"
+flutter_version="${FLUTTER_VERSION:-3.44.4}"
 platform="${1:-all}"
 case "$platform" in
   all|android|linux|windows|macos|ios|web) ;;
@@ -14,7 +14,7 @@ printf 'Host: %s / %s\n' "$(uname -s)" "$(uname -m)"
 flutter --version | sed -n '1,3p'
 flutter pub get
 if [[ "$platform" == all || "$platform" == android ]]; then
-  flutter build apk --release --split-per-abi --target-platform android-arm,android-arm64,android-x64 --no-pub
+  flutter build apk --release --split-per-abi --target-platform android-arm,android-arm64,android-x64 --no-pub -Pandroid.compileSdk=36 -Pandroid.targetSdk=36
 fi
 if [[ "$platform" == all || "$platform" == web ]]; then
   flutter build web --release --no-pub

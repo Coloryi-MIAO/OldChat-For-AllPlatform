@@ -45,7 +45,7 @@ dependencies:
   path_provider: ^2.1.0
 
   # 音频（通知音）
-  audioplayers: 5.2.1
+  audioplayers: ^6.5.1
   flutter_local_notifications: ^17.0.0
   win_toast: ^0.4.0
   windows_single_instance: ^1.1.0
@@ -69,7 +69,7 @@ flutter:
         - asset: assets/HarmonyOS_Sans_SC_Medium.ttf
           weight: 500
 
-# Keep the Apple camera implementation on the stable Objective-C/Swift boundary used by Flutter 3.44.8.
+# Keep the Apple camera implementation on the stable Objective-C/Swift boundary used by Flutter 3.44.4.
 dependency_overrides:
   camera_avfoundation: 0.9.22+9
   video_player_avfoundation: 2.8.10
