@@ -95,10 +95,10 @@ fi
 rm -f "$signing_dir/import-error.txt"
 
 run_security 60 security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$keychain_password" "$keychain" >/dev/null 2>&1 || true
-run_security 60 security default-keychain -s "$keychain" >/dev/null 2>&1
-run_security 60 security list-keychains -d user -s "$keychain" >/dev/null 2>&1
+run_security 60 security list-keychains -d user -s "$keychain" login.keychain-db >/dev/null 2>&1 || true
+run_security 60 security default-keychain -s "$keychain" >/dev/null 2>&1 || true
 
-if ! run_security 60 security find-identity -v -p codesigning "$keychain" > "$signing_dir/identities.txt" 2>/dev/null; then
+if ! run_security 60 security find-identity -v -p codesigning > "$signing_dir/identities.txt" 2>/dev/null; then
   echo 'Could not query the offline Apple signing identity.' >&2
   exit 1
 fi
