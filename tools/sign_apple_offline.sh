@@ -7,7 +7,10 @@ if [[ "$(uname -s)" != "Darwin" ]]; then
 fi
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 signing_dir="${root}/signing"
-p12_password="${OLDCHAT_APPLE_P12_PASSWORD-}"
+# Keep the generated private key unencrypted for non-interactive CI. macOS
+# runners reject some empty-password PKCS#12 bundles, so the temporary bundle
+# uses a local password unless one is explicitly provided.
+p12_password="${OLDCHAT_APPLE_P12_PASSWORD:-oldchatlocalbuild}"
 keychain_password="${OLDCHAT_APPLE_KEYCHAIN_PASSWORD:-oldchatlocalbuild}"
 identity="${OLDCHAT_APPLE_SIGNING_IDENTITY:-OldChat For AllPlatform Offline Development}"
 mkdir -p "$signing_dir"
@@ -54,7 +57,11 @@ security delete-keychain "$keychain" 2>/dev/null || true
 security create-keychain -p "$keychain_password" "$keychain"
 security set-keychain-settings -lut 21600 "$keychain"
 security unlock-keychain -p "$keychain_password" "$keychain"
-security import "$p12" -k "$keychain" -P "$p12_password" -f pkcs12 -A >/dev/null
+if ! security import "$p12" -k "$keychain" -P "$p12_password" -f pkcs12 -A >/dev/null 2>&1; then
+  echo 'PKCS#12 import failed; retrying with unencrypted PEM key and certificate.' >&2
+  security import "$key" -k "$keychain" -f pem -t priv -A >/dev/null
+  security import "$cert" -k "$keychain" -f pem -t cert -A >/dev/null
+fi
 security add-trusted-cert -d -r trustRoot -k "$keychain" "$cert" >/dev/null 2>&1 || true
 security set-key-partition-list -S apple-tool:,apple: -s -k "$keychain_password" "$keychain" >/dev/null 2>&1 || true
 security default-keychain -s "$keychain"
