@@ -69,7 +69,9 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libayatana-appindicator3-dev libmpv-dev
-      - run: flutter pub get
+      - run: flutter pub get      - name: Prepare Android signing
+        if: matrix.platform == 'android'
+        run: chmod +x tools/create_android_signing.sh && OLDCHATANDROIDKEYALIAS=oldchatrelease tools/create_android_signing.sh
       - name: Build platform engine
         shell: bash
         run: |
