@@ -3,7 +3,7 @@
 [![Latest Release](https://img.shields.io/github/v/release/Coloryi-MIAO/OldChat-For-AllPlatform?display_name=tag&sort=semver)](https://github.com/Coloryi-MIAO/OldChat-For-AllPlatform/releases)
 [![License](https://img.shields.io/github/license/Coloryi-MIAO/OldChat-For-AllPlatform)](LICENSE)
 [![Forks](https://img.shields.io/github/forks/Coloryi-MIAO/OldChat-For-AllPlatform?style=flat)](https://github.com/Coloryi-MIAO/OldChat-For-AllPlatform/network/members)
-[![Build](https://github.com/Coloryi-MIAO/OldChat-For-AllPlatform/actions/workflows/build.yml/badge.svg)](https://github.com/Coloryi-MIAO/OldChat-For-AllPlatform/actions/workflows/build.yml)
+[![Build](https://github.com/Coloryi-MIAO/OldChat-For-AllPlatform/actions/workflows/build.yml/badge.svg?branch=main)](https://github.com/Coloryi-MIAO/OldChat-For-AllPlatform/actions/workflows/build.yml)
 
 OldChat For AllPlatform 是基于 Flutter 的跨平台聊天客户端。当前版本为 `1.4.7-beta.8+5`，同一套代码覆盖 Windows、Android、iOS、macOS、Linux 和 Web。
 
