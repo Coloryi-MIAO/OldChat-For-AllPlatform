@@ -15,8 +15,6 @@ env:
   FLUTTER_ARM64: '3.44.8'
   ANDROID_COMPILE_SDK: '36'
   MACOSX_DEPLOYMENT_TARGET: '10.15'
-  OLDCHAT_APPLE_SIGNING_PASSWORD: oldchatlocalbuild
-  OLDCHAT_APPLE_SIGNING_IDENTITY: OldChat For AllPlatform Offline Development
 
 jobs:
   analyze-and-test:
