@@ -7,7 +7,7 @@ if [[ "$(uname -s)" != "Darwin" ]]; then
 fi
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 signing_dir="${root}/signing"
-openssl_password=""
+openssl_password="${OLDCHAT_APPLE_P12_PASSWORD-}"
 keychain_password="${OLDCHAT_APPLE_KEYCHAIN_PASSWORD:-oldchatlocalbuild}"
 identity="${OLDCHAT_APPLE_SIGNING_IDENTITY:-OldChat For AllPlatform Offline Development}"
 mkdir -p "$signing_dir"
@@ -17,8 +17,8 @@ csr="$signing_dir/oldchat-apple.csr"
 p12="$signing_dir/oldchat-apple.p12"
 
 rm -f "$key" "$cert" "$csr" "$p12"
-openssl req -new -newkey rsa:4096 -nodes \
-  -keyout "$key" -out "$csr" \
+openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:4096 -out "$key"
+openssl req -new -sha256 -key "$key" -out "$csr" \
   -subj "/C=CN/O=Coloryi-MIAO/OU=OldChat For AllPlatform/CN=$identity"
 extensions="$signing_dir/oldchat-apple.extensions"
 cat > "$extensions" <<'EXTENSIONS'
@@ -44,9 +44,11 @@ chmod 600 "$key" "$p12"
 chmod 644 "$cert"
 
 keychain="$signing_dir/oldchat-offline.keychain-db"
-security create-keychain -p "$keychain_password" "$keychain" 2>/dev/null || true
+security delete-keychain "$keychain" 2>/dev/null || true
+security create-keychain -p "$keychain_password" "$keychain"
 security unlock-keychain -p "$keychain_password" "$keychain"
-security import "$p12" -k "$keychain" -P "$openssl_password" -f pkcs12 -T /usr/bin/codesign -T /usr/bin/security >/dev/null
+security import "$key" -k "$keychain" -f pkcs8 -T /usr/bin/codesign -T /usr/bin/security >/dev/null
+security import "$cert" -k "$keychain" -f x509 -T /usr/bin/codesign -T /usr/bin/security >/dev/null
 security add-trusted-cert -d -r trustRoot -k "$keychain" "$cert" >/dev/null 2>&1 || true
 security set-key-partition-list -S apple-tool:,apple: -s -k "$keychain_password" "$keychain" >/dev/null
 security default-keychain -s "$keychain"

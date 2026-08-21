@@ -126,6 +126,7 @@ jobs:
       - name: Build and package macOS
         env:
           MACOSX_DEPLOYMENT_TARGET: '10.15'
+          OLDCHAT_APPLE_P12_PASSWORD: ''
           OLDCHAT_APPLE_KEYCHAIN_PASSWORD: oldchatlocalbuild
           OLDCHAT_APPLE_SIGNING_IDENTITY: OldChat For AllPlatform Offline Development
         run: |
@@ -150,6 +151,7 @@ jobs:
       - run: flutter pub get
       - name: Build development signed IPA with offline identity
         env:
+          OLDCHAT_APPLE_P12_PASSWORD: ''
           OLDCHAT_APPLE_KEYCHAIN_PASSWORD: oldchatlocalbuild
           OLDCHAT_APPLE_SIGNING_IDENTITY: OldChat For AllPlatform Offline Development
         run: |
