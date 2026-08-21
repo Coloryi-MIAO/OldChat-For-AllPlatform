@@ -31,15 +31,10 @@ openssl x509 -req -sha256 -days 36500 \
   -in "$csr" -signkey "$key" \
   -out "$cert" -extfile "$extensions"
 rm -f "$extensions" "$csr"
-if openssl pkcs12 -help 2>&1 | grep -q -- '-legacy'; then
-  openssl pkcs12 -export -legacy \
-    -inkey "$key" -in "$cert" -out "$p12" -name "$identity" \
-    -passout "pass:$p12_password"
-else
-  openssl pkcs12 -export \
-    -inkey "$key" -in "$cert" -out "$p12" -name "$identity" \
-    -passout "pass:$p12_password"
-fi
+openssl pkcs12 -export \
+  -inkey "$key" -in "$cert" -out "$p12" -name "$identity" \
+  -keypbe PBE-SHA1-3DES -certpbe PBE-SHA1-3DES -macalg sha1 \
+  -passout "pass:$p12_password"
 openssl pkcs12 -in "$p12" -passin "pass:$p12_password" -noout >/dev/null
 chmod 600 "$key" "$p12"
 chmod 644 "$cert"
