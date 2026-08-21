@@ -243,7 +243,7 @@ class _AboutPageState extends State<AboutPage> {
                 _row(tr.text('默认服务器', 'Default server'), '60.205.94.101:8080'),
                 _row(tr.text('开发者', 'Developer'), 'Coloryi-MIAO'),
                 _row(tr.text('开源协议', 'License'), 'MIT License'),
-                _row(tr.text('应用标识', 'Application ID'), 'com.coloryi.oldchatfo'),
+                _row(tr.text('应用标识', 'Application ID'), 'com.coloryi.oldchatforallplatform'),
                 const SizedBox(height: 12),
                 TextButton.icon(
                   onPressed: () => launchUrl(

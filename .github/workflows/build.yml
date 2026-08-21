@@ -15,6 +15,8 @@ env:
   FLUTTER_ARM64: '3.44.8'
   ANDROID_COMPILE_SDK: '36'
   MACOSX_DEPLOYMENT_TARGET: '10.15'
+  OLDCHAT_APPLE_SIGNING_PASSWORD: oldchatlocalbuild
+  OLDCHAT_APPLE_SIGNING_IDENTITY: OldChat For AllPlatform Offline Development
 
 jobs:
   analyze-and-test:
@@ -126,9 +128,11 @@ jobs:
       - name: Build and package macOS
         env:
           MACOSX_DEPLOYMENT_TARGET: '10.15'
+          OLDCHAT_APPLE_SIGNING_PASSWORD: oldchatlocalbuild
+          OLDCHAT_APPLE_SIGNING_IDENTITY: OldChat For AllPlatform Offline Development
         run: |
           chmod +x tools/package_macos.sh tools/sign_apple_offline.sh
-          tools/package_macos.sh ${{ matrix.arch }} dist/macos${{ matrix.arch }}
+          OLDCHAT_APPLE_SIGNING_PASSWORD="$OLDCHAT_APPLE_SIGNING_PASSWORD" tools/package_macos.sh ${{ matrix.arch }} dist/macos${{ matrix.arch }}
       - uses: actions/upload-artifact@v4
         with:
           name: oldchatmacos${{ matrix.arch }}
@@ -149,7 +153,7 @@ jobs:
       - name: Build development signed IPA with offline identity
         run: |
           chmod +x tools/sign_apple_offline.sh tools/package_ios.sh tools/package_ios_unsigned.sh
-          ./tools/sign_apple_offline.sh
+          OLDCHAT_APPLE_SIGNING_PASSWORD="$OLDCHAT_APPLE_SIGNING_PASSWORD" ./tools/sign_apple_offline.sh
           flutter build ios --release --no-codesign
           tools/package_ios_unsigned.sh dist/ios
           test -s dist/ios/OldChatForAllPlatformiosdevelopment.ipa

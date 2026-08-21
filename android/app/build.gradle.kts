@@ -8,7 +8,7 @@ dependencies {
 }
 
 android {
-    namespace = "com.coloryi.oldchatfo"
+    namespace = "com.coloryi.oldchatforallplatform"
     compileSdk = 36
     ndkVersion = flutter.ndkVersion
 
@@ -19,7 +19,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.coloryi.oldchatfo"
+        applicationId = "com.coloryi.oldchatforallplatform"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
