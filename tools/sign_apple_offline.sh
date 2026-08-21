@@ -7,17 +7,14 @@ if [[ "$(uname -s)" != "Darwin" ]]; then
 fi
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 signing_dir="${root}/signing"
-p12_password="${OLDCHAT_APPLE_P12_PASSWORD:-oldchatlocalbuild}"
 keychain_password="${OLDCHAT_APPLE_KEYCHAIN_PASSWORD:-oldchatlocalbuild}"
 identity="${OLDCHAT_APPLE_SIGNING_IDENTITY:-OldChat For AllPlatform Offline Development}"
 mkdir -p "$signing_dir"
 key="$signing_dir/oldchat-apple.key"
 cert="$signing_dir/oldchat-apple.crt"
 csr="$signing_dir/oldchat-apple.csr"
-p12="$signing_dir/oldchat-apple.p12"
-
-rm -f "$key" "$cert" "$csr" "$p12"
-openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:4096 -out "$key"
+rm -f "$key" "$cert" "$csr"
+openssl genrsa -traditional -out "$key" 2048
 openssl req -new -sha256 -key "$key" -out "$csr" \
   -subj "/C=CN/O=Coloryi-MIAO/OU=OldChat For AllPlatform/CN=$identity"
 extensions="$signing_dir/oldchat-apple.extensions"
@@ -31,19 +28,16 @@ openssl x509 -req -sha256 -days 36500 \
   -in "$csr" -signkey "$key" \
   -out "$cert" -extfile "$extensions"
 rm -f "$extensions" "$csr"
-openssl pkcs12 -export \
-  -inkey "$key" -in "$cert" -out "$p12" -name "$identity" \
-  -keypbe PBE-SHA1-3DES -certpbe PBE-SHA1-3DES -macalg sha1 \
-  -passout "pass:$p12_password"
-openssl pkcs12 -in "$p12" -passin "pass:$p12_password" -noout >/dev/null
-chmod 600 "$key" "$p12"
+chmod 600 "$key"
 chmod 644 "$cert"
 
 keychain="$signing_dir/oldchat-offline.keychain-db"
 security delete-keychain "$keychain" 2>/dev/null || true
 security create-keychain -p "$keychain_password" "$keychain"
+security set-keychain-settings -lut 21600 "$keychain"
 security unlock-keychain -p "$keychain_password" "$keychain"
-security import "$p12" -k "$keychain" -P "$p12_password" -f pkcs12 -T /usr/bin/codesign -T /usr/bin/security >/dev/null
+security import "$key" -k "$keychain" -f pemseq -T /usr/bin/codesign -T /usr/bin/security >/dev/null
+security import "$cert" -k "$keychain" -f x509 -T /usr/bin/codesign -T /usr/bin/security >/dev/null
 security add-trusted-cert -d -r trustRoot -k "$keychain" "$cert" >/dev/null 2>&1 || true
 security set-key-partition-list -S apple-tool:,apple: -s -k "$keychain_password" "$keychain" >/dev/null
 security default-keychain -s "$keychain"
