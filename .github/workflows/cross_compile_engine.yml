@@ -14,7 +14,7 @@ permissions:
 
 env:
   FLUTTER_X64: '3.44.8'
-  FLUTTER_ARM64: '3.44.4'
+  FLUTTER_ARM64: '3.44.8'
 
 jobs:
   engine:

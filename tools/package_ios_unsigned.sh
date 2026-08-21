@@ -9,11 +9,11 @@ identity="${OLDCHAT_APPLE_SIGNING_IDENTITY:-OldChat For AllPlatform Offline Deve
 rm -rf "$output/iospayload" "$output/OldChatForAllPlatformiosdevelopment.ipa" "$output/OldChatForAllPlatformiosdevelopment.signing.txt"
 mkdir -p "$output/iospayload/Payload"
 if command -v codesign >/dev/null 2>&1; then
-  security find-identity -v -p codesigning 2>/dev/null | grep -Fq "\"$identity\"" || {
-    echo "Offline Apple signing identity not found: $identity" >&2
-    exit 1
-  }
-  codesign --force --deep --timestamp=none --sign "$identity" "$app_dir"
+  signer="-"
+  if security find-identity -v -p codesigning 2>/dev/null | grep -Fq "\"$identity\""; then
+    signer="$identity"
+  fi
+  codesign --force --deep --timestamp=none --sign "$signer" "$app_dir"
   codesign --verify --deep --strict --verbose=2 "$app_dir"
   codesign --display --verbose=2 "$app_dir" > "$output/OldChatForAllPlatformiosdevelopment.signing.txt" 2>&1
 else
