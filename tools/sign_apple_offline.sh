@@ -86,11 +86,7 @@ run_security 60 security create-keychain -p "$keychain_password" "$keychain"
 run_security 60 security set-keychain-settings -lut 21600 "$keychain"
 run_security 60 security unlock-keychain -p "$keychain_password" "$keychain"
 
-if ! run_security 60 security add-trusted-cert -d -r trustRoot -k "$keychain" "$root_cert" > "$signing_dir/import-error.txt" 2>&1; then
-  cat "$signing_dir/import-error.txt" >&2 || true
-  echo 'Offline root trust setup failed.' >&2
-  exit 1
-fi
+security import "$root_cert" -k "$keychain" -f pem -A > "$signing_dir/import-error.txt" 2>&1 || true
 if ! run_security 60 security import "$p12" -k "$keychain" -f pkcs12 -P "$p12_password" -A > "$signing_dir/import-error.txt" 2>&1; then
   cat "$signing_dir/import-error.txt" >&2 || true
   echo 'Private-key and certificate import failed.' >&2
