@@ -15,6 +15,7 @@ if ($Architecture -eq 'arm64') {
 }
 New-Item -ItemType Directory -Force -Path $Output | Out-Null
 Copy-Item -Recurse -Force "$bundle\*" "$Output\"
+& "$root\tools\sign_windows.ps1" -Output $Output
 $zip = "OldChatForAllPlatformwindows$Architecture.zip"
 if (Test-Path $zip) { Remove-Item -Force $zip }
 Compress-Archive -Path "$Output\*" -DestinationPath $zip -Force

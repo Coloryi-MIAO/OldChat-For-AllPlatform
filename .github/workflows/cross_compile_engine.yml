@@ -13,7 +13,8 @@ permissions:
   contents: read
 
 env:
-  FLUTTER_VERSION: '3.44.8'
+  FLUTTER_X64: '3.44.8'
+  FLUTTER_ARM64: '3.44.4'
 
 jobs:
   engine:
@@ -23,22 +24,47 @@ jobs:
         include:
           - platform: android
             runner: ubuntu-24.04
+            flutter: FLUTTER_X64
+            architecture: x64
           - platform: linux
             runner: ubuntu-24.04
+            flutter: FLUTTER_X64
+            architecture: x64
+          - platform: linux
+            runner: ubuntu-24.04-arm
+            flutter: FLUTTER_ARM64
+            architecture: arm64
           - platform: windows
             runner: windows-2025
+            flutter: FLUTTER_X64
+            architecture: x64
+          - platform: windows
+            runner: windows-11-arm
+            flutter: FLUTTER_ARM64
+            architecture: arm64
+          - platform: macos
+            runner: macos-15-intel
+            flutter: FLUTTER_X64
+            architecture: x64
           - platform: macos
             runner: macos-15
+            flutter: FLUTTER_ARM64
+            architecture: arm64
           - platform: ios
             runner: macos-14
+            flutter: FLUTTER_ARM64
+            architecture: arm64
           - platform: web
             runner: ubuntu-24.04
+            flutter: FLUTTER_X64
+            architecture: x64
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: ${{ env.FLUTTER_VERSION }}
+          flutter-version: ${{ env[matrix.flutter] }}
+          architecture: ${{ matrix.architecture }}
           channel: stable
           cache: true
       - uses: actions/setup-java@v4
@@ -66,8 +92,8 @@ jobs:
       - name: Record engine result
         shell: bash
         run: |
-          printf 'platform=%s\nflutter=%s\nrunner=%s\n' '${{ matrix.platform }}' '${{ env.FLUTTER_VERSION }}' '${{ matrix.runner }}' > engine-result.txt
+          printf 'platform=%s\nflutter=%s\nrunner=%s\narchitecture=%s\n' '${{ matrix.platform }}' '${{ env[matrix.flutter] }}' '${{ matrix.runner }}' '${{ matrix.architecture }}' > engine-result.txt
       - uses: actions/upload-artifact@v4
         with:
-          name: oldchatengine${{ matrix.platform }}
+          name: oldchatengine${{ matrix.platform }}${{ matrix.architecture }}
           path: engine-result.txt

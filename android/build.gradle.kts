@@ -7,7 +7,7 @@ allprojects {
 
 subprojects {
     plugins.withId("com.android.library") {
-        extensions.configure<com.android.build.gradle.LibraryExtension> {
+        extensions.configure<com.android.gradle.LibraryExtension> {
             compileSdk = 36
         }
     }

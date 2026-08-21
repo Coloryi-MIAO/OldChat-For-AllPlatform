@@ -13,7 +13,8 @@ permissions:
   contents: read
 
 env:
-  FLUTTER_VERSION: '3.44.8'
+  FLUTTER_X64: '3.44.8'
+  FLUTTER_ARM64: '3.44.4'
   ANDROID_COMPILE_SDK: '36'
   MACOSX_DEPLOYMENT_TARGET: '10.15'
 
@@ -24,7 +25,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: ${{ env.FLUTTER_VERSION }}
+          flutter-version: ${{ env.FLUTTER_X64 }}
           channel: stable
           cache: true
       - run: flutter pub get
@@ -38,7 +39,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: ${{ env.FLUTTER_VERSION }}
+          flutter-version: ${{ env.FLUTTER_X64 }}
           channel: stable
           cache: true
       - uses: actions/setup-java@v4
@@ -68,21 +69,29 @@ jobs:
         include:
           - arch: x64
             runner: ubuntu-24.04
+            flutter: FLUTTER_X64
+            architecture: x64
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+            flutter: FLUTTER_ARM64
+            architecture: arm64
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: ${{ env.FLUTTER_VERSION }}
+          flutter-version: ${{ env[matrix.flutter] }}
+          architecture: ${{ matrix.architecture }}
           channel: stable
           cache: true
       - run: sudo apt-get update && sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libayatana-appindicator3-dev libmpv-dev dpkg-dev rpm gpg zip
       - run: flutter pub get
-      - run: chmod +x tools/package_linux.sh tools/sign_linux.sh && tools/package_linux.sh ${{ matrix.arch }} dist/linux-${{ matrix.arch }} && tools/sign_linux.sh dist/linux-${{ matrix.arch }}
+      - run: chmod +x tools/package_linux.sh tools/sign_linux.sh && tools/package_linux.sh ${{ matrix.arch }} dist/linux${{ matrix.arch }} && tools/sign_linux.sh dist/linux${{ matrix.arch }}
+      - run: test -s 'dist/linux${{ matrix.arch }}/OldChatForAllPlatformlinux${{ matrix.arch }}.deb' && test -s 'dist/linux${{ matrix.arch }}/OldChatForAllPlatformlinux${{ matrix.arch }}.rpm'
       - uses: actions/upload-artifact@v4
         with:
           name: oldchatlinux${{ matrix.arch }}
-          path: dist/linux-${{ matrix.arch }}
+          path: dist/linux${{ matrix.arch }}
 
   build-windows:
     needs: analyze-and-test
@@ -92,12 +101,19 @@ jobs:
         include:
           - arch: x64
             runner: windows-2025
+            flutter: FLUTTER_X64
+            architecture: x64
+          - arch: arm64
+            runner: windows-11-arm
+            flutter: FLUTTER_ARM64
+            architecture: arm64
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: ${{ env.FLUTTER_VERSION }}
+          flutter-version: ${{ env[matrix.flutter] }}
+          architecture: ${{ matrix.architecture }}
           channel: stable
           cache: true
       - run: flutter pub get
@@ -117,14 +133,19 @@ jobs:
         include:
           - arch: x64
             runner: macos-15-intel
+            flutter: FLUTTER_X64
+            architecture: x64
           - arch: arm64
             runner: macos-15
+            flutter: FLUTTER_ARM64
+            architecture: arm64
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: ${{ env.FLUTTER_VERSION }}
+          flutter-version: ${{ env[matrix.flutter] }}
+          architecture: ${{ matrix.architecture }}
           channel: stable
           cache: true
       - run: flutter pub get
@@ -146,20 +167,23 @@ jobs:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: ${{ env.FLUTTER_VERSION }}
+          flutter-version: ${{ env.FLUTTER_ARM64 }}
+          architecture: arm64
           channel: stable
           cache: true
       - run: flutter pub get
-      - name: Build unsigned development IPA
+      - name: Build development signed IPA with offline identity
         run: |
-          chmod +x tools/sign_apple_offline.sh tools/package_ios.sh
+          chmod +x tools/sign_apple_offline.sh tools/package_ios.sh tools/package_ios_unsigned.sh
           ./tools/sign_apple_offline.sh
           flutter build ios --release --no-codesign
-          tools/package_ios.sh dist/ios
+          tools/package_ios_unsigned.sh dist/ios
+          test -s dist/ios/OldChatForAllPlatformiosdevelopment.ipa
+          unzip -t dist/ios/OldChatForAllPlatformiosdevelopment.ipa
       - uses: actions/upload-artifact@v4
         with:
           name: oldchatiosipa
-          path: dist/ios/*.ipa
+          path: dist/ios/*
 
   build-web:
     needs: analyze-and-test
@@ -168,7 +192,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: ${{ env.FLUTTER_VERSION }}
+          flutter-version: ${{ env.FLUTTER_X64 }}
           channel: stable
           cache: true
       - run: flutter pub get
