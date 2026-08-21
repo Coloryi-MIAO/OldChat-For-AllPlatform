@@ -3,7 +3,7 @@ set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$root"
-flutter_version="${FLUTTER_VERSION:-3.44.4}"
+flutter_version="${FLUTTER_VERSION:-3.44.8}"
 platform="${1:-all}"
 case "$platform" in
   all|android|linux|windows|macos|ios|web) ;;

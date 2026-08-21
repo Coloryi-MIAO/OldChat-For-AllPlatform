@@ -1,4 +1,4 @@
-package com.coloryi.oldchatforallplatform
+package com.coloryi.oldchatfo
 
 import io.flutter.embedding.android.FlutterActivity
 

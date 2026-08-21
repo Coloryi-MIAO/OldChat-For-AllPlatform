@@ -190,16 +190,16 @@ class _AboutPageState extends State<AboutPage> {
                         else ...[
                           Text(AppLocalizations.current.t('系统：${_environment!.operatingSystem}')),
                           Text(
-                            '模式：${_environment!.buildMode} · ${_environment!.architecture}',
+                            tr.text('模式：${_environment!.buildMode} · ${_environment!.architecture}', 'Mode: ${_environment!.buildMode} · ${_environment!.architecture}'),
                           ),
                           Text(AppLocalizations.current.t('缓存：${_environment!.cacheBytes} bytes')),
                           Text(
-                            '缓存目录：${_environment!.cachePath}',
+                            tr.text('缓存目录：${_environment!.cachePath}', 'Cache directory: ${_environment!.cachePath}'),
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                           ),
                           Text(
-                            'WebView2：${_environment!.webView2Installed ? '可用' : '未确认'}',
+                            tr.text('WebView2：${_environment!.webView2Installed ? '可用' : 'Unknown'}', 'WebView2: ${_environment!.webView2Installed ? 'Available' : 'Unknown'}'),
                           ),
                         ],
                         const SizedBox(height: 8),
@@ -240,9 +240,10 @@ class _AboutPageState extends State<AboutPage> {
                   ),
                 ),
                 const SizedBox(height: 18),
-                _row('默认服务器', '60.205.94.101:8080'),
-                _row('开发者', 'Coloryi-MIAO'),
-                _row('开源协议', 'MIT License'),
+                _row(tr.text('默认服务器', 'Default server'), '60.205.94.101:8080'),
+                _row(tr.text('开发者', 'Developer'), 'Coloryi-MIAO'),
+                _row(tr.text('开源协议', 'License'), 'MIT License'),
+                _row(tr.text('应用标识', 'Application ID'), 'com.coloryi.oldchatfo'),
                 const SizedBox(height: 12),
                 TextButton.icon(
                   onPressed: () => launchUrl(

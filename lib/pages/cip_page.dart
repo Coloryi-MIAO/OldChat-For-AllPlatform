@@ -167,6 +167,10 @@ class _CipPageState extends State<CipPage> {
           'action': node['action'],
           'node_id': node['id'],
           'value': nodeId.isEmpty ? null : _inputControllers[nodeId]?.text,
+          'values': {
+            for (final entry in _inputControllers.entries) entry.key: entry.value.text,
+            for (final entry in _checkboxValues.entries) entry.key: entry.value,
+          },
         },
       );
     }

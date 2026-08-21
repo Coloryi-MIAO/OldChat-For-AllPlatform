@@ -1618,6 +1618,7 @@ class PluginService extends ChangeNotifier {
     final status = await state.doStringAsync(mainLua);
     if (!status) throw Exception('CIP 执行失败：脚本语法或宿主调用无效');
     _log(plugin, 'CIP 执行完成');
+    notifyListeners();
   }
 
   bool _packetAlreadyClaimed(Map packet) {

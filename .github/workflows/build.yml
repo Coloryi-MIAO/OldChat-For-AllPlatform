@@ -4,17 +4,15 @@ on:
   push:
     branches: [main]
     tags: ['v*']
-    paths-ignore: ['**/*.md', '*.md']
   pull_request:
-    paths-ignore: ['**/*.md', '*.md']
   workflow_dispatch:
 
 permissions:
   contents: read
 
 env:
-  FLUTTER_X64: '3.44.4'
-  FLUTTER_ARM64: '3.44.4'
+  FLUTTER_X64: '3.44.8'
+  FLUTTER_ARM64: '3.44.8'
   ANDROID_COMPILE_SDK: '36'
   MACOSX_DEPLOYMENT_TARGET: '10.15'
 
@@ -155,6 +153,7 @@ jobs:
           flutter build ios --release --no-codesign
           tools/package_ios_unsigned.sh dist/ios
           test -s dist/ios/OldChatForAllPlatformiosdevelopment.ipa
+          test -s dist/ios/OldChatForAllPlatformiosdevelopment.signing.txt
           unzip -t dist/ios/OldChatForAllPlatformiosdevelopment.ipa
       - uses: actions/upload-artifact@v4
         with:

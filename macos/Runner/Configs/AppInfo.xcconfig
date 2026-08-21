@@ -8,7 +8,7 @@
 PRODUCT_NAME = OldChatForAllPlatform
 
 // The application's bundle identifier
-PRODUCT_BUNDLE_IDENTIFIER = com.coloryi.oldchatforallplatform
+PRODUCT_BUNDLE_IDENTIFIER = com.coloryi.oldchatfo
 
 // The copyright displayed in application information
 PRODUCT_COPYRIGHT = Copyright © 2026 ColoryiMIAO. All rights reserved.

@@ -2379,16 +2379,6 @@ class _ChatPageState extends State<ChatPage>
   }
 
   Future<void> _handleClipboardPaste() async {
-    final media = await clipboardFileMedia();
-    if (media.isNotEmpty) {
-      if (!await _confirmClipboardSend(media.map((item) => item.name).toList())) {
-        return;
-      }
-      for (final item in media) {
-        await _sendPickedBytes(item.bytes, item.name, _mediaTypeForFile(item.name));
-      }
-      return;
-    }
     final textData = await Clipboard.getData(Clipboard.kTextPlain);
     if (textData?.text != null && textData!.text!.isNotEmpty) {
       final text = textData.text!;
@@ -2407,6 +2397,16 @@ class _ChatPageState extends State<ChatPage>
       _updateMentionPopup();
       return;
     }
+    final media = await clipboardFileMedia();
+    if (media.isNotEmpty) {
+      if (!await _confirmClipboardSend(media.map((item) => item.name).toList())) {
+        return;
+      }
+      for (final item in media) {
+        await _sendPickedBytes(item.bytes, item.name, _mediaTypeForFile(item.name));
+      }
+      return;
+    }
     final image = await clipboardImageMedia();
     if (image != null) {
       if (await _confirmClipboardSend([image.name])) {
@@ -2420,7 +2420,6 @@ class _ChatPageState extends State<ChatPage>
         (HardwareKeyboard.instance.isControlPressed ||
             HardwareKeyboard.instance.isMetaPressed) &&
         event.logicalKey == LogicalKeyboardKey.keyV) {
-      if (kIsWeb) return KeyEventResult.ignored;
       unawaited(_handleClipboardPaste());
       return KeyEventResult.handled;
     }

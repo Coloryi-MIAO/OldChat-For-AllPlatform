@@ -1,6 +1,7 @@
 import 'dart:js_interop';
 
 import 'package:web/web.dart' as web;
+import 'notification_navigation.dart';
 
 class WebNotificationService {
   Future<void> init() async {}
@@ -34,7 +35,7 @@ class WebNotificationService {
       notification.onclick = ((web.Event _) {
         notification.close();
         if (payload != null && payload.isNotEmpty) {
-          web.window.open('/$payload', '_self');
+          navigateFromWebNotification(payload);
         }
       }).toJS;
       return true;
