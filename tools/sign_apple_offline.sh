@@ -10,7 +10,7 @@ root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 signing_dir="${root}/signing"
 keychain_password="${OLDCHAT_APPLE_KEYCHAIN_PASSWORD:-oldchatlocalbuild}"
 identity="${OLDCHAT_APPLE_SIGNING_IDENTITY:-OldChat For AllPlatform Offline Development}"
-p12_password="${OLDCHAT_APPLE_P12_PASSWORD-}"
+p12_password="${OLDCHAT_APPLE_P12_PASSWORD:-oldchatlocalbuild}"
 mkdir -p "$signing_dir"
 key="$signing_dir/oldchat-apple.key"
 cert="$signing_dir/oldchat-apple.crt"
@@ -41,7 +41,7 @@ run_security() {
 }
 
 rm -f "$key" "$cert" "$csr" "$extensions" "$p12" "$signing_dir/identities.txt"
-openssl genrsa -traditional -out "$key" 4096 >/dev/null 2>&1
+openssl genrsa -out "$key" 4096 >/dev/null 2>&1
 openssl rsa -in "$key" -passin pass: -check -noout >/dev/null
 openssl req -new -sha256 -key "$key" -passin pass: -out "$csr" \
   -subj "/C=CN/O=Coloryi-MIAO/OU=OldChat For AllPlatform/CN=$identity"
@@ -56,7 +56,11 @@ openssl x509 -req -sha256 -days 36500 \
   -out "$cert" -extfile "$extensions" >/dev/null
 openssl verify -CAfile "$cert" "$cert" >/dev/null
 openssl pkcs12 -export -out "$p12" -inkey "$key" -in "$cert" \
-  -passout "pass:${p12_password}" -name "$identity" >/dev/null
+  -passout "pass:${p12_password}" \
+  -macalg sha1 \
+  -keypbe PBE-SHA1-3DES \
+  -certpbe PBE-SHA1-3DES \
+  -name "$identity" >/dev/null
 rm -f "$csr" "$extensions"
 chmod 600 "$key" "$p12"
 chmod 644 "$cert"
