@@ -10,11 +10,13 @@ root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 signing_dir="${root}/signing"
 keychain_password="${OLDCHAT_APPLE_KEYCHAIN_PASSWORD:-oldchatlocalbuild}"
 identity="${OLDCHAT_APPLE_SIGNING_IDENTITY:-OldChat For AllPlatform Offline Development}"
+p12_password="${OLDCHAT_APPLE_P12_PASSWORD-}"
 mkdir -p "$signing_dir"
 key="$signing_dir/oldchat-apple.key"
 cert="$signing_dir/oldchat-apple.crt"
 csr="$signing_dir/oldchat-apple.csr"
 extensions="$signing_dir/oldchat-apple.extensions"
+p12="$signing_dir/oldchat-apple.p12"
 keychain="$signing_dir/oldchat-offline.keychain-db"
 
 run_security() {
@@ -38,9 +40,9 @@ run_security() {
   wait "$pid"
 }
 
-rm -f "$key" "$cert" "$csr" "$extensions" "$signing_dir/identities.txt"
-openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:4096 -out "$key"
-openssl pkey -in "$key" -passin pass: -noout
+rm -f "$key" "$cert" "$csr" "$extensions" "$p12" "$signing_dir/identities.txt"
+openssl genrsa -traditional -out "$key" 4096 >/dev/null 2>&1
+openssl rsa -in "$key" -passin pass: -check -noout >/dev/null
 openssl req -new -sha256 -key "$key" -passin pass: -out "$csr" \
   -subj "/C=CN/O=Coloryi-MIAO/OU=OldChat For AllPlatform/CN=$identity"
 cat > "$extensions" <<'EXTENSIONS'
@@ -51,30 +53,33 @@ subjectKeyIdentifier=hash
 EXTENSIONS
 openssl x509 -req -sha256 -days 36500 \
   -in "$csr" -signkey "$key" -passin pass: \
-  -out "$cert" -extfile "$extensions"
+  -out "$cert" -extfile "$extensions" >/dev/null
+openssl verify -CAfile "$cert" "$cert" >/dev/null
+openssl pkcs12 -export -out "$p12" -inkey "$key" -in "$cert" \
+  -passout "pass:${p12_password}" -name "$identity" >/dev/null
 rm -f "$csr" "$extensions"
-chmod 600 "$key"
+chmod 600 "$key" "$p12"
 chmod 644 "$cert"
 
-run_security 10 security delete-keychain "$keychain" >/dev/null 2>&1 || true
-run_security 10 security create-keychain -p "$keychain_password" "$keychain"
-run_security 10 security set-keychain-settings -lut 21600 "$keychain"
-run_security 10 security unlock-keychain -p "$keychain_password" "$keychain"
+run_security 60 security delete-keychain "$keychain" >/dev/null 2>&1 || true
+run_security 60 security create-keychain -p "$keychain_password" "$keychain"
+run_security 60 security set-keychain-settings -lut 21600 "$keychain"
+run_security 60 security unlock-keychain -p "$keychain_password" "$keychain"
 
-if ! run_security 15 security import "$key" -k "$keychain" -f pem -t priv -A >/dev/null 2>&1; then
-  echo 'Private-key import failed.' >&2
+if ! run_security 60 security unlock-keychain -p "$keychain_password" "$keychain"; then
+  echo 'Keychain unlock failed.' >&2
   exit 1
 fi
-if ! run_security 15 security import "$cert" -k "$keychain" -f pem -t cert -A >/dev/null 2>&1; then
-  echo 'Certificate import failed.' >&2
+if ! run_security 60 security import "$p12" -k "$keychain" -f pkcs12 -P "$p12_password" -A >/dev/null 2>&1; then
+  echo 'Private-key and certificate import failed.' >&2
   exit 1
 fi
 
-run_security 10 security add-trusted-cert -d -r trustRoot -k "$keychain" "$cert" >/dev/null 2>&1 || true
-run_security 10 security default-keychain -s "$keychain" >/dev/null 2>&1
-run_security 10 security list-keychains -d user -s "$keychain" >/dev/null 2>&1
+run_security 60 security add-trusted-cert -d -r trustRoot -k "$keychain" "$cert" >/dev/null 2>&1 || true
+run_security 60 security default-keychain -s "$keychain" >/dev/null 2>&1
+run_security 60 security list-keychains -d user -s "$keychain" >/dev/null 2>&1
 
-if ! run_security 15 security find-identity -v -p codesigning "$keychain" > "$signing_dir/identities.txt" 2>/dev/null; then
+if ! run_security 60 security find-identity -v -p codesigning "$keychain" > "$signing_dir/identities.txt" 2>/dev/null; then
   echo 'Could not query the offline Apple signing identity.' >&2
   exit 1
 fi
