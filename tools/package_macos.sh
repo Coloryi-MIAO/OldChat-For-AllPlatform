@@ -18,7 +18,7 @@ esac
 
 chmod +x tools/sign_apple_offline.sh
 tools/sign_apple_offline.sh
-flutter build macos --release --no-codesign
+flutter build macos --release
 app="build/macos/Build/Products/Release/OldChatForAllPlatform.app"
 [[ -d "$app" ]] || { echo "Flutter did not produce $app" >&2; exit 1; }
 
