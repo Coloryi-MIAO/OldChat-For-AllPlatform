@@ -41,3 +41,6 @@ ios/Pods/
 
 # Local offline release signing material
 signing/
+
+# Local downloaded CI artifacts
+artifacts/
