@@ -9,18 +9,17 @@ identity="${OLDCHAT_APPLE_SIGNING_IDENTITY:-OldChat For AllPlatform Offline Deve
 keychain="${root}/signing/oldchat-offline.keychain-db"
 rm -rf "$output/iospayload" "$output/OldChatForAllPlatformiosdevelopment.ipa" "$output/OldChatForAllPlatformiosdevelopment.signing.txt"
 mkdir -p "$output/iospayload/Payload"
-if command -v codesign >/dev/null 2>&1; then
-  if ! security find-identity -v -p codesigning "$keychain" 2>/dev/null | grep -Fq "$identity"; then
-    echo "Offline Apple signing identity not found: $identity" >&2
-    exit 1
-  fi
-  codesign --force --deep --timestamp=none --keychain "$keychain" --sign "$identity" "$app_dir"
-  codesign --verify --deep --strict --verbose=2 "$app_dir"
-  codesign --display --verbose=2 "$app_dir" > "$output/OldChatForAllPlatformiosdevelopment.signing.txt" 2>&1
-else
+if ! command -v codesign >/dev/null 2>&1; then
   echo 'codesign is required to produce a signed iOS IPA.' >&2
   exit 2
 fi
+if ! security find-identity -v -p codesigning "$keychain" 2>/dev/null | grep -Fq "$identity"; then
+  echo "Offline Apple signing identity not found: $identity" >&2
+  exit 1
+fi
+codesign --force --deep --timestamp=none --keychain "$keychain" --sign "$identity" "$app_dir"
+codesign --verify --deep --strict --verbose=2 "$app_dir"
+codesign --display --verbose=2 "$app_dir" > "$output/OldChatForAllPlatformiosdevelopment.signing.txt" 2>&1
 cp -a "$app_dir" "$output/iospayload/Payload/"
 (cd "$output/iospayload" && zip -qry "../OldChatForAllPlatformiosdevelopment.ipa" Payload)
 rm -rf "$output/iospayload"

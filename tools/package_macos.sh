@@ -22,7 +22,7 @@ app="build/macos/Build/Products/Release/OldChatForAllPlatform.app"
 [[ -d "$app" ]] || { echo "Flutter did not produce $app" >&2; exit 1; }
 identity="${OLDCHAT_APPLE_SIGNING_IDENTITY:-OldChat For AllPlatform Offline Development}"
 keychain="$root/signing/oldchat-offline.keychain-db"
-security find-identity -v -p codesigning "$keychain" 2>/dev/null | grep -Fq "$identity" || {
+security find-identity -v -p codesigning "$keychain" | grep -Fq "$identity" || {
   echo "Offline Apple signing identity not found: $identity" >&2
   exit 1
 }
