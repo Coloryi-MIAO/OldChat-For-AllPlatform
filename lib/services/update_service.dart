@@ -1,4 +1,4 @@
-import 'dart:io';
+import 'package:universal_io/io.dart';
 
 import 'package:dio/dio.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -48,7 +48,7 @@ class UpdateService {
     final build = info.buildNumber.trim();
     return build.isEmpty
         ? info.version
-        : '${info.version}.${build.replaceFirst(RegExp(r'^\\+'), '')}';
+        : '${info.version}+${build.replaceFirst(RegExp(r'^\\+'), '')}';
   }
 
   Future<ReleaseInfo?> latest(UpdateChannel channel) async {
@@ -77,7 +77,11 @@ class UpdateService {
 
   Future<ReleaseInfo?> availableForCurrentWindows(UpdateChannel channel) async {
     if (!Platform.isWindows) return null;
-    return available(channel);
+    final release = await latest(channel);
+    if (release == null) return null;
+    final current = await currentVersion();
+    if (_compare(release.tagName, current) <= 0) return null;
+    return release;
   }
 
   Future<File> downloadRelease(
@@ -91,17 +95,8 @@ class UpdateService {
       '${Directory.systemTemp.path}${Platform.pathSeparator}OldChatUpdates',
     );
     await directory.create(recursive: true);
-    final tagName = _safeFileName(
-      release.tagName,
-    ).replaceFirst(RegExp(r'^v', caseSensitive: false), '');
     final sourceName = url.split('/').last.split('?').first;
-    final sourceExtension = sourceName.contains('.')
-        ? sourceName.substring(sourceName.lastIndexOf('.'))
-        : '.exe';
-    final extension = sourceExtension.toLowerCase() == '.exe'
-        ? '.exe'
-        : sourceExtension;
-    final name = 'OldChat-$tagName$extension';
+    final name = _safeFileName(sourceName);
     final file = File('${directory.path}${Platform.pathSeparator}$name');
     if (await file.exists()) await file.delete();
     final dio = Dio(
@@ -192,34 +187,33 @@ Remove-Item -LiteralPath \$MyInvocation.MyCommand.Path -Force -ErrorAction Silen
     var name = Uri.decodeComponent(value.trim());
     name = name.replaceAll(RegExp(r'[<>:"/\\|?*\x00-\x1F]'), '_');
     name = name.replaceAll(RegExp(r'\s+'), ' ').trim();
-    if (name.isEmpty || name == '.' || name == '..')
-      return 'OldChat-update.exe';
-    if (!name.toLowerCase().endsWith('.exe')) name = '$name.exe';
+    if (name.isEmpty || name == '.' || name == '..') return 'OldChat-update.exe';
     return name;
-  }
-
-  String _releaseFileName(ReleaseInfo release) {
-    final raw = release.downloadUrl?.split('/').last.split('?').first ?? '';
-    final name = _safeFileName(raw);
-    return name.toLowerCase().endsWith('.exe') ? name : 'OldChat-update.exe';
   }
 
   ReleaseInfo _parse(Map<String, dynamic> raw) {
     final assets = raw['assets'] is List ? raw['assets'] as List : const [];
-    final windowsAsset = assets
+    final candidates = assets
         .whereType<Map>()
         .map((asset) => Map<String, dynamic>.from(asset))
-        .firstWhere(
-          (asset) => _isWindowsAsset(asset['name']?.toString() ?? ''),
-          orElse: () => <String, dynamic>{},
-        );
+        .where((asset) => _isWindowsAsset(asset['name']?.toString() ?? ''))
+        .where((asset) => _matchesWindowsRuntime(asset['name']?.toString() ?? ''))
+        .toList();
+    candidates.sort((a, b) {
+      final aName = a['name']?.toString().toLowerCase() ?? '';
+      final bName = b['name']?.toString().toLowerCase() ?? '';
+      final aExe = aName.endsWith('.exe') ? 0 : 1;
+      final bExe = bName.endsWith('.exe') ? 0 : 1;
+      return aExe.compareTo(bExe);
+    });
+    final asset = candidates.isEmpty ? <String, dynamic>{} : candidates.first;
     return ReleaseInfo(
       tagName: (raw['tag_name'] ?? raw['name'] ?? '').toString(),
       name: (raw['name'] ?? raw['tag_name'] ?? '').toString(),
       body: (raw['body'] ?? '').toString(),
       htmlUrl: (raw['html_url'] ?? '').toString(),
-      downloadUrl: windowsAsset['browser_download_url']?.toString(),
-      downloadSize: (windowsAsset['size'] as num?)?.toInt(),
+      downloadUrl: asset['browser_download_url']?.toString(),
+      downloadSize: (asset['size'] as num?)?.toInt(),
       prerelease: raw['prerelease'] == true,
       publishedAt: DateTime.tryParse((raw['published_at'] ?? '').toString()),
     );
@@ -243,10 +237,14 @@ Remove-Item -LiteralPath \$MyInvocation.MyCommand.Path -Force -ErrorAction Silen
 
   bool _isWindowsAsset(String name) {
     final value = name.toLowerCase();
-    return value.endsWith('.exe') ||
-        value.contains('windows') ||
-        value.contains('win64') ||
-        value.contains('win-x64');
+    if (!value.endsWith('.exe') && !value.endsWith('.zip')) return false;
+    return value.contains('windows') || value.contains('win64') || value.contains('win-x64');
+  }
+
+  bool _matchesWindowsRuntime(String name) {
+    final value = name.toLowerCase();
+    if (value.contains('windows7') || value.contains('windows8')) return false;
+    return true;
   }
 
   int _compare(String left, String right) {

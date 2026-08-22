@@ -37,7 +37,7 @@ class _PluginCenterPageState extends State<PluginCenterPage> {
     try {
       await _service.setEnabled(plugin['id'].toString(), value);
     } catch (error) {
-      _show('插件状态修改失败：$error');
+      _show('${context.tr.t('插件状态修改失败')}：$error');
     }
   }
 
@@ -291,9 +291,9 @@ class _PluginCenterPageState extends State<PluginCenterPage> {
     setState(() => _busy = true);
     try {
       await _service.approvePending(id);
-      _show('审核通过并已执行');
+      _show(context.tr.t('审核通过并已执行'));
     } catch (error) {
-      _show('执行失败：$error');
+      _show('${context.tr.t('执行失败')}：$error');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -305,9 +305,9 @@ class _PluginCenterPageState extends State<PluginCenterPage> {
         plugin['id'].toString(),
         context.read<AppThemeController>(),
       );
-      _show('主题已应用');
+      _show(context.tr.t('主题已应用'));
     } catch (error) {
-      _show('主题应用失败：$error');
+      _show('${context.tr.t('主题应用失败')}：$error');
     }
   }
 

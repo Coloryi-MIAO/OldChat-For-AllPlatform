@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
@@ -726,6 +727,16 @@ class ApiService {
     return defaultTargetPlatform.name;
   }
 
+  Future<String> _appVersion() async {
+    try {
+      final info = await PackageInfo.fromPlatform();
+      final build = info.buildNumber.trim();
+      return build.isEmpty ? info.version : '${info.version}+$build';
+    } catch (_) {
+      return '1.4.8-beta.5+6';
+    }
+  }
+
   Future<Map<String, dynamic>> login(String username, String password) async {
     try {
       final deviceId = await WsSessionService(http: true).getDeviceId();
@@ -739,7 +750,7 @@ class ApiService {
           if (deviceId != null && deviceId.isNotEmpty) 'device_id': deviceId,
           'device_name': Constants.appName,
           'platform': _clientPlatformName(),
-          'app_version': '1.4.5-beta.5',
+          'app_version': await _appVersion(),
         },
       );
       if (response.statusCode == 200 || response.statusCode == 201) {

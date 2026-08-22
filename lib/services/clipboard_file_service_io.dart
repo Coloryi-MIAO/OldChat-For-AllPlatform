@@ -1,4 +1,4 @@
-import 'dart:io';
+import 'package:universal_io/io.dart';
 
 Future<List<String>> clipboardFilePaths() async {
   if (!Platform.isWindows) return const <String>[];

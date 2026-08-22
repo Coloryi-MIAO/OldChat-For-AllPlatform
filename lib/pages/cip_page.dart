@@ -22,6 +22,7 @@ class _CipPageState extends State<CipPage> {
     super.initState();
     _service.addListener(_refresh);
     _service.load();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _refresh());
   }
 
   @override
@@ -151,14 +152,16 @@ class _CipPageState extends State<CipPage> {
       }
       return;
     }
-    if (action == 'submit' || action == 'run') {
-      if (pluginId == null || pluginId.isEmpty) return;
-      final plugin = _service.plugins.cast<Map<String, dynamic>?>().firstWhere(
-        (item) => item?['id']?.toString() == pluginId,
-        orElse: () => null,
-      );
-      final script = plugin?['cip_main']?.toString();
-      if (script == null || script.isEmpty) return;
+    if (action != 'submit' && action != 'run') return;
+    if (pluginId == null || pluginId.isEmpty) return;
+    final plugin = _service.plugins.firstWhere(
+      (item) => item['id']?.toString() == pluginId,
+      orElse: () => <String, dynamic>{},
+    );
+    final script = plugin['cip_main']?.toString();
+    if (script == null || script.isEmpty || plugin['enabled'] != true) return;
+    setState(() => _busy = true);
+    try {
       await _service.executeCip(
         pluginId,
         script,
@@ -173,6 +176,14 @@ class _CipPageState extends State<CipPage> {
           },
         },
       );
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${context.tr.t('CIP 执行失败')}：$error')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
     }
   }
 

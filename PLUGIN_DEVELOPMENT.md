@@ -1,6 +1,6 @@
 # OldChat For AllPlatform 插件开发文档
 
-适用于 OldChat For AllPlatform `1.4.7-beta.8+5`。插件是受权限控制的本地功能模块，不是任意代码执行器。本文以当前 `PluginService`、`PluginCenterPage` 和 `CipPage` 的实际行为为准。
+适用于 OldChat For AllPlatform `1.4.8-beta.5+6`。插件是受权限控制的本地功能模块，不是任意代码执行器。本文以当前 `PluginService`、`PluginCenterPage` 和 `CipPage` 的实际行为为准。
 
 ## 1. 两种包格式
 
@@ -13,6 +13,8 @@
 这是 ZIP 包，根目录必须包含 `manifest.json` 与 `main.lua`，其余文件只能位于 `assets/`。CIP 会在 CIP 中心展示，可启用后手动运行，也可在收到消息时由宿主触发。
 
 大小限制：插件压缩包最多 4 MiB、解压后最多 16 MiB、最多 128 个条目；CIP 压缩包最多 2 MiB、解压后最多 8 MiB、脚本最多 512 KiB。路径不能以 `/` 开头，不能包含 `..`、盘符或符号链接。
+
+导入后的插件和 CIP 会按当前用户保存到本地账户存储，重启应用不会丢失；CIP 页面会监听执行结果并直接渲染页面、按钮、输入框、复选框、图片和容器。插件主题不是自动强制替换主题，必须启用插件后在插件中心点击“应用主题”。
 
 ## 2. manifest
 

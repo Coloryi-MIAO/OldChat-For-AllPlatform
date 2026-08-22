@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:io';
+import 'package:universal_io/io.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter/foundation.dart';
@@ -7,6 +7,7 @@ import 'services/image_cache_service.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:provider/provider.dart';
 import 'package:windows_single_instance/windows_single_instance.dart';
+import 'package:video_player_media_kit/video_player_media_kit.dart';
 import 'widgets/tray_manager.dart';
 import 'services/auth_service.dart';
 import 'services/account_storage.dart';
@@ -27,7 +28,6 @@ import 'pages/favorites_page.dart';
 import 'pages/about_page.dart';
 import 'pages/settings_page.dart';
 import 'pages/chat_page.dart';
-import 'pages/resource_plaza_page.dart';
 import 'pages/public_court_page.dart';
 import 'pages/tools_hub_page.dart';
 import 'pages/channel_page.dart';
@@ -50,8 +50,18 @@ void main(List<String> args) async {
   final desktop = !kIsWeb && (Platform.isWindows || Platform.isMacOS || Platform.isLinux);
   await StartupService.cleanupOnStartup();
   ImageCacheService.configure();
+  VideoPlayerMediaKit.ensureInitialized(
+    android: true,
+    iOS: true,
+    macOS: true,
+    windows: true,
+    linux: true,
+    web: false,
+  );
 
-  // ★ 加载用户自定义 baseUrl
+  final auth = AuthService();
+  await auth.loadFromStorage();
+  await AccountStorage.instance.load(userId: auth.userId);
   await Constants.loadBaseUrl();
   final themeController = AppThemeController();
   await themeController.load();
@@ -92,10 +102,6 @@ void main(List<String> args) async {
       await windowManager.focus();
     });
 
-    final auth = AuthService();
-    await auth.loadFromStorage();
-    await AccountStorage.instance.load(userId: auth.userId);
-
     final notificationService = NotificationService();
     try {
       await notificationService.init();
@@ -113,10 +119,6 @@ void main(List<String> args) async {
       ),
     );
   } else {
-    final auth = AuthService();
-    await auth.loadFromStorage();
-    await AccountStorage.instance.load(userId: auth.userId);
-
     final notificationService = NotificationService();
     try {
       await notificationService.init();
@@ -387,6 +389,7 @@ class MyApp extends StatelessWidget {
           theme: AppTheme.build(
             pink: themeController.isPink,
             fontFamily: themeController.fontFamily,
+            pluginTheme: themeController.pluginTheme,
           ),
           home: const _StartupGate(),
           routes: {
@@ -423,7 +426,6 @@ class MyApp extends StatelessWidget {
                 embed: false,
               );
             },
-            '/resource_plaza': (context) => const ResourcePlazaPage(),
             '/public_court': (context) => const PublicCourtPage(),
             '/tools': (context) => const ToolsHubPage(),
             '/more': (context) => const ToolsHubPage(more: true),

@@ -3,13 +3,12 @@
 [![Latest Release](https://img.shields.io/github/v/release/Coloryi-MIAO/OldChat-For-AllPlatform?display_name=tag&sort=semver)](https://github.com/Coloryi-MIAO/OldChat-For-AllPlatform/releases)
 [![License](https://img.shields.io/github/license/Coloryi-MIAO/OldChat-For-AllPlatform)](LICENSE)
 [![Forks](https://img.shields.io/github/forks/Coloryi-MIAO/OldChat-For-AllPlatform?style=flat)](https://github.com/Coloryi-MIAO/OldChat-For-AllPlatform/network/members)
-[![Build](https://github.com/Coloryi-MIAO/OldChat-For-AllPlatform/actions/workflows/build.yml/badge.svg?branch=main)](https://github.com/Coloryi-MIAO/OldChat-For-AllPlatform/actions/workflows/build.yml)
 
-OldChat For AllPlatform 是基于 Flutter 的跨平台聊天客户端。当前版本为 `1.4.7-beta.8+5`，同一套代码覆盖 Windows、Android、iOS、macOS、Linux 和 Web。
+OldChat For AllPlatform 是基于 Flutter 的跨平台聊天客户端。当前版本为 `1.4.8-beta.5+6`，同一套代码覆盖 Windows、Android、iOS、macOS、Linux 和 Web。
 
 ## 功能范围
 
-- 私聊、群聊、频道、动态、通知、收藏、资源、音乐、表情和公开法庭。
+- 私聊、群聊、频道、动态、通知、收藏、音乐、表情和公开法庭。
 - WebSocket 会话与 HTTP API，支持消息刷新、重连和账户级缓存。
 - 本地账户与登录状态按 UID 隔离；移动端登录凭据保存在系统安全存储适配层中，不会因为普通启动而清理。
 - `.oldchat-plugin` 插件包和 `.cip` 小程序包导入、启用、运行、导出与账户级持久化。
@@ -61,11 +60,11 @@ flutter build ios --release --no-codesign
 `file .github/workflows/build.yml` 执行分析、测试和最终产物构建：
 
 - Android：`armeabi-v7a`、`arm64-v8a`、`x86_64` 三个 APK。
-- Linux：x64 `.deb` 与 `.rpm`。
+- Linux：x64 `.deb`、`.rpm` 与 `.AppImage`。
 - Windows：x64 安装/压缩产物。
 - macOS：x64 与 arm64 DMG。
 - iOS：开发测试用 ad hoc 签名 IPA；它不是 App Store 分发签名。
-- Web：release 静态站点。
+- Web：release 静态站点；浏览器通知需用户授权。
 
 `file .github/workflows/cross_compile_engine.yml` 单独维护跨平台构建引擎验证，并记录每个平台、runner、架构和 Flutter 版本。GitHub Actions 不会把 info 或 warning 当作失败，但错误和测试失败仍会阻止发布。
 

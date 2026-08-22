@@ -1,7 +1,7 @@
 name: oldchatforallplatform
 description: OldChat For AllPlatform — cross-platform Flutter chat client.
 publish_to: 'none'
-version: 1.4.7-beta.8+5
+version: 1.4.8-beta.5+6
 
 environment:
   sdk: ">=3.10.0 <4.0.0"
@@ -30,6 +30,14 @@ dependencies:
   webview_flutter: ^4.8.0
   webview_windows: ^0.4.0
   video_player: 2.12.0
+  video_player_media_kit: ^2.0.0
+  media_kit: ^1.2.6
+  media_kit_video: ^2.0.1
+  media_kit_libs_android_video: ^1.3.8
+  media_kit_libs_ios_video: ^1.1.4
+  media_kit_libs_macos_video: ^1.1.4
+  media_kit_libs_windows_video: ^1.0.11
+  media_kit_libs_linux: ^1.2.1
   chewie: ^1.14.1
   win32: ^6.3.0
   ffi: ^2.1.3

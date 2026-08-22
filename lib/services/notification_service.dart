@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'dart:async';
-import 'dart:io';
+import 'package:universal_io/io.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
@@ -331,7 +331,14 @@ class NotificationService {
     bool withFlash = false,
   }) async {
     if (kIsWeb) {
-      await _webNotifier.show(title: title, body: body, payload: payload);
+      final shown = await _webNotifier.show(
+        title: title,
+        body: body,
+        payload: payload,
+      );
+      if (!shown) {
+        debugPrint('[Web notification] Browser permission denied or unavailable');
+      }
       return;
     }
     if (!kIsWeb && Platform.isWindows) {
@@ -400,18 +407,6 @@ class NotificationService {
       return;
     }
 
-    if (kIsWeb) {
-      final shown = await _webNotifier.show(
-        title: title,
-        body: body,
-        payload: payload,
-      );
-      if (!shown)
-        debugPrint(
-          '[Web notification] Browser permission denied or unavailable',
-        );
-      return;
-    }
     const androidDetails = AndroidNotificationDetails(
       'chat_channel',
       '聊天消息',
