@@ -93,7 +93,14 @@ class ApiService {
       final gatewayError =
           '${error.error}'.contains('gateway') ||
           '${error.error}'.contains('encrypted response invalid');
-      if (!_canFallbackV2(error) && !gatewayError) rethrow;
+      final canFallback = _canFallbackV2(error) &&
+          (error.response?.statusCode == 404 ||
+              error.response?.statusCode == 405 ||
+              error.type == DioExceptionType.connectionError ||
+              error.type == DioExceptionType.connectionTimeout ||
+              error.type == DioExceptionType.receiveTimeout);
+      if (!canFallback && !gatewayError) rethrow;
+      if (gatewayError && _gatewayErrorStatus(error) == 503) rethrow;
       if (error.requestOptions.extra['_gatewayRetried'] != true) {
         WsSessionService(http: true).reset();
         try {
@@ -106,8 +113,10 @@ class ApiService {
           if (!_hasV2GatewayError(retry.data)) return retry;
         } catch (_) {}
       }
-      _openV2Circuit(endpointKey);
-      if (fallbackPath != null) return sendDirect(fallbackPath, v2: false);
+      if (canFallback && fallbackPath != null) {
+        _openV2Circuit(endpointKey);
+        return sendDirect(fallbackPath, v2: false);
+      }
       rethrow;
     } catch (_) {
       if (fallbackPath == null) rethrow;
@@ -304,6 +313,13 @@ class ApiService {
         error.type == DioExceptionType.receiveTimeout;
   }
 
+  int? _gatewayErrorStatus(DioException error) {
+    final data = error.response?.data;
+    if (data is! Map) return null;
+    final raw = data['code'] ?? data['status'];
+    return raw is num ? raw.toInt() : int.tryParse('$raw');
+  }
+
   bool _hasV2GatewayError(dynamic data) {
     if (data is String) {
       final decoded = _decodeMap(data);
@@ -495,6 +511,7 @@ class ApiService {
                   responseText.contains('session') ||
                   responseText.contains('device id'));
           if (e.response?.statusCode == 401 &&
+              e.requestOptions.extra['_skipAuthRecovery'] != true &&
               !isV2SessionFailure &&
               !alreadyRetried &&
               !isAuthEndpoint &&
@@ -576,20 +593,30 @@ class ApiService {
   }
 
   Exception _apiError(String prefix, DioException error) {
-    final data = error.response?.data;
-    if (data is Map) {
-      final detail = data['error'] ?? data['message'] ?? data['code'];
-      if (detail != null) {
-        final status = error.response?.statusCode;
-        return Exception(
-          '$prefix${status == null ? '' : ' ($status)'}: $detail',
-        );
-      }
-    }
     final status = error.response?.statusCode;
-    return Exception(
-      '$prefix${status == null ? '' : ' ($status)'}: ${error.message ?? '网络错误'}',
-    );
+    final data = error.response?.data;
+    var code = '';
+    var detail = '';
+    if (data is Map) {
+      final map = Map<String, dynamic>.from(data);
+      code = (map['code'] ?? map['error_code'] ?? '').toString();
+      detail = (map['message'] ?? map['error'] ?? '').toString().trim();
+    }
+    final statusText = status == null ? '' : ' ($status)';
+    if (status == 401) {
+      return Exception('$prefix$statusText: 登录已过期，请重新登录${code.isEmpty ? '' : ' [$code]'}');
+    }
+    if (status == 503) {
+      return Exception('$prefix$statusText: 服务暂时不可用，请稍后重试${code.isEmpty ? '' : ' [$code]'}');
+    }
+    if (status == 404) {
+      return Exception('$prefix$statusText: 请求的接口或资源不存在${code.isEmpty ? '' : ' [$code]'}');
+    }
+    if (status == 400) {
+      return Exception('$prefix$statusText: ${detail.isEmpty ? '请求参数无效' : detail}${code.isEmpty ? '' : ' [$code]'}');
+    }
+    if (detail.isNotEmpty) return Exception('$prefix$statusText: $detail${code.isEmpty ? '' : ' [$code]'}');
+    return Exception('$prefix$statusText: ${error.message ?? '网络错误'}');
   }
 
   bool _isPublicEndpoint(String path) {
@@ -752,6 +779,7 @@ class ApiService {
           'platform': _clientPlatformName(),
           'app_version': await _appVersion(),
         },
+        options: Options(extra: {'_skipAuthRecovery': true}),
       );
       if (response.statusCode == 200 || response.statusCode == 201) {
         final data = _unwrapEnvelopeMap(response.data);
@@ -911,9 +939,10 @@ class ApiService {
 
   Future<List<Conversation>> getFriends() async {
     try {
-      final response = await _requestV2WithV1Fallback('GET', '/v2/friends');
+      final response = await _dio.get(Constants.apiPath('/v1/friends'));
       if (response.statusCode == 200) {
-        final list = _nestedList(_unwrapEnvelopeMap(response.data), const [
+        final envelope = _unwrapEnvelopeMap(response.data);
+        final list = _nestedList(envelope, const [
           'friends',
           'items',
           'list',
@@ -930,11 +959,10 @@ class ApiService {
             })
             .where((conversation) => conversation.id.trim().isNotEmpty)
             .toList();
-      } else {
-        throw Exception('Failed to load friends');
       }
+      throw Exception('好友列表加载失败');
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('加载好友列表失败', e);
     }
   }
 
@@ -1017,9 +1045,10 @@ class ApiService {
 
   Future<List<Conversation>> getGroups() async {
     try {
-      final response = await _requestV2WithV1Fallback('GET', '/v2/groups/list');
+      final response = await _dio.get(Constants.apiPath('/v1/groups/list'));
       if (response.statusCode == 200) {
-        final list = _nestedList(_unwrapEnvelopeMap(response.data), const [
+        final envelope = _unwrapEnvelopeMap(response.data);
+        final list = _nestedList(envelope, const [
           'groups',
           'items',
           'list',
@@ -1036,11 +1065,10 @@ class ApiService {
             })
             .where((conversation) => conversation.id.trim().isNotEmpty)
             .toList();
-      } else {
-        throw Exception('Failed to load groups');
       }
+      throw Exception('群聊列表加载失败');
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('加载群聊列表失败', e);
     }
   }
 
@@ -1273,6 +1301,50 @@ class ApiService {
       );
     } on DioException catch (e) {
       throw Exception('Network error: ${e.message}');
+    }
+  }
+
+  Future<Map<String, dynamic>> getGroupAnnouncement(String groupId) async {
+    try {
+      final response = await _dio.get(
+        Constants.apiPath('/v1/groups/announcement'),
+        queryParameters: {'group_id': groupId.trim()},
+      );
+      return _unwrapEnvelopeMap(response.data);
+    } on DioException catch (e) {
+      throw _apiError('加载群公告失败', e);
+    }
+  }
+
+  Future<void> forwardMessages({required String conversationType, required String conversationId, required List<String> messageIds}) async {
+    final endpoint = conversationType == 'group'
+        ? Constants.apiPath('/v1/groups/message/send')
+        : Constants.apiPath('/v1/direct/send');
+    try {
+      final messages = <Map<String, dynamic>>[];
+      for (final messageId in messageIds) {
+        messages.add({'source_message_id': messageId});
+      }
+      await _dio.post(
+        endpoint,
+        data: conversationType == 'group'
+            ? {
+                'group_id': conversationId,
+                'body': jsonEncode({'v': 2, 'forward_message_ids': messageIds}),
+                'msg_type': 'forward',
+                'forward_message_ids': messageIds,
+                'forward_items': messages,
+              }
+            : {
+                'to_uid': conversationId,
+                'body': jsonEncode({'v': 2, 'forward_message_ids': messageIds}),
+                'msg_type': 'forward',
+                'forward_message_ids': messageIds,
+                'forward_items': messages,
+              },
+      );
+    } on DioException catch (e) {
+      throw _apiError('转发消息失败', e);
     }
   }
 

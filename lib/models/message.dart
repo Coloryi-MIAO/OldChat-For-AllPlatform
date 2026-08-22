@@ -16,6 +16,8 @@ class Message {
   final int createdAt;
   final String? groupId;
   final int? groupSeq;
+  final String? groupRole;
+  final String? memberRole;
   final String? threadId;
   final String? toUid;
   final int? deliveredAt;
@@ -38,6 +40,8 @@ class Message {
     required this.createdAt,
     this.groupId,
     this.groupSeq,
+    this.groupRole,
+    this.memberRole,
     this.threadId,
     this.toUid,
     this.deliveredAt,
@@ -93,6 +97,7 @@ class Message {
       createdAt: _parseTimestamp(json['created_at'] ?? json['timestamp'] ?? json['createdAt']),
       groupId: (json['group_id'] ?? json['groupId'])?.toString(),
       groupSeq: _toNullableInt(json['group_seq'] ?? json['groupSeq']),
+      memberRole: (json['member_role'] ?? json['group_role'] ?? json['role'])?.toString(),
       threadId: (json['thread_id'] ?? json['threadId'])?.toString(),
       toUid: json['to_uid']?.toString(),
       deliveredAt: _toNullableInt(json['delivered_at']),
@@ -175,6 +180,7 @@ class Message {
         'created_at': createdAt,
         'group_id': groupId,
         'group_seq': groupSeq,
+        'member_role': memberRole,
         'thread_id': threadId,
         'to_uid': toUid,
         'delivered_at': deliveredAt,

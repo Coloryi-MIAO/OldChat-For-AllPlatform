@@ -810,42 +810,52 @@ class _HomePageState extends State<HomePage> {
     if (!hadVisibleData && mounted) setState(() => _loading = true);
     try {
       final api = ApiService();
-      final results = await Future.wait<dynamic>([
-        api.getFriends(),
-        api.getGroups(),
+      Future<List<Conversation>?> safeList(Future<List<Conversation>> request) async {
+        try {
+          return await request;
+        } catch (error) {
+          debugPrint('[会话] 单独加载失败，保留另一类会话：$error');
+          return null;
+        }
+      }
+      final results = await Future.wait<List<Conversation>?>([
+        safeList(api.getFriends()),
+        safeList(api.getGroups()),
       ]);
-      final friends = results.isNotEmpty && results[0] is List
-          ? (results[0] as List).whereType<Conversation>().toList()
-          : <Conversation>[];
-      final groups = results.length > 1 && results[1] is List
-          ? (results[1] as List).whereType<Conversation>().toList()
-          : <Conversation>[];
+      final friends = results[0] ?? <Conversation>[];
+      final groups = results[1] ?? <Conversation>[];
+      final friendsAvailable = results[0] != null;
+      final groupsAvailable = results[1] != null;
       if (mounted) {
         setState(() {
-          final mergedFriends = _mergeConversationUpdates(_friends, friends)
-              .where(
-                (item) => friends.any(
-                  (incoming) =>
-                      _conversationKey(incoming) == _conversationKey(item),
-                ),
-              )
-              .where((item) => item.id.trim().isNotEmpty)
-              .toList();
-          final mergedGroups = _mergeConversationUpdates(_groups, groups)
-              .where(
-                (item) => groups.any(
-                  (incoming) =>
-                      _conversationKey(incoming) == _conversationKey(item),
-                ),
-              )
-              .where((item) => item.id.trim().isNotEmpty)
-              .toList();
-          _friends = friends.isEmpty && _friends.isNotEmpty
-              ? _friends
-              : mergedFriends;
-          _groups = groups.isEmpty && _groups.isNotEmpty
-              ? _groups
-              : mergedGroups;
+          if (friendsAvailable) {
+            final mergedFriends = _mergeConversationUpdates(_friends, friends)
+                .where(
+                  (item) => friends.any(
+                    (incoming) =>
+                        _conversationKey(incoming) == _conversationKey(item),
+                  ),
+                )
+                .where((item) => item.id.trim().isNotEmpty)
+                .toList();
+            _friends = friends.isEmpty && _friends.isNotEmpty
+                ? _friends
+                : mergedFriends;
+          }
+          if (groupsAvailable) {
+            final mergedGroups = _mergeConversationUpdates(_groups, groups)
+                .where(
+                  (item) => groups.any(
+                    (incoming) =>
+                        _conversationKey(incoming) == _conversationKey(item),
+                  ),
+                )
+                .where((item) => item.id.trim().isNotEmpty)
+                .toList();
+            _groups = groups.isEmpty && _groups.isNotEmpty
+                ? _groups
+                : mergedGroups;
+          }
           final validKeys = {
             ..._friends,
             ..._groups,
@@ -1121,6 +1131,8 @@ class _HomePageState extends State<HomePage> {
         details.globalPosition.dy + 1,
       ),
       items: [
+        if (conv.type == 'direct')
+          PopupMenuItem(value: 'delete_friend', child: Text(context.tr.text('删除好友', 'Delete friend'))),
         PopupMenuItem(
           value: isPinned ? 'unpin' : 'pin',
           child: Row(
@@ -1178,6 +1190,8 @@ class _HomePageState extends State<HomePage> {
         _removeRecent(conv);
       } else if (value == 'add_recent') {
         setState(() => _rememberRecent(conv, force: true));
+      } else if (value == 'delete_friend' && conv.type == 'direct') {
+        unawaited(_deleteFriend(conv));
       } else if (value == 'mute' || value == 'unmute') {
         unawaited(
           NotificationService().setConversationMuted(
@@ -1229,6 +1243,52 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  Future<void> _deleteFriend(Conversation conv) async {
+    final confirmed = await showDialog<bool>(context: context, builder: (dialogContext) => AlertDialog(title: Text(context.tr.text('删除好友', 'Delete friend')), content: Text(context.tr.text('确认删除该好友？', 'Delete this friend?')), actions: [TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: Text(context.tr.text('取消', 'Cancel'))), FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: Text(context.tr.text('删除', 'Delete')))]));
+    if (confirmed != true) return;
+    try {
+      await ApiService().deleteFriend(conv.id);
+      if (!mounted) return;
+      setState(() { _friends.removeWhere((item) => item.id == conv.id); _recentConversations.remove(_conversationKey(conv)); if (_currentConversation?.id == conv.id) _currentConversation = null; });
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(context.tr.text('好友已删除', 'Friend deleted'))));
+    } catch (error) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(context.tr.text('删除失败：$error', 'Delete failed: $error'))));
+    }
+  }
+
+  Future<void> _createGroup() async {
+    final nameController = TextEditingController();
+    final memberController = TextEditingController();
+    final result = await showDialog<Map<String, String>>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(context.tr.text('新建群聊', 'New group chat')),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(controller: nameController, decoration: InputDecoration(labelText: context.tr.text('群名称', 'Group name'))),
+            TextField(controller: memberController, decoration: InputDecoration(labelText: context.tr.text('成员 UID（逗号分隔）', 'Member UIDs (comma separated)'))),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext), child: Text(context.tr.text('取消', 'Cancel'))),
+          FilledButton(onPressed: () => Navigator.pop(dialogContext, {'name': nameController.text, 'members': memberController.text}), child: Text(context.tr.text('创建', 'Create'))),
+        ],
+      ),
+    );
+    nameController.dispose();
+    memberController.dispose();
+    if (result == null || result['name']!.trim().isEmpty) return;
+    try {
+      final members = result['members']!.split(',').map((item) => item.trim()).where((item) => item.isNotEmpty).toList();
+      await ApiService().createGroup(result['name']!.trim(), members);
+      await _loadConversations();
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(context.tr.text('群聊已创建', 'Group created'))));
+    } catch (error) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(context.tr.text('创建失败：$error', 'Create failed: $error'))));
+    }
+  }
+
   void _logout() async {
     await context.read<AuthService>().clear();
     WebSocketService().disconnect();
@@ -1246,26 +1306,63 @@ class _HomePageState extends State<HomePage> {
     return total < 0 ? 0 : total.clamp(0, 1 << 30);
   }
 
+  Widget _buildErrorState() {
+    final error = _error ?? '';
+    final status = RegExp(r'\((400|401|404|503)\)').firstMatch(error)?.group(1) ??
+        RegExp(r'\b(400|401|404|503)\b').firstMatch(error)?.group(1);
+    final title = status == '401'
+        ? context.tr.text('登录已过期，请重新登录', 'Your session has expired. Please log in again.')
+        : status == '400'
+        ? context.tr.text('请求参数无效，请重试', 'The request was invalid. Please try again.')
+        : status == '404'
+        ? context.tr.text('服务器接口不存在，请检查服务器地址或 API 版本', 'The server endpoint was not found. Check the server address or API version.')
+        : status == '503'
+        ? context.tr.text('服务器暂时不可用，请稍后重试', 'The server is temporarily unavailable. Please try again later.')
+        : context.tr.text('加载失败', 'Loading failed');
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 520),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.cloud_off_outlined, size: 48),
+              const SizedBox(height: 12),
+              Text(title, textAlign: TextAlign.center, style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 8),
+              Text(error, textAlign: TextAlign.center),
+              const SizedBox(height: 16),
+              Wrap(
+                alignment: WrapAlignment.center,
+                spacing: 8,
+                children: [
+                  OutlinedButton.icon(onPressed: _refresh, icon: const Icon(Icons.refresh), label: Text(context.tr.t('重试'))),
+                  if (status == '401' || status == '400' || status == '404' || status == '503')
+                    FilledButton.icon(onPressed: _logout, icon: const Icon(Icons.logout), label: Text(context.tr.t('退出登录'))),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final compactNavigation = kIsWeb || Platform.isAndroid || Platform.isIOS;
-    if (compactNavigation) return _buildCompactShell(context);
+    if (compactNavigation) {
+      if (_error != null && _friends.isEmpty && _groups.isEmpty && _recentConversations.isEmpty) {
+        return Scaffold(body: _buildErrorState());
+      }
+      return _buildCompactShell(context);
+    }
     return Scaffold(
       body: _loading
           ? Center(child: CircularProgressIndicator())
           : _error != null
-          ? Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(AppLocalizations.current.t('加载失败: $_error')),
-                  TextButton(
-                    onPressed: _refresh,
-                    child: Text(AppLocalizations.current.t('重试')),
-                  ),
-                ],
-              ),
-            )
+          ? _buildErrorState()
           : Row(
               children: [
                 SizedBox(
@@ -1273,6 +1370,7 @@ class _HomePageState extends State<HomePage> {
                   child: Column(
                     children: [
                       _buildToolbar(),
+                      Align(alignment: Alignment.centerRight, child: Padding(padding: const EdgeInsets.only(right: 12), child: TextButton.icon(onPressed: _createGroup, icon: const Icon(Icons.group_add), label: Text(context.tr.text('新建群聊', 'New group chat'))))),
                       Padding(
                         padding: const EdgeInsets.all(8),
                         child: TextField(
@@ -1318,7 +1416,7 @@ class _HomePageState extends State<HomePage> {
                                 ),
                                 const SizedBox(height: 16),
                                 Text(
-                                  '选择一个会话开始聊天',
+                                  context.tr.text('选择一个会话开始聊天', 'Choose a conversation to start chatting'),
                                   style: TextStyle(
                                     fontSize: 16,
                                     color: Colors.grey[600],
@@ -1326,7 +1424,7 @@ class _HomePageState extends State<HomePage> {
                                 ),
                                 const SizedBox(height: 8),
                                 Text(
-                                  '右键刷新',
+                                  context.tr.text('右键刷新', 'Right-click to refresh'),
                                   style: TextStyle(
                                     fontSize: 12,
                                     color: Colors.grey[500],
@@ -1342,7 +1440,7 @@ class _HomePageState extends State<HomePage> {
                           ),
                           conversationId: _currentConversation!.id,
                           type: _currentConversation!.type,
-                          title: _currentConversation!.name ?? '聊天',
+                          title: _currentConversation!.name ?? context.tr.chat,
                           embed: true,
                           onMessageSent: () {
                             unawaited(_loadConversations());
@@ -1415,8 +1513,12 @@ class _HomePageState extends State<HomePage> {
           ),
         ],
       ),
-      body: _loading
+      body: _error != null && _friends.isEmpty && _groups.isEmpty && _recentConversations.isEmpty
+          ? _buildErrorState()
+          : _loading
           ? const Center(child: CircularProgressIndicator())
+          : _error != null && current == null
+          ? _buildErrorState()
           : current == null
           ? _buildCompactHomeBody()
           : ChatPage(
@@ -1706,7 +1808,7 @@ class _HomePageState extends State<HomePage> {
           Padding(
             padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Text(
-              '群聊',
+              context.tr.text('群聊', 'Group chats'),
               style: TextStyle(
                 fontWeight: FontWeight.bold,
                 fontSize: 13,
@@ -1733,7 +1835,7 @@ class _HomePageState extends State<HomePage> {
           Padding(
             padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Text(
-              '私聊',
+              context.tr.text('私聊', 'Direct messages'),
               style: TextStyle(
                 fontWeight: FontWeight.bold,
                 fontSize: 13,

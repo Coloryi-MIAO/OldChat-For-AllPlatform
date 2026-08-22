@@ -29,7 +29,6 @@ class _ToolsHubPageState extends State<ToolsHubPage> {
   static const _tools = <_ToolEntry>[
     _ToolEntry('moments', '动态', Icons.dynamic_feed_outlined, '/moments'),
     _ToolEntry('court', '公开法庭', Icons.gavel_outlined, '/public_court'),
-    _ToolEntry('music', '音乐广场', Icons.music_note, '/music_plaza'),
     _ToolEntry('emoji', '表情广场', Icons.emoji_emotions_outlined, '/emoji_plaza'),
     _ToolEntry(
       'notifications',

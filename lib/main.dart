@@ -19,7 +19,6 @@ import 'pages/home_page.dart';
 import 'pages/profile_page.dart';
 import 'pages/user_profile_page.dart';
 import 'pages/moments_page.dart';
-import 'pages/music_plaza_page.dart';
 import 'pages/emoji_plaza_page.dart';
 import 'pages/notifications_page.dart';
 import 'pages/checkin_wall_page.dart';
@@ -406,7 +405,6 @@ class MyApp extends StatelessWidget {
               final uid = args is String ? args : null;
               return MomentsPage(uid: uid);
             },
-            '/music_plaza': (context) => const MusicPlazaPage(),
             '/emoji_plaza': (context) => const EmojiPlazaPage(),
             '/notifications': (context) => const NotificationsPage(),
             '/checkin_wall': (context) => const CheckinWallPage(),

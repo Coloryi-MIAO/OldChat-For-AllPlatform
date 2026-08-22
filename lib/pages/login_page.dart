@@ -188,6 +188,26 @@ class _LoginPageState extends State<LoginPage>
     super.dispose();
   }
 
+  String _loginErrorMessage(Object error) {
+    final value = error.toString().toLowerCase();
+    if (value.contains('invalid_credentials') || value.contains('invalid credentials')) {
+      return context.tr.text('用户名或密码错误', 'The username or password is incorrect.');
+    }
+    if (value.contains('(503)') || value.contains('service unavailable') || value.contains('temporarily') || value.contains('route_disabled')) {
+      return context.tr.text('服务器暂时不可用，请稍后重试', 'The server is temporarily unavailable. Please try again later.');
+    }
+    if (value.contains('(404)')) {
+      return context.tr.text('登录接口不存在，请检查服务器地址', 'The login endpoint was not found. Check the server address.');
+    }
+    if (value.contains('(400)')) {
+      return context.tr.text('登录请求无效，请检查输入内容', 'The login request was invalid. Check your input.');
+    }
+    if (value.contains('(401)')) {
+      return context.tr.text('登录凭据无效，请重新输入', 'The login credentials are invalid. Please try again.');
+    }
+    return safeErrorMessage(error);
+  }
+
   Future<void> _login() async {
     if (!_credentialsLoaded) {
       await _loadSavedCredentials();
@@ -232,7 +252,7 @@ class _LoginPageState extends State<LoginPage>
       if (mounted)
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('${context.tr.t('登录失败:')}${safeErrorMessage(e)}')));
+        ).showSnackBar(SnackBar(content: Text('${context.tr.t('登录失败:')}${_loginErrorMessage(e)}')));
     } finally {
       if (mounted) setState(() => _loading = false);
     }

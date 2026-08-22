@@ -22,6 +22,7 @@ import '../services/local_emoji_service.dart';
 import '../widgets/cached_image.dart';
 
 import '../models/message.dart';
+import '../models/conversation.dart';
 import '../utils/message_parser.dart';
 import '../widgets/message_tile.dart';
 import '../pages/user_profile_page.dart';
@@ -83,7 +84,124 @@ class _ChatPageState extends State<ChatPage>
   int _lastGroupSeq = 0;
   final Map<String, Message> _messageMap = {};
   final List<Map<String, String>> _pendingMentions = [];
+  final Set<String> _selectedMessageIds = <String>{};
+  bool _selectionMode = false;
+
+  void _toggleMessageSelection(Message message) {
+    setState(() {
+      _selectionMode = true;
+      if (!_selectedMessageIds.add(message.id)) {
+        _selectedMessageIds.remove(message.id);
+      }
+      if (_selectedMessageIds.isEmpty) _selectionMode = false;
+    });
+  }
+
+  void _clearMessageSelection() {
+    if (!mounted) return;
+    setState(() {
+      _selectionMode = false;
+      _selectedMessageIds.clear();
+    });
+  }
+
+  Widget _buildSelectionBar() {
+    if (!_selectionMode) return const SizedBox.shrink();
+    return Material(
+      color: Theme.of(context).colorScheme.primaryContainer,
+      child: SafeArea(
+        bottom: false,
+        child: Row(
+          children: [
+            IconButton(
+              onPressed: _clearMessageSelection,
+              icon: const Icon(Icons.close),
+              tooltip: context.tr.text('取消选择', 'Cancel selection'),
+            ),
+            Expanded(
+              child: Text(
+                context.tr.text(
+                  '已选择 ${_selectedMessageIds.length} 条消息',
+                  '${_selectedMessageIds.length} messages selected',
+                ),
+              ),
+            ),
+            FilledButton.icon(
+              onPressed: _forwardSelectedMessages,
+              icon: const Icon(Icons.forward, size: 18),
+              label: Text(context.tr.text('转发', 'Forward')),
+            ),
+            const SizedBox(width: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _forwardSelectedMessages() async {
+    final ids = _selectedMessageIds.toList(growable: false);
+    if (ids.isEmpty) return;
+    List<Conversation> targets;
+    try {
+      final result = await Future.wait<dynamic>([
+        ApiService().getFriends(),
+        ApiService().getGroups(),
+      ]);
+      targets = [
+        ...(result[0] as List<Conversation>),
+        ...(result[1] as List<Conversation>),
+      ];
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(context.tr.text('加载转发对象失败：$error', 'Failed to load forwarding targets: $error'))),
+        );
+      }
+      return;
+    }
+    if (!mounted) return;
+    final target = await showModalBottomSheet<Conversation>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          children: targets
+              .map(
+                (item) => ListTile(
+                  leading: Icon(item.type == 'group' ? Icons.groups : Icons.person),
+                  title: Text(item.name ?? item.id),
+                  subtitle: Text(item.id),
+                  onTap: () => Navigator.pop(sheetContext, item),
+                ),
+              )
+              .toList(),
+        ),
+      ),
+    );
+    if (target == null || !mounted) return;
+    try {
+      await ApiService().forwardMessages(
+        conversationType: target.type,
+        conversationId: target.id,
+        messageIds: ids,
+      );
+      _clearMessageSelection();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(context.tr.text('转发成功', 'Forwarded successfully'))),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(context.tr.text('转发失败：$error', 'Forward failed: $error'))),
+        );
+      }
+    }
+  }
+
   final List<Map<String, String>> _mentionMembers = [];
+  final Map<String, String> _groupRoleByUid = <String, String>{};
   Timer? _mentionFilterTimer;
   int? _mentionStart;
   int _mentionActiveIndex = 0;
@@ -1038,35 +1156,62 @@ class _ChatPageState extends State<ChatPage>
     );
   }
 
+  Future<void> _showAnnouncement() async {
+    try {
+      final data = await ApiService().getGroupAnnouncement(widget.conversationId);
+      final value = (data['announcement'] ?? data['content'] ?? data['text'] ?? data['data'] ?? '').toString();
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: Text(context.tr.text('群公告', 'Group announcement')),
+          content: Text(value.isEmpty ? context.tr.text('暂无群公告', 'No group announcement') : value),
+          actions: [TextButton(onPressed: () => Navigator.pop(dialogContext), child: Text(context.tr.text('关闭', 'Close')))],
+        ),
+      );
+    } catch (error) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(context.tr.text('加载群公告失败：$error', 'Failed to load announcement: $error'))));
+    }
+  }
+
   Future<void> _showGroupTools() async {
-    await showModalBottomSheet<void>(
+    final action = await showModalBottomSheet<String>(
       context: context,
-      builder: (context) => SafeArea(
+      builder: (sheetContext) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            ListTile(
-              leading: const Icon(Icons.groups_2),
-              title: Text(AppLocalizations.current.t('群成员')),
-              subtitle: Text(AppLocalizations.current.t('查看成员、身份与资料')),
-              onTap: () {
-                Navigator.pop(context);
-                _showGroupMembers();
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.manage_search),
-              title: Text(AppLocalizations.current.t('搜索历史消息')),
-              subtitle: Text(AppLocalizations.current.t('按关键词定位历史内容')),
-              onTap: () {
-                Navigator.pop(context);
-                _showSearchMessages();
-              },
-            ),
+            ListTile(leading: const Icon(Icons.groups_2), title: Text(context.tr.t('群成员')), onTap: () => Navigator.pop(sheetContext, 'members')),
+            ListTile(leading: const Icon(Icons.campaign_outlined), title: Text(context.tr.t('群公告')), onTap: () => Navigator.pop(sheetContext, 'announcement')),
+            ListTile(leading: const Icon(Icons.manage_search), title: Text(context.tr.t('搜索历史消息')), onTap: () => Navigator.pop(sheetContext, 'search')),
+            ListTile(leading: const Icon(Icons.exit_to_app, color: Colors.red), title: Text(context.tr.text('退出群聊', 'Leave group')), onTap: () => Navigator.pop(sheetContext, 'leave')),
           ],
         ),
       ),
     );
+    if (!mounted) return;
+    if (action == 'members') await _showGroupMembers();
+    if (action == 'announcement') await _showAnnouncement();
+    if (action == 'search') await _showSearchMessages();
+    if (action == 'leave') {
+      try {
+        await ApiService().leaveGroup(widget.conversationId);
+        widget.onConversationUnavailable?.call();
+      } catch (error) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(context.tr.text('退出群聊失败：$error', 'Failed to leave group: $error'))));
+      }
+    }
+  }
+
+  String _groupRoleLabel(dynamic rawRole) {
+    final role = rawRole?.toString().trim().toLowerCase() ?? '';
+    if (role == 'owner' || role == 'group_owner' || role == '群主') {
+      return context.tr.text('群主', 'Owner');
+    }
+    if (role == 'admin' || role == 'administrator' || role == 'group_admin' || role == '管理员') {
+      return context.tr.text('群管理员', 'Administrator');
+    }
+    return context.tr.text('群成员', 'Member');
   }
 
   Future<void> _showGroupMembers() async {
@@ -1123,9 +1268,7 @@ class _ChatPageState extends State<ChatPage>
                           ),
                           title: Text(name),
                           subtitle: Text(
-                            member['role']?.toString() ??
-                                member['title']?.toString() ??
-                                uid,
+                            _groupRoleLabel(member['role'] ?? member['group_role'] ?? member['member_role']),
                           ),
                           onTap: uid.isEmpty
                               ? null
@@ -1186,10 +1329,12 @@ class _ChatPageState extends State<ChatPage>
                       uid)
                   .toString()
                   .trim();
+          final role = (map['role'] ?? map['member_role'] ?? map['group_role'] ?? map['title'])?.toString().trim() ?? '';
           if ((uid.isEmpty && ncuid.isEmpty) || name.isEmpty) continue;
           final key = uid.isNotEmpty ? uid : ncuid;
           if (members.any((member) => member['uid'] == key)) continue;
-          members.add({'uid': key, 'ncuid': ncuid, 'name': name});
+          members.add({'uid': key, 'ncuid': ncuid, 'name': name, if (role.isNotEmpty) 'role': role});
+          if (role.isNotEmpty) _groupRoleByUid[key] = role;
         }
       }
       if (!mounted) return;
@@ -1967,6 +2112,10 @@ class _ChatPageState extends State<ChatPage>
   }
 
   void _showMessageMenu(Message msg) {
+    if (_selectionMode) {
+      _toggleMessageSelection(msg);
+      return;
+    }
     final displayText = _getMessageDisplayText(msg);
     showModalBottomSheet(
       context: context,
@@ -1981,6 +2130,14 @@ class _ChatPageState extends State<ChatPage>
                 Navigator.pop(context);
                 setState(() => _quotedMessage = msg);
                 _inputFocus.requestFocus();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.check_box_outlined),
+              title: Text(AppLocalizations.current.t('选择消息')),
+              onTap: () {
+                Navigator.pop(context);
+                _toggleMessageSelection(msg);
               },
             ),
             ListTile(
@@ -2650,6 +2807,9 @@ class _ChatPageState extends State<ChatPage>
                                       key: _messageKeys[msg.id],
                                       message: msg,
                                       isMe: msg.fromUid == userId,
+                                      selected: _selectedMessageIds.contains(msg.id),
+                                      groupRole: _groupRoleByUid[msg.fromUid],
+                                      onLongPress: () => _toggleMessageSelection(msg),
                                       showAvatar:
                                           i == 0 ||
                                           _messages[i - 1].fromUid !=
@@ -2657,9 +2817,7 @@ class _ChatPageState extends State<ChatPage>
                                           msg.createdAt -
                                                   _messages[i - 1].createdAt >=
                                               5 * 60,
-                                      onLongPress: () => _showMessageMenu(msg),
-                                      onSecondaryTap: () =>
-                                          _showMessageMenu(msg),
+                                      onSecondaryTap: () => _showMessageMenu(msg),
                                       onQuoteTap: (quotedId) =>
                                           _scrollToMessage(quotedId),
                                       onMessageAction: _handleMessageAction,
@@ -2915,7 +3073,7 @@ class _ChatPageState extends State<ChatPage>
               ],
             ),
           ),
-          Expanded(child: body),
+          Expanded(child: Column(children: [_buildSelectionBar(), Expanded(child: body)])),
         ],
       );
     }
@@ -3005,7 +3163,7 @@ class _ChatPageState extends State<ChatPage>
           ),
         ],
       ),
-      body: body,
+      body: Column(children: [_buildSelectionBar(), Expanded(child: body)]),
     );
   }
 }

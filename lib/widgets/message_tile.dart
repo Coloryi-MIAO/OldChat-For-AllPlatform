@@ -26,6 +26,8 @@ class MessageTile extends StatefulWidget {
   final Message message;
   final bool isMe;
   final bool showAvatar;
+  final bool selected;
+  final String? groupRole;
   final Future<void> Function(Message message, String action, String data)?
   onMessageAction;
   final VoidCallback? onLongPress;
@@ -43,6 +45,8 @@ class MessageTile extends StatefulWidget {
     required this.message,
     required this.isMe,
     this.showAvatar = true,
+    this.selected = false,
+    this.groupRole,
     this.onMessageAction,
     this.onLongPress,
     this.onSecondaryTap,
@@ -126,6 +130,7 @@ class _MessageTileState extends State<MessageTile> {
   Future<void> _loadSenderInfo() async {
     final msg = widget.message;
     final uid = msg.fromUid;
+    final roleOverride = _roleLabel(widget.groupRole ?? msg.groupRole);
     if (uid.isEmpty) return;
     final auth = context.read<AuthService>();
     final currentUserId = auth.userId;
@@ -135,7 +140,7 @@ class _MessageTileState extends State<MessageTile> {
         if (mounted) {
           setState(() {
             _senderName = '我';
-            _senderTitle = _cleanTitle(
+            _senderTitle = roleOverride ?? _cleanTitle(
               cachedSelf['user_title'] ?? cachedSelf['title'],
             );
             _myAvatarUrl = cachedSelf['avatar_url'];
@@ -149,7 +154,7 @@ class _MessageTileState extends State<MessageTile> {
         if (mounted) {
           setState(() {
             _senderName = '我';
-            _senderTitle = _cleanTitle(
+            _senderTitle = roleOverride ?? _cleanTitle(
               profile['user_title'] ?? profile['title'],
             );
             _myAvatarUrl = profile['avatar_url'];
@@ -165,7 +170,7 @@ class _MessageTileState extends State<MessageTile> {
       if (mounted) {
         setState(() {
           _senderName = _profileLabel(cachedProfile, uid);
-          _senderTitle = _cleanTitle(
+          _senderTitle = roleOverride ?? _cleanTitle(
             cachedProfile['user_title'] ?? cachedProfile['title'],
           );
           _avatarUrl = cachedProfile['avatar_url'];
@@ -185,7 +190,7 @@ class _MessageTileState extends State<MessageTile> {
       if (mounted) {
         setState(() {
           _senderName = _profileLabel(profile, uid);
-          _senderTitle = _cleanTitle(profile['user_title'] ?? profile['title']);
+          _senderTitle = roleOverride ?? _cleanTitle(profile['user_title'] ?? profile['title']);
           _avatarUrl = profile['avatar_url'];
         });
       }
@@ -197,7 +202,7 @@ class _MessageTileState extends State<MessageTile> {
       if (cached is Map && mounted) {
         setState(() {
           _senderName = _profileLabel(Map<String, dynamic>.from(cached), uid);
-          _senderTitle = _cleanTitle(cached['user_title'] ?? cached['title']);
+          _senderTitle = roleOverride ?? _cleanTitle(cached['user_title'] ?? cached['title']);
           _avatarUrl = cached['avatar_url'];
         });
       } else if (mounted) {
@@ -1058,6 +1063,27 @@ class _MessageTileState extends State<MessageTile> {
   }
 
   // ★ 红包卡片
+  String? _roleLabel(String? value) {
+    final role = value?.trim().toLowerCase();
+    if (role == null || role.isEmpty) return null;
+    switch (role) {
+      case 'owner':
+      case 'admin_owner':
+      case '群主':
+        return AppLocalizations.current.text('群主', 'Owner');
+      case 'admin':
+      case 'manager':
+      case '管理员':
+      case '群管理员':
+        return AppLocalizations.current.text('群管理员', 'Admin');
+      case 'member':
+      case '群成员':
+        return AppLocalizations.current.text('群成员', 'Member');
+      default:
+        return value;
+    }
+  }
+
   String _senderLabel(String name) => name;
 
   Widget _buildRedPacketContent() {
@@ -1522,7 +1548,9 @@ class _MessageTileState extends State<MessageTile> {
                       bottomRight: Radius.circular(isMe ? 5 : 18),
                     ),
                     border: Border.all(
-                      color: isMe
+                      color: widget.selected
+                          ? Theme.of(context).colorScheme.primary
+                          : isMe
                           ? Theme.of(
                               context,
                             ).colorScheme.primary.withOpacity(.55)
