@@ -94,13 +94,20 @@ class ApiService {
           '${error.error}'.contains('gateway') ||
           '${error.error}'.contains('encrypted response invalid');
       final canFallback = _canFallbackV2(error) &&
-          (error.response?.statusCode == 404 ||
+          (error.response?.statusCode == 400 ||
+              error.response?.statusCode == 401 ||
+              error.response?.statusCode == 404 ||
               error.response?.statusCode == 405 ||
+              (error.response?.statusCode != null &&
+                  error.response!.statusCode! >= 500) ||
               error.type == DioExceptionType.connectionError ||
               error.type == DioExceptionType.connectionTimeout ||
               error.type == DioExceptionType.receiveTimeout);
       if (!canFallback && !gatewayError) rethrow;
-      if (gatewayError && _gatewayErrorStatus(error) == 503) rethrow;
+      final gatewayStatus = _gatewayErrorStatus(error);
+      final gatewayCanFallback =
+          gatewayError && gatewayStatus != 400 && gatewayStatus != 401;
+      if (!canFallback && !gatewayCanFallback) rethrow;
       if (error.requestOptions.extra['_gatewayRetried'] != true) {
         WsSessionService(http: true).reset();
         try {
@@ -113,7 +120,7 @@ class ApiService {
           if (!_hasV2GatewayError(retry.data)) return retry;
         } catch (_) {}
       }
-      if (canFallback && fallbackPath != null) {
+      if ((canFallback || gatewayCanFallback) && fallbackPath != null) {
         _openV2Circuit(endpointKey);
         return sendDirect(fallbackPath, v2: false);
       }
@@ -306,6 +313,7 @@ class ApiService {
     if (status == 400 ||
         status == 401 ||
         status == 404 ||
+        status == 405 ||
         (status != null && status >= 500))
       return true;
     return error.type == DioExceptionType.connectionError ||
@@ -939,7 +947,10 @@ class ApiService {
 
   Future<List<Conversation>> getFriends() async {
     try {
-      final response = await _dio.get(Constants.apiPath('/v1/friends'));
+      final response = await _requestV2WithV1Fallback(
+        'GET',
+        '/v2/friends',
+      );
       if (response.statusCode == 200) {
         final envelope = _unwrapEnvelopeMap(response.data);
         final list = _nestedList(envelope, const [
@@ -1045,7 +1056,10 @@ class ApiService {
 
   Future<List<Conversation>> getGroups() async {
     try {
-      final response = await _dio.get(Constants.apiPath('/v1/groups/list'));
+      final response = await _requestV2WithV1Fallback(
+        'GET',
+        '/v2/groups/list',
+      );
       if (response.statusCode == 200) {
         final envelope = _unwrapEnvelopeMap(response.data);
         final list = _nestedList(envelope, const [
@@ -1306,8 +1320,9 @@ class ApiService {
 
   Future<Map<String, dynamic>> getGroupAnnouncement(String groupId) async {
     try {
-      final response = await _dio.get(
-        Constants.apiPath('/v1/groups/announcement'),
+      final response = await _requestV2WithV1Fallback(
+        'GET',
+        '/v2/groups/announcement',
         queryParameters: {'group_id': groupId.trim()},
       );
       return _unwrapEnvelopeMap(response.data);
@@ -1318,14 +1333,15 @@ class ApiService {
 
   Future<void> forwardMessages({required String conversationType, required String conversationId, required List<String> messageIds}) async {
     final endpoint = conversationType == 'group'
-        ? Constants.apiPath('/v1/groups/message/send')
-        : Constants.apiPath('/v1/direct/send');
+        ? '/v2/groups/message/send'
+        : '/v2/direct/send';
     try {
       final messages = <Map<String, dynamic>>[];
       for (final messageId in messageIds) {
         messages.add({'source_message_id': messageId});
       }
-      await _dio.post(
+      await _requestV2WithV1Fallback(
+        'POST',
         endpoint,
         data: conversationType == 'group'
             ? {
@@ -3020,7 +3036,6 @@ class ApiService {
     }
   }
 
-  // ==================== AI ====================
   // ==================== AI ====================
 
   Future<Map<String, dynamic>> getAIQuota() async {
