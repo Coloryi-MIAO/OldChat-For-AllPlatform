@@ -1,8 +1,8 @@
-name: Cross Compile Engine
+name: 构建 OldChat 跨平台引擎
 
 on:
   push:
-    branches: [main]
+    branches: [master]
     tags: ['v*']
   pull_request:
   workflow_dispatch:
@@ -36,32 +36,36 @@ jobs:
             architecture: x64
     runs-on: ${{ matrix.runner }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: subosito/flutter-action@v2
+      - name: 检出代码
+        uses: actions/checkout@v4
+      - name: 安装 Flutter
+        uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           architecture: ${{ matrix.architecture }}
           channel: stable
           cache: true
-      - uses: actions/setup-java@v4
+      - name: 安装 Java
+        uses: actions/setup-java@v4
         if: matrix.platform == 'android'
         with:
           distribution: temurin
           java-version: '17'
-      - name: Install Linux build dependencies
+      - name: 安装 Linux 构建依赖
         if: matrix.platform == 'linux'
         run: sudo apt-get update && sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libayatana-appindicator3-dev libmpv-dev dpkg-dev rpm gpg zip
-      - name: Install AppImage tool
+      - name: 安装 AppImage 工具
         if: matrix.platform == 'linux'
         run: |
           curl -L --fail --retry 3 -o /tmp/appimagetool https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
           chmod +x /tmp/appimagetool
           sudo mv /tmp/appimagetool /usr/local/bin/appimagetool
-      - run: flutter pub get
-      - name: Prepare Android signing
+      - name: 获取依赖
+        run: flutter pub get
+      - name: 准备 Android 签名
         if: matrix.platform == 'android'
         run: chmod +x tools/create_android_signing.sh && OLDCHATANDROIDKEYALIAS=oldchatrelease tools/create_android_signing.sh
-      - name: Build platform output
+      - name: 构建平台产物
         shell: bash
         run: |
           set -euo pipefail
@@ -73,7 +77,7 @@ jobs:
             ios) flutter build ios --release --no-codesign ;;
             web) flutter build web --release ;;
           esac
-      - name: Verify expected output
+      - name: 验证预期产物
         shell: bash
         run: |
           set -euo pipefail
@@ -84,10 +88,11 @@ jobs:
             ios) find build/ios/iphoneos -maxdepth 1 -type d -name '*.app' | grep -q . ;;
             web) test -f build/web/index.html ;;
           esac
-      - name: Record engine result
+      - name: 记录引擎结果
         shell: bash
         run: printf 'platform=%s\nflutter=%s\nrunner=%s\narchitecture=%s\n' '${{ matrix.platform }}' '${{ env.FLUTTER_VERSION }}' '${{ matrix.runner }}' '${{ matrix.architecture }}' > engine-result.txt
-      - uses: actions/upload-artifact@v4
+      - name: 上传引擎结果
+        uses: actions/upload-artifact@v4
         with:
-          name: oldchatengine${{ matrix.platform }}${{ matrix.architecture }}
+          name: OldChat 跨平台引擎 ${{ matrix.platform }} ${{ matrix.architecture }}
           path: engine-result.txt

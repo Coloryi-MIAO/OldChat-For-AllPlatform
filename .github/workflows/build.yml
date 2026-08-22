@@ -1,8 +1,8 @@
-name: Build OldChat For AllPlatform
+name: 构建 OldChat For AllPlatform 全平台
 
 on:
   push:
-    branches: [main]
+    branches: [master]
     tags: ['v*']
   pull_request:
   workflow_dispatch:
@@ -20,13 +20,16 @@ jobs:
   analyze-and-test:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: subosito/flutter-action@v2
+      - name: 检出代码
+        uses: actions/checkout@v4
+      - name: 安装 Flutter
+        uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ env.FLUTTER_X64 }}
           channel: stable
           cache: true
-      - run: flutter pub get
+      - name: 获取依赖
+        run: flutter pub get
       - run: flutter analyze lib test --no-fatal-infos --no-fatal-warnings
       - run: flutter test
 
@@ -34,74 +37,87 @@ jobs:
     needs: analyze-and-test
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: subosito/flutter-action@v2
+      - name: 检出代码
+        uses: actions/checkout@v4
+      - name: 安装 Flutter
+        uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ env.FLUTTER_X64 }}
           channel: stable
           cache: true
-      - uses: actions/setup-java@v4
+      - name: 安装 Java
+        uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
-      - run: flutter pub get
+      - name: 获取依赖
+        run: flutter pub get
       - run: chmod +x tools/create_android_signing.sh && OLDCHATANDROIDKEYALIAS=oldchatrelease tools/create_android_signing.sh
       - run: flutter build apk --release --split-per-abi --target-platform android-arm,android-arm64,android-x64 -Pandroid.compileSdk=36 -Pandroid.targetSdk=36
-      - name: Rename Android artifacts
+      - name: 重命名 Android 产物
         shell: bash
         run: |
           mkdir -p dist/android
           cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk dist/android/OldChatForAllPlatformandroidv7a.apk
           cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk dist/android/OldChatForAllPlatformandroidv8a.apk
           cp build/app/outputs/flutter-apk/app-x86_64-release.apk dist/android/OldChatForAllPlatformandroidx64.apk
-      - uses: actions/upload-artifact@v4
+      - name: 上传 Android 安装包
+        uses: actions/upload-artifact@v4
         with:
-          name: oldchatandroid
+          name: OldChat 安卓
           path: dist/android
 
   build-linux:
     needs: analyze-and-test
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: subosito/flutter-action@v2
+      - name: 检出代码
+        uses: actions/checkout@v4
+      - name: 安装 Flutter
+        uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ env.FLUTTER_X64 }}
           architecture: x64
           channel: stable
           cache: true
       - run: sudo apt-get update && sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libayatana-appindicator3-dev libmpv-dev dpkg-dev rpm gpg zip
-      - name: Install appimagetool
+      - name: 安装 AppImage 工具
         run: |
           curl -L --fail --retry 3 -o /tmp/appimagetool https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
           chmod +x /tmp/appimagetool
           sudo mv /tmp/appimagetool /usr/local/bin/appimagetool
-      - run: flutter pub get
+      - name: 获取依赖
+        run: flutter pub get
       - run: chmod +x tools/package_linux.sh tools/sign_linux.sh && tools/package_linux.sh x64 dist/linuxx64 && tools/sign_linux.sh dist/linuxx64
       - run: test -s dist/linuxx64/OldChatForAllPlatformlinuxx64.deb && test -s dist/linuxx64/OldChatForAllPlatformlinuxx64.rpm && test -s dist/linuxx64/OldChatForAllPlatformlinuxx64.AppImage
-      - uses: actions/upload-artifact@v4
+      - name: 上传构建产物
+        uses: actions/upload-artifact@v4
         with:
-          name: oldchatlinuxx64
+          name: OldChat Linux x64
           path: dist/linuxx64
 
   build-windows:
     needs: analyze-and-test
     runs-on: windows-2025
     steps:
-      - uses: actions/checkout@v4
-      - uses: subosito/flutter-action@v2
+      - name: 检出代码
+        uses: actions/checkout@v4
+      - name: 安装 Flutter
+        uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ env.FLUTTER_X64 }}
           architecture: x64
           channel: stable
           cache: true
-      - run: flutter pub get
-      - name: Build and package Windows
+      - name: 获取依赖
+        run: flutter pub get
+      - name: 构建并打包 Windows
         shell: pwsh
         run: ./tools/package_windows.ps1 -Architecture 'x64' -Output 'dist/windowsx64'
-      - uses: actions/upload-artifact@v4
+      - name: 上传构建产物
+        uses: actions/upload-artifact@v4
         with:
-          name: oldchatwindowsx64
+          name: OldChat Windows x64
           path: dist/windowsx64
 
   build-macos:
@@ -120,39 +136,46 @@ jobs:
             architecture: arm64
     runs-on: ${{ matrix.runner }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: subosito/flutter-action@v2
+      - name: 检出代码
+        uses: actions/checkout@v4
+      - name: 安装 Flutter
+        uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ env[matrix.flutter] }}
           architecture: ${{ matrix.architecture }}
           channel: stable
           cache: true
-      - run: flutter pub get
-      - name: Build and package macOS
+      - name: 获取依赖
+        run: flutter pub get
+      - name: 构建并打包 macOS
         env:
           MACOSX_DEPLOYMENT_TARGET: '10.15'
           OLDCHAT_APPLE_SIGNING_MODE: adhoc
         run: |
           chmod +x tools/package_macos.sh tools/sign_apple_offline.sh
           tools/package_macos.sh ${{ matrix.arch }} dist/macos${{ matrix.arch }}
-      - uses: actions/upload-artifact@v4
+      - name: 上传构建产物
+        uses: actions/upload-artifact@v4
         with:
-          name: oldchatmacos${{ matrix.arch }}
+          name: OldChat macOS ${{ matrix.arch }}
           path: dist/macos${{ matrix.arch }}/*.dmg
 
   build-ios-ipa:
     needs: analyze-and-test
     runs-on: macos-14
     steps:
-      - uses: actions/checkout@v4
-      - uses: subosito/flutter-action@v2
+      - name: 检出代码
+        uses: actions/checkout@v4
+      - name: 安装 Flutter
+        uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ env.FLUTTER_ARM64 }}
           architecture: arm64
           channel: stable
           cache: true
-      - run: flutter pub get
-      - name: Build development signed IPA with offline identity
+      - name: 获取依赖
+        run: flutter pub get
+      - name: 构建离线开发签名 IPA
         env:
           OLDCHAT_APPLE_SIGNING_MODE: adhoc
         run: |
@@ -163,24 +186,29 @@ jobs:
           test -s dist/ios/OldChatForAllPlatformiosdevelopment.ipa
           test -s dist/ios/OldChatForAllPlatformiosdevelopment.signing.txt
           unzip -t dist/ios/OldChatForAllPlatformiosdevelopment.ipa
-      - uses: actions/upload-artifact@v4
+      - name: 上传构建产物
+        uses: actions/upload-artifact@v4
         with:
-          name: oldchatiosipa
+          name: OldChat iOS IPA
           path: dist/ios/*
 
   build-web:
     needs: analyze-and-test
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: subosito/flutter-action@v2
+      - name: 检出代码
+        uses: actions/checkout@v4
+      - name: 安装 Flutter
+        uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ env.FLUTTER_X64 }}
           channel: stable
           cache: true
-      - run: flutter pub get
+      - name: 获取依赖
+        run: flutter pub get
       - run: flutter build web --release
-      - uses: actions/upload-artifact@v4
+      - name: 上传构建产物
+        uses: actions/upload-artifact@v4
         with:
-          name: oldchatweb
+          name: OldChat Web
           path: build/web

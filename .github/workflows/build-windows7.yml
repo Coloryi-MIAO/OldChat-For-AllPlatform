@@ -1,0 +1,70 @@
+name: 构建 OldChat For AllPlatform Windows 7
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  FLUTTER_VERSION: '3.19.6'
+
+jobs:
+  analyze-and-test:
+    name: 分析与测试
+    runs-on: windows-2022
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+      - name: 安装 Flutter 3.19.6 x64
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          architecture: x64
+          channel: stable
+          cache: true
+      - name: 获取依赖
+        run: flutter pub get
+      - name: 静态分析
+        run: flutter analyze lib test --no-fatal-infos --no-fatal-warnings
+      - name: 运行测试
+        run: flutter test
+
+  build-windows7-x64:
+    name: 构建 Windows 7 x64
+    needs: analyze-and-test
+    runs-on: windows-2022
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+      - name: 安装 Flutter 3.19.6 x64
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          architecture: x64
+          channel: stable
+          cache: true
+      - name: 获取依赖
+        run: flutter pub get
+      - name: 构建 Windows 7 x64
+        shell: pwsh
+        run: ./tools/package_windows.ps1 -Architecture 'x64' -Output 'dist/windows7x64'
+      - name: 验证构建产物
+        shell: pwsh
+        run: |
+          $exe = 'dist/windows7x64/OldChatForAllPlatformwindows7x64.exe'
+          $zip = 'OldChatForAllPlatformwindows7x64.zip'
+          if (-not (Test-Path $exe)) { throw "没有生成 $exe" }
+          if (-not (Test-Path $zip)) { throw "没有生成 $zip" }
+          Get-Item $exe, $zip
+      - name: 上传 Windows 7 x64 产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: OldChat Windows 7 x64 安装包
+          path: |
+            dist/windows7x64
+            OldChatForAllPlatformwindows7x64.zip
