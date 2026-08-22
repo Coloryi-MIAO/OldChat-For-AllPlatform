@@ -1,4 +1,4 @@
-name: Build OldChat For AllPlatform
+name: 构建 OldChat For AllPlatform 全平台
 
 on:
   push:
@@ -56,7 +56,7 @@ jobs:
           cp build/app/outputs/flutter-apk/app-x86_64-release.apk dist/android/OldChatForAllPlatformandroidx64.apk
       - uses: actions/upload-artifact@v4
         with:
-          name: oldchatandroid
+          name: OldChat 安卓
           path: dist/android
 
   build-linux:
@@ -81,7 +81,7 @@ jobs:
       - run: test -s dist/linuxx64/OldChatForAllPlatformlinuxx64.deb && test -s dist/linuxx64/OldChatForAllPlatformlinuxx64.rpm && test -s dist/linuxx64/OldChatForAllPlatformlinuxx64.AppImage
       - uses: actions/upload-artifact@v4
         with:
-          name: oldchatlinuxx64
+          name: OldChat Linux x64
           path: dist/linuxx64
 
   build-windows:
@@ -101,7 +101,7 @@ jobs:
         run: ./tools/package_windows.ps1 -Architecture 'x64' -Output 'dist/windowsx64'
       - uses: actions/upload-artifact@v4
         with:
-          name: oldchatwindowsx64
+          name: OldChat Windows 10 11 x64
           path: dist/windowsx64
 
   build-macos:
@@ -137,7 +137,7 @@ jobs:
           tools/package_macos.sh ${{ matrix.arch }} dist/macos${{ matrix.arch }}
       - uses: actions/upload-artifact@v4
         with:
-          name: oldchatmacos${{ matrix.arch }}
+          name: OldChat macOS ${{ matrix.arch }}
           path: dist/macos${{ matrix.arch }}/*.dmg
 
   build-ios-ipa:
@@ -165,7 +165,7 @@ jobs:
           unzip -t dist/ios/OldChatForAllPlatformiosdevelopment.ipa
       - uses: actions/upload-artifact@v4
         with:
-          name: oldchatiosipa
+          name: OldChat iOS IPA
           path: dist/ios/*
 
   build-web:
@@ -182,5 +182,5 @@ jobs:
       - run: flutter build web --release
       - uses: actions/upload-artifact@v4
         with:
-          name: oldchatweb
+          name: OldChat Web
           path: build/web

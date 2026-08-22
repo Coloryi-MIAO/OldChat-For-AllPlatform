@@ -1,4 +1,4 @@
-name: Cross Compile Engine
+name: 构建 OldChat 跨平台引擎
 
 on:
   push:
@@ -89,5 +89,5 @@ jobs:
         run: printf 'platform=%s\nflutter=%s\nrunner=%s\narchitecture=%s\n' '${{ matrix.platform }}' '${{ env.FLUTTER_VERSION }}' '${{ matrix.runner }}' '${{ matrix.architecture }}' > engine-result.txt
       - uses: actions/upload-artifact@v4
         with:
-          name: oldchatengine${{ matrix.platform }}${{ matrix.architecture }}
+          name: OldChat 跨平台引擎 ${{ matrix.platform }} ${{ matrix.architecture }}
           path: engine-result.txt
