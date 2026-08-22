@@ -94,9 +94,7 @@ class ApiService {
           '${error.error}'.contains('gateway') ||
           '${error.error}'.contains('encrypted response invalid');
       final canFallback = _canFallbackV2(error) &&
-          (error.response?.statusCode == 400 ||
-              error.response?.statusCode == 401 ||
-              error.response?.statusCode == 404 ||
+          (error.response?.statusCode == 404 ||
               error.response?.statusCode == 405 ||
               (error.response?.statusCode != null &&
                   error.response!.statusCode! >= 500) ||
@@ -351,6 +349,88 @@ class ApiService {
         text.contains('missing device id');
   }
 
+  String? _v2FallbackPath(String v1Path) {
+    const mappings = <String, String>{
+      '/v1/friends': '/v2/friends',
+      '/v1/friends/requests': '/v2/friends/requests',
+      '/v1/friends/request': '/v2/friends/request',
+      '/v1/friends/respond': '/v2/friends/respond',
+      '/v1/friends/remark': '/v2/friends/remark',
+      '/v1/friends/delete': '/v2/friends/delete',
+      '/v1/groups/list': '/v2/groups/list',
+      '/v1/groups/create': '/v2/groups/create',
+      '/v1/groups/join': '/v2/groups/join',
+      '/v1/groups/members': '/v2/groups/members',
+      '/v1/groups/requests': '/v2/groups/requests',
+      '/v1/groups/invite': '/v2/groups/invite',
+      '/v1/groups/approve': '/v2/groups/approve',
+      '/v1/groups/admin': '/v2/groups/admin',
+      '/v1/groups/avatar': '/v2/groups/avatar',
+      '/v1/groups/name': '/v2/groups/name',
+      '/v1/groups/settings': '/v2/groups/settings',
+      '/v1/groups/announcement': '/v2/groups/announcement',
+      '/v1/groups/announcement/read': '/v2/groups/announcement/read',
+      '/v1/groups/kick': '/v2/groups/kick',
+      '/v1/groups/leave': '/v2/groups/leave',
+      '/v1/groups/dissolve': '/v2/groups/dissolve',
+      '/v1/direct/send': '/v2/direct/send',
+      '/v1/groups/message/send': '/v2/groups/message/send',
+      '/v1/direct/read': '/v2/direct/read',
+      '/v1/groups/read': '/v2/groups/read',
+      '/v1/direct/unread': '/v2/unread/direct',
+      '/v1/groups/unread': '/v2/unread/groups',
+      '/v1/direct/messages/v2': '/v2/direct/messages/v2',
+      '/v1/groups/messages/v2': '/v2/groups/messages/v2',
+      '/v1/groups/messages': '/v2/groups/messages/after',
+      '/v1/buttons/callback': '/v2/buttons/callback',
+      '/v1/groups/invitations': '/v2/groups/invitations',
+      '/v1/groups/invitations/respond': '/v2/groups/invitations/respond',
+      '/v1/redpackets/send': '/v2/redpackets/send',
+      '/v1/redpackets/claim': '/v2/redpackets/claim',
+      '/v1/channels/discover': '/v2/channels/discover',
+      '/v1/channels/states': '/v2/channels/states',
+      '/v1/channels/notifications': '/v2/channels/notifications',
+      '/v1/channels/subscribe': '/v2/channels/subscribe',
+      '/v1/channels/unsubscribe': '/v2/channels/unsubscribe',
+      '/v1/channels/posts/send': '/v2/channels/posts/send',
+      '/v1/channels/read': '/v2/channels/read',
+      '/v1/channels/posts/after': '/v2/channels/posts/after',
+      '/v1/channels/reactions/toggle': '/v2/channels/reactions/toggle',
+      '/v1/me/scratch': '/v2/me/scratch',
+    };
+    return mappings[v1Path.split('?').first];
+  }
+
+  Future<Response<dynamic>?> _tryV2ForV1Failure(DioException error) async {
+    final options = error.requestOptions;
+    if (options.extra['_v1V2Retried'] == true || options.data is FormData) {
+      return null;
+    }
+    options.extra['_v1V2Retried'] = true;
+    final v2Path = _v2FallbackPath(options.path);
+    if (v2Path == null || _auth.token?.isNotEmpty != true) return null;
+    final status = error.response?.statusCode;
+    final eligible = status == 404 ||
+        status == 405 ||
+        (status != null && status >= 500) ||
+        error.type == DioExceptionType.connectionError ||
+        error.type == DioExceptionType.connectionTimeout ||
+        error.type == DioExceptionType.receiveTimeout;
+    if (!eligible) return null;
+    try {
+      final response = await _sendV2WithGateway(
+        options.method,
+        v2Path,
+        data: options.data,
+        queryParameters: options.queryParameters,
+      );
+      if (_hasV2GatewayError(response.data)) return null;
+      return response;
+    } catch (_) {
+      return null;
+    }
+  }
+
   String? _v1FallbackPath(String v2Path) {
     const mappings = <String, String>{
       '/v2/direct/messages/v2': '/v1/direct/messages/v2',
@@ -507,6 +587,8 @@ class ApiService {
               return handler.resolve(retry);
             } catch (_) {}
           }
+          final v2Fallback = await _tryV2ForV1Failure(e);
+          if (v2Fallback != null) return handler.resolve(v2Fallback);
           final responseData = e.response?.data;
           final responseText = responseData is Map
               ? '${responseData['error'] ?? responseData['code'] ?? responseData['message'] ?? (responseData['body'] is Map ? (responseData['body'] as Map)['error'] : '')}'
