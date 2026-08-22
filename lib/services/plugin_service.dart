@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
-import 'package:camera/camera.dart';
 import 'package:file_picker/file_picker.dart';
 import '../utils/file_picker_compat.dart';
 import 'package:flutter/foundation.dart';
@@ -412,7 +411,7 @@ class PluginService extends ChangeNotifier {
       ..add(ArchiveFile('manifest.json', manifestBytes.length, manifestBytes));
     final bytes = ZipEncoder().encodeBytes(archive);
     final selected = filePickerPath(
-      await FilePicker.saveFile(
+      await saveFileCompat(
         dialogTitle: '导出插件',
         fileName: '${plugin['id']}.oldchat-plugin',
         type: FileType.custom,
@@ -1534,7 +1533,7 @@ class PluginService extends ChangeNotifier {
     state.registerAsync('app_file_pick', (LuaState ls) async {
       if (!permissions.contains('files.local')) return deniedCapability(ls);
       try {
-        final result = await FilePicker.pickFiles(
+        final result = await pickFilesCompat(
           withData: false,
           allowMultiple: false,
         );
@@ -1567,29 +1566,8 @@ class PluginService extends ChangeNotifier {
     });
     state.registerAsync('app_camera_capture', (LuaState ls) async {
       if (!permissions.contains('camera')) return deniedCapability(ls);
-      CameraController? controller;
-      try {
-        final cameras = await availableCameras();
-        if (cameras.isEmpty) {
-          ls.pushNil();
-          ls.pushString('no Windows camera is available');
-          return 2;
-        }
-        controller = CameraController(
-          cameras.first,
-          ResolutionPreset.medium,
-          enableAudio: false,
-        );
-        await controller.initialize();
-        final picture = await controller.takePicture();
-        ls.pushString(picture.path);
-        ls.pushNil();
-      } catch (error) {
-        ls.pushNil();
-        ls.pushString('camera capture failed: $error');
-      } finally {
-        await controller?.dispose();
-      }
+      ls.pushNil();
+      ls.pushString('camera capture is unavailable in the Windows 7 build');
       return 2;
     });
     state.registerAsync('app_http_get', (LuaState ls) async {

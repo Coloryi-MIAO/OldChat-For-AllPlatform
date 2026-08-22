@@ -188,7 +188,7 @@ class _CipPageState extends State<CipPage> {
   }
 
   Future<void> _import() async {
-    final result = await FilePicker.pickFiles(
+    final result = await pickFilesCompat(
       type: FileType.custom,
       allowedExtensions: const ['cip'],
       withData: false,

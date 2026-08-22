@@ -1826,8 +1826,9 @@ class _ChatPageState extends State<ChatPage>
       if (shouldSend) await _sendFriendRequest(widget.conversationId);
       return;
     }
-    final result = await FilePicker.pickFile();
-    if (result != null) await _sendPickedFile(result, 'file');
+    final result = await pickFilesCompat(allowMultiple: false);
+    final files = filePickerFiles(result);
+    if (files.isNotEmpty) await _sendPickedFile(files.first, 'file');
   }
 
   // ★ 发红包
@@ -2300,8 +2301,9 @@ class _ChatPageState extends State<ChatPage>
               title: Text(AppLocalizations.current.t('文件')),
               onTap: () async {
                 Navigator.pop(context);
-                final result = await FilePicker.pickFile();
-                if (result != null) await _sendPickedFile(result, 'file');
+                final result = await pickFilesCompat(allowMultiple: false);
+                final files = filePickerFiles(result);
+                if (files.isNotEmpty) await _sendPickedFile(files.first, 'file');
               },
             ),
             ListTile(
