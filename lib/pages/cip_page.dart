@@ -133,11 +133,11 @@ class _CipPageState extends State<CipPage> {
         return url.isEmpty
             ? const SizedBox.shrink()
             : Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
+                padding: EdgeInsets.symmetric(vertical: margin),
                 child: Image.network(url, height: height ?? 160, fit: BoxFit.contain),
               );
       case 'spacer':
-        return const SizedBox(height: 12);
+        return SizedBox(height: height ?? 12);
       case 'text':
       default:
         return Padding(

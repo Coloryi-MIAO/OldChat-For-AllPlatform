@@ -479,6 +479,8 @@ class ApiService {
       '/v2/channels/posts/after': '/v1/channels/posts/after',
       '/v2/channels/reactions/toggle': '/v1/channels/reactions/toggle',
       '/v2/me/scratch': '/v1/me/scratch',
+      '/v2/public-court/cases': '/v1/public-court/cases',
+      '/v2/public-court/cases/': '/v1/public-court/cases/',
     };
     return mappings[v2Path];
   }
@@ -1186,26 +1188,31 @@ class ApiService {
     String avatarUrl = '',
   }) async {
     try {
+      final members = memberUids
+          .map((uid) => uid.trim())
+          .where((uid) => uid.isNotEmpty)
+          .toSet()
+          .toList();
       final response = await _v2Request(
         'POST',
         '/v2/groups/create',
         data: {
           'name': name.trim(),
           'avatar_url': avatarUrl.trim(),
-          'member_uids': memberUids
-              .map((uid) => uid.trim())
-              .where((uid) => uid.isNotEmpty)
-              .toSet()
-              .toList(),
+          'member_uids': members,
+          'members': members,
         },
       );
       final value = response.data;
       if (value is Map) {
-        final result = Map<String, dynamic>.from(value);
-        final nested = result['data'];
-        if (nested is Map) {
-          return {...result, ...Map<String, dynamic>.from(nested)};
+        final result = _unwrapEnvelopeMap(value);
+        final nested = result['group'] ?? result['group_info'];
+        if (nested is Map) result.addAll(Map<String, dynamic>.from(nested));
+        if (result['id'] == null && result['group_id'] != null) {
+          result['id'] = result['group_id'];
         }
+        result['members'] ??= const <dynamic>[];
+        result['member_count'] ??= (result['members'] as List?)?.length ?? 0;
         return result;
       }
       return <String, dynamic>{'data': value};
@@ -1240,12 +1247,11 @@ class ApiService {
 
   Map<String, dynamic> _normalizeGroupMemberResponse(dynamic raw) {
     final value = raw is Map ? Map<String, dynamic>.from(raw) : <String, dynamic>{};
-    final nested = value['data'];
+    dynamic nested = value['data'] ?? value['result'] ?? value['payload'];
     if (nested is Map) {
       final nestedMap = Map<String, dynamic>.from(nested);
-      for (final entry in nestedMap.entries) {
-        value[entry.key] = entry.value;
-      }
+      value.addAll(nestedMap);
+      nested = nestedMap['data'] ?? nestedMap['result'] ?? nestedMap['payload'];
     }
     final rawMembers = value['members'] ??
         value['member_list'] ??
@@ -1259,28 +1265,34 @@ class ApiService {
         : <dynamic>[];
     value['members'] = members;
     final owner = value['owner_uid'] ?? value['group_owner_uid'] ?? value['ownerUid'];
-    if (owner != null) value['owner_uid'] = owner.toString();
+    final ownerUid = owner?.toString().trim() ?? '';
+    if (ownerUid.isNotEmpty) value['owner_uid'] = ownerUid;
     final count = value['member_count'] ?? value['members_count'] ?? value['memberCount'];
     value['member_count'] = count is num
         ? count.toInt()
         : int.tryParse('$count') ?? members.length;
     final currentRole = value['role'] ?? value['member_role'] ?? value['group_role'];
+    final normalizedRole = currentRole?.toString().trim().toLowerCase() ?? '';
+    value['role'] = currentRole?.toString();
     value['is_admin'] = _flag(value['is_admin'] ?? value['isAdmin']) ||
-        currentRole == 'admin' || currentRole == 'administrator';
+        normalizedRole == 'admin' || normalizedRole == 'administrator';
     value['is_owner'] = _flag(value['is_owner'] ?? value['isOwner']) ||
-        currentRole == 'owner' || currentRole == 'group_owner';
+        normalizedRole == 'owner' || normalizedRole == 'group_owner';
     for (var index = 0; index < members.length; index++) {
       final item = members[index];
       if (item is! Map) continue;
       final member = Map<String, dynamic>.from(item);
       final uid = member['uid'] ?? member['user_uid'] ?? member['user_id'] ?? member['id'];
-      if (uid != null) member['uid'] = uid.toString();
+      final memberUid = uid?.toString().trim() ?? '';
+      if (memberUid.isNotEmpty) member['uid'] = memberUid;
       final role = member['role'] ?? member['group_role'] ?? member['member_role'];
+      final memberRole = role?.toString().trim().toLowerCase() ?? '';
       if (role != null) member['role'] = role.toString();
       member['is_admin'] = _flag(member['is_admin'] ?? member['isAdmin'] ?? member['admin']) ||
-          member['role'] == 'admin' || member['role'] == 'administrator';
+          memberRole == 'admin' || memberRole == 'administrator';
       member['is_owner'] = _flag(member['is_owner'] ?? member['isOwner'] ?? member['owner']) ||
-          member['role'] == 'owner' || member['role'] == 'group_owner';
+          memberRole == 'owner' || memberRole == 'group_owner' ||
+          (ownerUid.isNotEmpty && memberUid == ownerUid);
       members[index] = member;
     }
     return value;
@@ -1292,7 +1304,7 @@ class ApiService {
 
   Future<List<Map<String, dynamic>>> getCipStore() async {
     Object? lastError;
-    for (final path in const ['/v2/cip/store', '/v1/cip/store']) {
+    for (final path in const ['/v1/cip/store', '/v2/cip/store']) {
       try {
         final response = await _requestV2WithV1Fallback('GET', path);
         final value = _unwrapEnvelopeMap(response.data);
@@ -1350,14 +1362,14 @@ class ApiService {
 
   Future<Map<String, dynamic>> getGroupMembers(String groupId) async {
     try {
-      final response = await _v2Request(
+      final response = await _requestV2WithV1Fallback(
         'GET',
         '/v2/groups/members',
         queryParameters: {'group_id': groupId.trim()},
       );
       return _normalizeGroupMemberResponse(response.data);
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('加载群成员失败', e);
     }
   }
 
@@ -1543,28 +1555,35 @@ class ApiService {
     final endpoint = conversationType == 'group'
         ? '/v2/groups/message/send'
         : '/v2/direct/send';
+    final ids = messageIds.map((id) => id.trim()).where((id) => id.isNotEmpty).toSet().toList();
+    if (ids.isEmpty) throw Exception('至少选择一条消息');
+    final forward = {
+      'v': 2,
+      'forward_v2': {
+        'title': '聊天记录',
+        'message_ids': ids,
+        'items': ids.map((id) => {'id': id, 'message_id': id}).toList(),
+      },
+      'forward_message_ids': ids,
+    };
     try {
-      final messages = <Map<String, dynamic>>[];
-      for (final messageId in messageIds) {
-        messages.add({'source_message_id': messageId});
-      }
       await _requestV2WithV1Fallback(
         'POST',
         endpoint,
         data: conversationType == 'group'
             ? {
                 'group_id': conversationId,
-                'body': jsonEncode({'v': 2, 'forward_message_ids': messageIds}),
+                'body': jsonEncode(forward),
                 'msg_type': 'forward',
-                'forward_message_ids': messageIds,
-                'forward_items': messages,
+                'forward_message_ids': ids,
+                'forward_items': forward['forward_v2'],
               }
             : {
                 'to_uid': conversationId,
-                'body': jsonEncode({'v': 2, 'forward_message_ids': messageIds}),
+                'body': jsonEncode(forward),
                 'msg_type': 'forward',
-                'forward_message_ids': messageIds,
-                'forward_items': messages,
+                'forward_message_ids': ids,
+                'forward_items': forward['forward_v2'],
               },
       );
     } on DioException catch (e) {
@@ -2466,8 +2485,9 @@ class ApiService {
     try {
       final normalizedReason = reason.trim();
       final normalizedEvidence = evidence.trim();
-      final response = await _dio.post(
-        Constants.apiPath('/v1/public-court/cases/$caseId/vote'),
+      final response = await _requestV2WithV1Fallback(
+        'POST',
+        '/v2/public-court/cases/$caseId/vote',
         data: {
           'vote': vote,
           'decision': vote,

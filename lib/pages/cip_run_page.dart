@@ -117,7 +117,7 @@ class _CipRunPageState extends State<CipRunPage> {
         return url.isEmpty
             ? const SizedBox.shrink()
             : Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
+                padding: EdgeInsets.symmetric(vertical: margin),
                 child: Image.network(url, height: height ?? 180, fit: BoxFit.contain),
               );
       case 'spacer':

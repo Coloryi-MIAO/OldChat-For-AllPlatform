@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
 import 'package:camera/camera.dart';
+import 'package:dio/dio.dart';
 import 'package:file_picker/file_picker.dart';
 import '../utils/file_picker_compat.dart';
 import 'package:flutter/foundation.dart';
@@ -1221,24 +1222,28 @@ class PluginService extends ChangeNotifier {
 
   dynamic _luaValue(LuaState ls, int index, [int depth = 0]) {
     if (depth > 8) return null;
-    if (ls.isNil(index)) return null;
-    if (ls.isFunction(index)) {
-      ls.pushValue(index);
+    final absoluteIndex = ls.absIndex(index);
+    if (ls.isNil(absoluteIndex)) return null;
+    if (ls.isFunction(absoluteIndex)) {
+      ls.pushValue(absoluteIndex);
       final reference = ls.ref(luaRegistryIndex);
       return {'__lua_callback_ref': reference};
     }
-    if (ls.isString(index)) return ls.toStr(index);
-    if (ls.isBoolean(index)) return ls.toBoolean(index);
-    if (ls.isNumber(index)) return ls.toNumberX(index);
-    if (!ls.isTable(index)) return null;
+    if (ls.isString(absoluteIndex)) return ls.toStr(absoluteIndex);
+    if (ls.isBoolean(absoluteIndex)) return ls.toBoolean(absoluteIndex);
+    if (ls.isNumber(absoluteIndex)) return ls.toNumberX(absoluteIndex);
+    if (!ls.isTable(absoluteIndex)) return null;
     final entries = <dynamic, dynamic>{};
+    ls.pushValue(absoluteIndex);
+    final tableIndex = ls.absIndex(-1);
     ls.pushNil();
-    while (ls.next(index)) {
+    while (ls.next(tableIndex)) {
       final key = ls.isNumber(-2) ? ls.toInteger(-2) : (ls.toStr(-2) ?? '');
       final value = _luaValue(ls, -1, depth + 1);
       if (value != null) entries[key] = value;
       ls.pop(1);
     }
+    ls.pop(1);
     final numericKeys = entries.keys.whereType<int>().toList()..sort();
     if (numericKeys.isNotEmpty &&
         numericKeys.length == entries.length &&
@@ -1534,9 +1539,101 @@ class PluginService extends ChangeNotifier {
     state.register('app_storage_set', storageSet);
     state.register('app_storage_remove', storageRemove);
     state.register('app_storage_clear', storageClear);
+    dynamic luaArgument(LuaState ls, int index) {
+      final absolute = ls.absIndex(index);
+      if (ls.isBoolean(absolute)) return ls.toBoolean(absolute);
+      if (ls.isNumber(absolute)) return ls.toNumberX(absolute);
+      if (ls.isString(absolute)) return ls.toStr(absolute);
+      return null;
+    }
+
+    String? getUiText(String nodeId) {
+      final node = _findUiNode(_uiResults[id], nodeId);
+      return node?['text']?.toString();
+    }
+
+    int getText(LuaState ls) {
+      final value = getUiText(ls.optString(1, '') ?? '');
+      if (value == null) {
+        ls.pushNil();
+      } else {
+        ls.pushString(value);
+      }
+      return 1;
+    }
+
+    int appendText(LuaState ls) {
+      final nodeId = ls.optString(1, '') ?? '';
+      final suffix = ls.optString(2, '') ?? '';
+      final root = _uiResults[id];
+      if (root != null) {
+        _setUiFieldValue(root, nodeId, 'text', '${getUiText(nodeId) ?? ''}$suffix');
+      }
+      notifyListeners();
+      return 0;
+    }
+
+    int getChecked(LuaState ls) {
+      final checked = _findUiField(
+            _uiResults[id],
+            ls.optString(1, '') ?? '',
+            'checked',
+          ) ==
+          true;
+      ls.pushBoolean(checked);
+      return 1;
+    }
+
+    int setChecked(LuaState ls) {
+      final root = _uiResults[id];
+      if (root != null) {
+        _setUiFieldValue(
+          root,
+          ls.optString(1, '') ?? '',
+          'checked',
+          luaArgument(ls, 2) == true,
+        );
+      }
+      notifyListeners();
+      return 0;
+    }
+
+    int getVisible(LuaState ls) {
+      final visible = _findUiField(
+            _uiResults[id],
+            ls.optString(1, '') ?? '',
+            'visible',
+          ) !=
+          false;
+      ls.pushBoolean(visible);
+      return 1;
+    }
+
+    int focus(LuaState ls) {
+      final nodeId = ls.optString(1, '') ?? '';
+      final root = _uiResults[id];
+      if (root != null) _setUiFieldValue(root, nodeId, 'focus_requested', true);
+      notifyListeners();
+      return 0;
+    }
+
+    int jsonDecodeApi(LuaState ls) {
+      try {
+        _pushLuaValue(ls, jsonDecode(ls.optString(1, '') ?? ''));
+      } catch (_) {
+        ls.pushNil();
+      }
+      return 1;
+    }
+
+    int jsonEncodeApi(LuaState ls) {
+      ls.pushString(jsonEncode(_luaValue(ls, 1)));
+      return 1;
+    }
+
     int setUiField(LuaState ls, String field) {
       final nodeId = ls.optString(1, '') ?? '';
-      final value = ls.optString(2, '') ?? '';
+      final value = luaArgument(ls, 2)?.toString() ?? '';
       final root = _uiResults[id];
       if (root != null) _setUiField(root, nodeId, field, value);
       notifyListeners();
@@ -1558,9 +1655,17 @@ class PluginService extends ChangeNotifier {
         return 2;
       }
       final target = ls.optString(1, '') ?? '';
-      if (!target.startsWith('/') || target.contains('..') || target.contains('\\')) {
+      final isLocal = target.startsWith('/') &&
+          !target.contains('..') &&
+          !target.contains('\\');
+      final uri = Uri.tryParse(target);
+      final isExternal = uri != null &&
+          (uri.scheme == 'http' || uri.scheme == 'https') &&
+          uri.host.isNotEmpty &&
+          permissions.contains('network_external');
+      if (!isLocal && !isExternal) {
         ls.pushNil();
-        ls.pushString('invalid path');
+        ls.pushString('invalid or unauthorized path');
         return 2;
       }
       final hasCallback = ls.getTop() >= 2 && ls.isFunction(2);
@@ -1572,7 +1677,12 @@ class PluginService extends ChangeNotifier {
       dynamic value;
       String? error;
       try {
-        value = await ApiService().getRaw(target);
+        value = isLocal
+            ? await ApiService().getRaw(target)
+            : await Dio().get<dynamic>(
+                target,
+                options: Options(responseType: ResponseType.json),
+              ).then((response) => response.data);
       } catch (e) {
         error = e.toString();
       }
@@ -1606,6 +1716,30 @@ class PluginService extends ChangeNotifier {
     state.register('app_set_visible', setVisible);
     state.register('app_set_enabled', setEnabled);
     state.register('app_set_hint', setHint);
+    state.register('app_get_text', getText);
+    state.register('app_append_text', appendText);
+    state.register('app_get_checked', getChecked);
+    state.register('app_set_checked', setChecked);
+    state.register('app_get_visible', getVisible);
+    state.register('app_focus', focus);
+    state.register('app_json_decode', jsonDecodeApi);
+    state.register('app_json_encode', jsonEncodeApi);
+    state.register('app_delay', (LuaState ls) {
+      final milliseconds = (ls.toNumberX(1) ?? 0).clamp(0, 60000).toInt();
+      if (ls.getTop() >= 2 && ls.isFunction(2)) {
+        ls.pushValue(2);
+        final callbackRef = ls.ref(luaRegistryIndex);
+        Future<void>.delayed(Duration(milliseconds: milliseconds), () async {
+          try {
+            state.rawGetI(luaRegistryIndex, callbackRef);
+            if (state.isFunction(-1)) await state.callAsync(0, 0);
+          } finally {
+            state.unRef(luaRegistryIndex, callbackRef);
+          }
+        });
+      }
+      return 0;
+    });
     installTable('app', {
       'toast': toast,
       'camera': camera,
@@ -1616,10 +1750,34 @@ class PluginService extends ChangeNotifier {
       'storage_clear': storageClear,
       'asset': asset,
       'set_text': setText,
+      'append_text': appendText,
+      'get_text': getText,
       'set_image': setImage,
       'set_visible': setVisible,
+      'get_visible': getVisible,
       'set_enabled': setEnabled,
       'set_hint': setHint,
+      'get_checked': getChecked,
+      'set_checked': setChecked,
+      'focus': focus,
+      'json_decode': jsonDecodeApi,
+      'json_encode': jsonEncodeApi,
+      'delay': (LuaState ls) {
+        final milliseconds = (ls.toNumberX(1) ?? 0).clamp(0, 60000).toInt();
+        if (ls.getTop() >= 2 && ls.isFunction(2)) {
+          ls.pushValue(2);
+          final callbackRef = ls.ref(luaRegistryIndex);
+          Future<void>.delayed(Duration(milliseconds: milliseconds), () async {
+            try {
+              state.rawGetI(luaRegistryIndex, callbackRef);
+              if (state.isFunction(-1)) await state.callAsync(0, 0);
+            } finally {
+              state.unRef(luaRegistryIndex, callbackRef);
+            }
+          });
+        }
+        return 0;
+      },
     });
     installTable('ui', {
       'page': widgetFactory,
@@ -1726,7 +1884,7 @@ class PluginService extends ChangeNotifier {
     final state = _cipStates[id];
     if (state == null) throw Exception('CIP 页面已失效，请重新运行');
     state.setTop(0);
-    final type = state.rawGetI(luaRegistryIndex, callbackRef);
+    state.rawGetI(luaRegistryIndex, callbackRef);
     if (!state.isFunction(-1)) {
       state.setTop(0);
       throw Exception('CIP 按钮回调不存在');
@@ -1750,18 +1908,65 @@ class PluginService extends ChangeNotifier {
     notifyListeners();
   }
 
-  void _setUiField(
-    Map<String, dynamic> node,
-    String id,
-    String field,
-    String value,
-  ) {
+  Map<String, dynamic>? _findUiNode(Map<String, dynamic>? node, String id) {
+    if (node == null) return null;
+    if (node['id']?.toString() == id) return node;
+    final children = node['children'];
+    if (children is List) {
+      for (final child in children) {
+        if (child is Map) {
+          final found = _findUiNode(Map<String, dynamic>.from(child), id);
+          if (found != null) return found;
+        }
+      }
+    }
+    return null;
+  }
+
+  dynamic _findUiField(Map<String, dynamic>? node, String id, String field) =>
+      _findUiNode(node, id)?[field];
+
+  void _setUiFieldValue(Map<String, dynamic> node, String id, String field, dynamic value) {
     if (node['id']?.toString() == id) node[field] = value;
     final children = node['children'];
     if (children is List) {
-      for (final child in children.whereType<Map>()) {
-        _setUiField(Map<String, dynamic>.from(child), id, field, value);
+      for (var index = 0; index < children.length; index++) {
+        final child = children[index];
+        if (child is Map) {
+          final childMap = Map<String, dynamic>.from(child);
+          _setUiFieldValue(childMap, id, field, value);
+          children[index] = childMap;
+        }
       }
+    }
+  }
+
+  void _setUiField(Map<String, dynamic> node, String id, String field, String value) =>
+      _setUiFieldValue(node, id, field, value);
+
+  void _pushLuaValue(LuaState ls, dynamic value, [int depth = 0]) {
+    if (depth > 8 || value == null) {
+      ls.pushNil();
+    } else if (value is bool) {
+      ls.pushBoolean(value);
+    } else if (value is num) {
+      ls.pushNumber(value.toDouble());
+    } else if (value is String) {
+      ls.pushString(value);
+    } else if (value is List) {
+      ls.newTable();
+      for (var index = 0; index < value.length; index++) {
+        _pushLuaValue(ls, value[index], depth + 1);
+        ls.setI(-2, index + 1);
+      }
+    } else if (value is Map) {
+      ls.newTable();
+      for (final entry in value.entries) {
+        _pushLuaValue(ls, entry.value, depth + 1);
+        ls.setField(-2, entry.key.toString());
+      }
+    } else {
+      ls.pushString(value.toString());
     }
   }
 

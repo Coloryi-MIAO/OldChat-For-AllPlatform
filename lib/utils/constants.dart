@@ -115,8 +115,10 @@ class Constants {
       apiPath(_apiVersion == 'v1' ? '/v1/moments' : '/v1/moments/v2');
   static String get wsPath => apiPath('/v1/ws');
 
-  static String resolveMediaUrl(String raw) {
-    final value = raw.trim();
+  static String resolveMediaUrl(String? raw) {
+    final value = raw?.trim() ?? '';
+    if (value.isEmpty) return '';
+    if (value.startsWith('cip://')) return value;
     if (value.startsWith('channel-private:')) {
       return '$defaultBaseUrl/channel-media/${value.substring('channel-private:'.length)}';
     }

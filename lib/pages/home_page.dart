@@ -39,6 +39,7 @@ class _HomePageState extends State<HomePage> {
   final Map<String, bool> _pinnedMap = {};
   Conversation? _currentConversation;
   int _totalUnread = 0;
+  int _pendingRequestCount = 0;
   Timer? _searchTimer;
   Timer? _unreadReloadTimer;
   Timer? _systemNotificationTimer;
@@ -681,6 +682,13 @@ class _HomePageState extends State<HomePage> {
       );
       _systemNotificationBaselineReady = true;
       _requestNotificationBaselineReady = true;
+      if (mounted) {
+        setState(() {
+          _pendingRequestCount = _seenFriendRequestIds.length +
+              _seenGroupRequestIds.length +
+              _seenGroupInvitationIds.length;
+        });
+      }
       for (final item in incoming.reversed) {
         unawaited(
           NotificationService().showNotification(
@@ -1504,6 +1512,31 @@ class _HomePageState extends State<HomePage> {
       appBar: AppBar(
         title: Text(current?.name ?? context.tr.text('主页', 'Home')),
         actions: [
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              IconButton(
+                tooltip: context.tr.text('通知', 'Notifications'),
+                onPressed: () => Navigator.pushNamed(context, '/notifications'),
+                icon: const Icon(Icons.notifications_none),
+              ),
+              if (_pendingRequestCount > 0)
+                Positioned(
+                  right: 4,
+                  top: 4,
+                  child: Container(
+                    constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    decoration: BoxDecoration(color: Colors.red, borderRadius: BorderRadius.circular(9)),
+                    alignment: Alignment.center,
+                    child: Text(
+                      _pendingRequestCount > 99 ? '99+' : '$_pendingRequestCount',
+                      style: const TextStyle(color: Colors.white, fontSize: 9),
+                    ),
+                  ),
+                ),
+            ],
+          ),
           IconButton(
             tooltip: context.tr.refresh,
             onPressed: _refresh,

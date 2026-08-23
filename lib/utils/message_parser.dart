@@ -152,6 +152,12 @@ class MessageParser {
         .toList();
   }
 
+  static Map<String, dynamic>? parseForward(String body) {
+    final parsed = _decodeObject(body);
+    final value = parsed?['forward_v2'];
+    return value is Map ? Map<String, dynamic>.from(value) : null;
+  }
+
   static Map<String, dynamic> parseV2(String body) {
     return parseMessageBody(body, 'text');
   }
