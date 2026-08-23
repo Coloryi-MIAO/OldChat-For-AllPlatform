@@ -1,4 +1,4 @@
-name: 构建 OldChat For AllPlatform Windows 7
+name: Build OldChat For AllPlatform for Windows 7
 
 on:
   push:
@@ -11,72 +11,67 @@ permissions:
   contents: read
 
 env:
-  FLUTTER_VERSION: '3.19.6'
+  FLUTTER_VERSION: "3.19.6"
+  PUB_CACHE: ${{ github.workspace }}/.pub-cache
 
 jobs:
-  analyze-and-test:
-    name: 分析与测试
-    runs-on: windows-2022
-    steps:
-      - name: 检出代码
-        uses: actions/checkout@v4
-      - name: 安装 Flutter 3.19.6 x64
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: ${{ env.FLUTTER_VERSION }}
-          architecture: x64
-          channel: stable
-          cache: false
-      - name: 打印版本信息（确认环境）
-        run: |
-            flutter --version
-            dart --version
-
-      - name: 清理所有缓存
-        run: |
-          flutter clean
-          Remove-Item -Recurse -Force .dart_tool -ErrorAction SilentlyContinue
-          Remove-Item -Force pubspec.lock -ErrorAction SilentlyContinue
-      - name: 获取依赖
-        run: flutter pub get
-      - name: 静态分析
-        run: flutter analyze lib test --no-fatal-infos --no-fatal-warnings
-      - name: 运行测试
-        run: flutter test
-      - name: 安装 Windows 10 SDK（包含 Media Foundation）
-        run: |
-          choco install windows-sdk -y --version=10.0.19041.0
   build-windows7-x64:
-    name: 构建 Windows 7 x64
-    needs: analyze-and-test
+    name: Build Windows 7 x64
     runs-on: windows-2022
+    timeout-minutes: 45
     steps:
-      - name: 检出代码
+      - name: Checkout
         uses: actions/checkout@v4
-      - name: 安装 Flutter 3.19.6 x64
+
+      - name: Install Flutter
         uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
-          architecture: x64
           channel: stable
+          architecture: x64
           cache: true
-      - name: 获取依赖
-        run: flutter pub get
-      - name: 构建 Windows 7 x64
-        shell: pwsh
-        run: ./tools/package_windows.ps1 -Architecture 'x64' -Output 'dist/windows7x64'
-      - name: 验证构建产物
+
+      - name: Show tool versions
         shell: pwsh
         run: |
-          $exe = 'dist/windows7x64/OldChatForAllPlatformwindows7x64.exe'
-          $zip = 'OldChatForAllPlatformwindows7x64.zip'
-          if (-not (Test-Path $exe)) { throw "没有生成 $exe" }
-          if (-not (Test-Path $zip)) { throw "没有生成 $zip" }
-          Get-Item $exe, $zip
-      - name: 上传 Windows 7 x64 产物
+          flutter --version
+          dart --version
+          cmake --version
+
+      - name: Install dependencies
+        shell: pwsh
+        run: flutter pub get
+
+      - name: Analyze
+        shell: pwsh
+        run: flutter analyze lib test --no-fatal-infos --no-fatal-warnings
+
+      - name: Test
+        shell: pwsh
+        run: flutter test
+
+      - name: Build and package
+        shell: pwsh
+        run: ./tools/package_windows.ps1 -Architecture x64 -Output dist/windows7x64
+
+      - name: Verify package
+        shell: pwsh
+        run: |
+          $output = Join-Path $PWD "dist/windows7x64"
+          $exe = Join-Path $output "OldChatForAllPlatformwindows7x64.exe"
+          $zip = Join-Path $PWD "OldChatForAllPlatformwindows7x64.zip"
+          if (-not (Test-Path -LiteralPath $exe -PathType Leaf)) { throw "Missing executable: $exe" }
+          if (-not (Test-Path -LiteralPath $zip -PathType Leaf)) { throw "Missing archive: $zip" }
+          if ((Get-Item -LiteralPath $exe).Length -le 0) { throw "Executable is empty: $exe" }
+          if ((Get-Item -LiteralPath $zip).Length -le 0) { throw "Archive is empty: $zip" }
+          Get-ChildItem -LiteralPath $output -Recurse | Select-Object FullName,Length
+
+      - name: Upload Windows 7 artifact
         uses: actions/upload-artifact@v4
         with:
-          name: OldChat Windows 7 x64 安装包
+          name: OldChat-Windows-7-x64-${{ github.sha }}
           path: |
-            dist/windows7x64
+            dist/windows7x64/**
             OldChatForAllPlatformwindows7x64.zip
+          if-no-files-found: error
+          retention-days: 14
