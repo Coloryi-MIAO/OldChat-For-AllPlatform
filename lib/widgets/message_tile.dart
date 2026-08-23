@@ -31,6 +31,7 @@ class MessageTile extends StatefulWidget {
   final Future<void> Function(Message message, String action, String data)?
   onMessageAction;
   final VoidCallback? onLongPress;
+  final VoidCallback? onTap;
   final VoidCallback? onSecondaryTap;
   final void Function(String quotedId)? onQuoteTap;
   final void Function(String uid, String name)? onAvatarLongPress;
@@ -49,6 +50,7 @@ class MessageTile extends StatefulWidget {
     this.groupRole,
     this.onMessageAction,
     this.onLongPress,
+    this.onTap,
     this.onSecondaryTap,
     this.onQuoteTap,
     this.onAvatarLongPress,
@@ -1311,7 +1313,8 @@ class _MessageTileState extends State<MessageTile> {
 
     if (widget.isRedPacket) {
       return GestureDetector(
-        onLongPress: widget.onLongPress,
+        onTap: widget.onTap,
+      onLongPress: widget.onLongPress,
         onSecondaryTap: widget.onSecondaryTap,
         behavior: HitTestBehavior.opaque,
         child: Padding(
@@ -1479,6 +1482,7 @@ class _MessageTileState extends State<MessageTile> {
     final double maxBubbleWidth = MediaQuery.of(context).size.width * 0.3;
 
     return GestureDetector(
+      onTap: widget.onTap,
       onLongPress: widget.onLongPress,
       onSecondaryTap: widget.onSecondaryTap,
       behavior: HitTestBehavior.opaque,

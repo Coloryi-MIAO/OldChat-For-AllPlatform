@@ -1222,8 +1222,10 @@ class _ChatPageState extends State<ChatPage>
       await showDialog<void>(
         context: context,
         builder: (context) {
+          final ownerUid = response['owner_uid']?.toString() ?? '';
+          final memberCount = response['member_count']?.toString() ?? '${list.length}';
           return AlertDialog(
-            title: Text(AppLocalizations.current.t('群成员')),
+            title: Text('${AppLocalizations.current.t('群成员')} ($memberCount)'),
             content: SizedBox(
               width: 420,
               height: 360,
@@ -1245,6 +1247,12 @@ class _ChatPageState extends State<ChatPage>
                                     member['name'] ??
                                     uid)
                                 .toString();
+                        final isOwner = member['is_owner'] == true ||
+                            (ownerUid.isNotEmpty && ownerUid == uid);
+                        final isAdmin = member['is_admin'] == true ||
+                            member['isAdmin'] == true ||
+                            (member['role']?.toString().toLowerCase() == 'admin') ||
+                            (member['role']?.toString().toLowerCase() == 'administrator');
                         final rawAvatar =
                             member['avatar_url'] ??
                             member['avatar'] ??
@@ -1268,7 +1276,11 @@ class _ChatPageState extends State<ChatPage>
                           ),
                           title: Text(name),
                           subtitle: Text(
-                            _groupRoleLabel(member['role'] ?? member['group_role'] ?? member['member_role']),
+                            isOwner
+                                ? context.tr.text('群主', 'Owner')
+                                : isAdmin
+                                ? context.tr.text('群管理员', 'Administrator')
+                                : _groupRoleLabel(member['role'] ?? member['group_role'] ?? member['member_role']),
                           ),
                           onTap: uid.isEmpty
                               ? null
@@ -1820,17 +1832,6 @@ class _ChatPageState extends State<ChatPage>
     }
   }
 
-  Future<void> _sendAnyFile() async {
-    if (widget.type == 'direct' && !_isFriend) {
-      final shouldSend = await _showFriendRequestDialog();
-      if (shouldSend) await _sendFriendRequest(widget.conversationId);
-      return;
-    }
-    final result = await pickFilesCompat(allowMultiple: false);
-    final files = filePickerFiles(result);
-    if (files.isNotEmpty) await _sendPickedFile(files.first, 'file');
-  }
-
   // ★ 发红包
   Future<void> _sendRedPacket() async {
     if (widget.type == 'direct' && !_isFriend) {
@@ -2294,16 +2295,6 @@ class _ChatPageState extends State<ChatPage>
                   source: ImageSource.gallery,
                 );
                 if (result != null) _sendPickedFileBytes(result, 'video');
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.attach_file, color: Colors.orange),
-              title: Text(AppLocalizations.current.t('文件')),
-              onTap: () async {
-                Navigator.pop(context);
-                final result = await pickFilesCompat(allowMultiple: false);
-                final files = filePickerFiles(result);
-                if (files.isNotEmpty) await _sendPickedFile(files.first, 'file');
               },
             ),
             ListTile(
@@ -2811,7 +2802,8 @@ class _ChatPageState extends State<ChatPage>
                                       isMe: msg.fromUid == userId,
                                       selected: _selectedMessageIds.contains(msg.id),
                                       groupRole: _groupRoleByUid[msg.fromUid],
-                                      onLongPress: () => _toggleMessageSelection(msg),
+                                      onTap: () => _selectionMode ? _toggleMessageSelection(msg) : null,
+                                      onLongPress: _selectionMode ? null : () => _showMessageMenu(msg),
                                       showAvatar:
                                           i == 0 ||
                                           _messages[i - 1].fromUid !=
