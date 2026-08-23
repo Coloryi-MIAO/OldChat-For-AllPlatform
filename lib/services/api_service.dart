@@ -1193,11 +1193,13 @@ class ApiService {
           .where((uid) => uid.isNotEmpty)
           .toSet()
           .toList();
+      final groupName = name.trim();
+      if (groupName.isEmpty) throw Exception('群名称不能为空');
       final response = await _v2Request(
         'POST',
         '/v2/groups/create',
         data: {
-          'name': name.trim(),
+          'name': groupName,
           'avatar_url': avatarUrl.trim(),
           'member_uids': members,
           'members': members,
@@ -1208,11 +1210,7 @@ class ApiService {
         final result = _unwrapEnvelopeMap(value);
         final nested = result['group'] ?? result['group_info'];
         if (nested is Map) result.addAll(Map<String, dynamic>.from(nested));
-        if (result['id'] == null && result['group_id'] != null) {
-          result['id'] = result['group_id'];
-        }
-        result['members'] ??= const <dynamic>[];
-        result['member_count'] ??= (result['members'] as List?)?.length ?? 0;
+        if (result['id'] == null && result['group_id'] != null) result['id'] = result['group_id'];
         return result;
       }
       return <String, dynamic>{'data': value};
@@ -1303,18 +1301,21 @@ class ApiService {
       value?.toString().trim() == '1';
 
   Future<List<Map<String, dynamic>>> getCipStore() async {
-    Object? lastError;
-    for (final path in const ['/v1/cip/store', '/v2/cip/store']) {
-      try {
-        final response = await _requestV2WithV1Fallback('GET', path);
-        final value = _unwrapEnvelopeMap(response.data);
-        final items = _nestedList(value, const ['items', 'cips', 'plugins', 'data', 'result']);
-        return items.whereType<Map>().map((item) => Map<String, dynamic>.from(item)).toList();
-      } catch (error) {
-        lastError = error;
-      }
+    try {
+      final response = await _dio.get(
+        Constants.apiPath('/v1/cip/store'),
+        options: Options(headers: {'Accept': 'application/json'}),
+      );
+      final value = _unwrapEnvelopeMap(response.data);
+      final items = _nestedList(value, const ['items', 'cips', 'plugins', 'data', 'result']);
+      return items
+          .whereType<Map>()
+          .map((item) => Map<String, dynamic>.from(item))
+          .where((item) => item['status']?.toString().toLowerCase() != 'rejected')
+          .toList(growable: false);
+    } on DioException catch (error) {
+      throw _apiError('CIP 商店加载失败', error);
     }
-    throw Exception('CIP 商店加载失败：$lastError');
   }
 
   Future<dynamic> getCipStoreItem(String path) async {
@@ -1329,7 +1330,8 @@ class ApiService {
     final rawUrl = (item['download_url'] ??
             item['downloadUrl'] ??
             item['url'] ??
-            item['path'])
+            item['path'] ??
+            item['cip_file_url'])
         ?.toString()
         .trim();
     if (rawUrl == null || rawUrl.isEmpty) {
@@ -1344,7 +1346,10 @@ class ApiService {
     final response = rawUrl.startsWith('/')
         ? await _dio.get<List<int>>(
             rawUrl,
-            options: Options(responseType: ResponseType.bytes),
+            options: Options(
+              responseType: ResponseType.bytes,
+              headers: {'Accept': 'application/zip, application/octet-stream'},
+            ),
           )
         : await Dio().get<List<int>>(
             rawUrl,
@@ -1551,39 +1556,69 @@ class ApiService {
     }
   }
 
-  Future<void> forwardMessages({required String conversationType, required String conversationId, required List<String> messageIds}) async {
-    final endpoint = conversationType == 'group'
-        ? '/v2/groups/message/send'
-        : '/v2/direct/send';
-    final ids = messageIds.map((id) => id.trim()).where((id) => id.isNotEmpty).toSet().toList();
-    if (ids.isEmpty) throw Exception('至少选择一条消息');
+  Future<void> forwardMessages({
+    required String conversationType,
+    required String conversationId,
+    required List<String> messageIds,
+    List<Map<String, dynamic>>? items,
+  }) async {
+    final ids = messageIds
+        .map((id) => id.trim())
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .toList();
+    if (ids.isEmpty || conversationId.trim().isEmpty) {
+      throw Exception('转发参数不能为空');
+    }
+    final normalizedItems = (items ?? const <Map<String, dynamic>>[])
+        .map((item) => <String, dynamic>{
+              'source_message_id': item['source_message_id'] ?? item['message_id'] ?? item['id'] ?? '',
+              'from_uid': item['from_uid'] ?? '',
+              'from_name': item['from_name'] ?? item['from_uid'] ?? 'Unknown',
+              'from_avatar': item['from_avatar'] ?? '',
+              'type': item['type'] ?? item['msg_type'] ?? 'text',
+              'media_kind': item['media_kind'] ?? item['type'] ?? item['msg_type'] ?? 'text',
+              'text': item['text'] ?? item['body'] ?? '',
+              if (item['thumb_url'] != null) 'thumb_url': item['thumb_url'],
+            })
+        .where((item) => ids.contains(item['source_message_id'].toString()))
+        .toList(growable: false);
     final forward = {
       'v': 2,
+      'text': '',
+      'media_kind': 'forward',
       'forward_v2': {
-        'title': '聊天记录',
+        'title': 'Chat history',
         'message_ids': ids,
-        'items': ids.map((id) => {'id': id, 'message_id': id}).toList(),
+        'items': normalizedItems,
       },
       'forward_message_ids': ids,
     };
+    final target = conversationType == 'group'
+        ? <String, dynamic>{'group_id': conversationId.trim()}
+        : <String, dynamic>{
+            'to_uid': conversationId.trim(),
+            'to_ncuid': conversationId.trim(),
+          };
     try {
       await _requestV2WithV1Fallback(
         'POST',
-        endpoint,
+        conversationType == 'group' ? '/v2/groups/message/send' : '/v2/direct/send',
         data: conversationType == 'group'
             ? {
-                'group_id': conversationId,
+                'group_id': conversationId.trim(),
                 'body': jsonEncode(forward),
                 'msg_type': 'forward',
                 'forward_message_ids': ids,
-                'forward_items': forward['forward_v2'],
+                'forward_items': normalizedItems,
               }
             : {
-                'to_uid': conversationId,
+                'to_uid': conversationId.trim(),
+                'to_ncuid': conversationId.trim(),
                 'body': jsonEncode(forward),
                 'msg_type': 'forward',
                 'forward_message_ids': ids,
-                'forward_items': forward['forward_v2'],
+                'forward_items': normalizedItems,
               },
       );
     } on DioException catch (e) {
@@ -1753,30 +1788,34 @@ class ApiService {
     int durationMs = 0,
     int burnAfterSeconds = 0,
   }) async {
+    final normalizedUid = toUid.trim();
+    if (normalizedUid.isEmpty) throw Exception('Recipient UID is empty');
     try {
-      final payload = {
-        'to_uid': toUid,
-        'to_ncuid': toUid,
+      final payload = <String, dynamic>{
+        'to_uid': normalizedUid,
         'body': body,
         'msg_type': msgType,
-        if (mediaUrl != null) 'media_url': mediaUrl,
-        if (thumbUrl != null) 'thumb_url': thumbUrl,
-        if (mediaUrl != null) 'original_url': mediaUrl,
-        'duration_ms': durationMs,
-        'burn_after_seconds': burnAfterSeconds,
+        if (mediaUrl != null && mediaUrl.trim().isNotEmpty)
+          'media_url': mediaUrl.trim(),
+        if (thumbUrl != null && thumbUrl.trim().isNotEmpty)
+          'thumb_url': thumbUrl.trim(),
+        if (mediaUrl != null && mediaUrl.trim().isNotEmpty)
+          'original_url': mediaUrl.trim(),
+        if (durationMs > 0) 'duration_ms': durationMs,
+        if (burnAfterSeconds > 0) 'burn_after_seconds': burnAfterSeconds,
       };
       final response = await _v2Request(
         'POST',
         '/v2/direct/send',
         data: payload,
       );
-      if (response.statusCode == 201 || response.statusCode == 200) {
-        return Message.fromJson(_unwrapMessage(response.data));
-      } else {
-        throw Exception('Send direct message failed');
+      final message = _unwrapMessage(response.data);
+      if (message is! Map || message['id']?.toString().trim().isEmpty != false) {
+        throw Exception('Server returned an invalid direct message');
       }
+      return Message.fromJson(Map<String, dynamic>.from(message));
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('Send direct message failed', e);
     }
   }
 
@@ -2483,15 +2522,24 @@ class ApiService {
     String evidence = '',
   }) async {
     try {
+      final normalizedCaseId = caseId.trim();
+      final normalizedVote = vote.trim().toLowerCase();
       final normalizedReason = reason.trim();
       final normalizedEvidence = evidence.trim();
+      if (normalizedCaseId.isEmpty || normalizedVote.isEmpty || normalizedReason.isEmpty) {
+        throw Exception('投票参数不能为空');
+      }
       final response = await _dio.post(
-        Constants.apiPath('/v1/public-court/cases/$caseId/vote'),
+        Constants.apiPath('/v1/public-court/cases/${Uri.encodeComponent(normalizedCaseId)}/vote'),
         data: {
-          'vote': vote,
+          'vote': normalizedVote,
           'reason': normalizedReason,
           'evidence': normalizedEvidence,
         },
+        options: Options(headers: const {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json; charset=utf-8',
+        }),
       );
       return _unwrapEnvelopeMap(response.data);
     } on DioException catch (e) {
@@ -3181,6 +3229,10 @@ class ApiService {
           'content_text': text.trim(),
           'image_urls': urls,
         },
+        options: Options(headers: const {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json; charset=utf-8',
+        }),
       );
       return response.data is Map
           ? Map<String, dynamic>.from(response.data as Map)
