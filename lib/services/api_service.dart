@@ -1301,18 +1301,21 @@ class ApiService {
       value?.toString().trim() == '1';
 
   Future<List<Map<String, dynamic>>> getCipStore() async {
-    Object? lastError;
-    for (final path in const ['/v1/cip/store', '/v2/cip/store']) {
-      try {
-        final response = await _requestV2WithV1Fallback('GET', path);
-        final value = _unwrapEnvelopeMap(response.data);
-        final items = _nestedList(value, const ['items', 'cips', 'plugins', 'data', 'result']);
-        return items.whereType<Map>().map((item) => Map<String, dynamic>.from(item)).toList();
-      } catch (error) {
-        lastError = error;
-      }
+    try {
+      final response = await _dio.get(
+        Constants.apiPath('/v1/cip/store'),
+        options: Options(headers: {'Accept': 'application/json'}),
+      );
+      final value = _unwrapEnvelopeMap(response.data);
+      final items = _nestedList(value, const ['items', 'cips', 'plugins', 'data', 'result']);
+      return items
+          .whereType<Map>()
+          .map((item) => Map<String, dynamic>.from(item))
+          .where((item) => item['status']?.toString().toLowerCase() != 'rejected')
+          .toList(growable: false);
+    } on DioException catch (error) {
+      throw _apiError('CIP 商店加载失败', error);
     }
-    throw Exception('CIP 商店加载失败：$lastError');
   }
 
   Future<dynamic> getCipStoreItem(String path) async {
@@ -1327,7 +1330,8 @@ class ApiService {
     final rawUrl = (item['download_url'] ??
             item['downloadUrl'] ??
             item['url'] ??
-            item['path'])
+            item['path'] ??
+            item['cip_file_url'])
         ?.toString()
         .trim();
     if (rawUrl == null || rawUrl.isEmpty) {
@@ -1342,7 +1346,10 @@ class ApiService {
     final response = rawUrl.startsWith('/')
         ? await _dio.get<List<int>>(
             rawUrl,
-            options: Options(responseType: ResponseType.bytes),
+            options: Options(
+              responseType: ResponseType.bytes,
+              headers: {'Accept': 'application/zip, application/octet-stream'},
+            ),
           )
         : await Dio().get<List<int>>(
             rawUrl,
@@ -1781,30 +1788,34 @@ class ApiService {
     int durationMs = 0,
     int burnAfterSeconds = 0,
   }) async {
+    final normalizedUid = toUid.trim();
+    if (normalizedUid.isEmpty) throw Exception('Recipient UID is empty');
     try {
-      final payload = {
-        'to_uid': toUid,
-        'to_ncuid': toUid,
+      final payload = <String, dynamic>{
+        'to_uid': normalizedUid,
         'body': body,
         'msg_type': msgType,
-        if (mediaUrl != null) 'media_url': mediaUrl,
-        if (thumbUrl != null) 'thumb_url': thumbUrl,
-        if (mediaUrl != null) 'original_url': mediaUrl,
-        'duration_ms': durationMs,
-        'burn_after_seconds': burnAfterSeconds,
+        if (mediaUrl != null && mediaUrl.trim().isNotEmpty)
+          'media_url': mediaUrl.trim(),
+        if (thumbUrl != null && thumbUrl.trim().isNotEmpty)
+          'thumb_url': thumbUrl.trim(),
+        if (mediaUrl != null && mediaUrl.trim().isNotEmpty)
+          'original_url': mediaUrl.trim(),
+        if (durationMs > 0) 'duration_ms': durationMs,
+        if (burnAfterSeconds > 0) 'burn_after_seconds': burnAfterSeconds,
       };
       final response = await _v2Request(
         'POST',
         '/v2/direct/send',
         data: payload,
       );
-      if (response.statusCode == 201 || response.statusCode == 200) {
-        return Message.fromJson(_unwrapMessage(response.data));
-      } else {
-        throw Exception('Send direct message failed');
+      final message = _unwrapMessage(response.data);
+      if (message is! Map || message['id']?.toString().trim().isEmpty != false) {
+        throw Exception('Server returned an invalid direct message');
       }
+      return Message.fromJson(Map<String, dynamic>.from(message));
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('Send direct message failed', e);
     }
   }
 

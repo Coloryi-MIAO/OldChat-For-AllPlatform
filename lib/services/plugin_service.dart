@@ -1852,14 +1852,18 @@ class PluginService extends ChangeNotifier {
     });
     final status = await state.doStringAsync(mainLua);
     if (!status) throw Exception('CIP 执行失败：脚本语法或宿主调用无效');
-    if (state.getTop() > 0) {
-      final returned = _luaValue(state, -1);
-      if (returned is Map) {
-        final normalized = _normalizeUiTree(Map<String, dynamic>.from(returned));
-        if (normalized != null) {
-          normalized['plugin_id'] = id;
-          _uiResults[id] = normalized;
+    final top = state.getTop();
+    if (top > 0) {
+      Map<String, dynamic>? normalized;
+      for (var index = top; index >= 1 && normalized == null; index--) {
+        final returned = _luaValue(state, index);
+        if (returned is Map) {
+          normalized = _normalizeUiTree(Map<String, dynamic>.from(returned));
         }
+      }
+      if (normalized != null) {
+        normalized['plugin_id'] = id;
+        _uiResults[id] = normalized;
       }
     }
     _cipStates[id] = state;
@@ -1886,14 +1890,18 @@ class PluginService extends ChangeNotifier {
       state.setTop(0);
       throw Exception('CIP 按钮执行失败');
     }
-    if (state.getTop() > 0) {
-      final returned = _luaValue(state, -1);
-      if (returned is Map) {
-        final normalized = _normalizeUiTree(Map<String, dynamic>.from(returned));
-        if (normalized != null) {
-          normalized['plugin_id'] = id;
-          _uiResults[id] = normalized;
+    final top = state.getTop();
+    if (top > 0) {
+      Map<String, dynamic>? normalized;
+      for (var index = top; index >= 1 && normalized == null; index--) {
+        final returned = _luaValue(state, index);
+        if (returned is Map) {
+          normalized = _normalizeUiTree(Map<String, dynamic>.from(returned));
         }
+      }
+      if (normalized != null) {
+        normalized['plugin_id'] = id;
+        _uiResults[id] = normalized;
       }
     }
     state.setTop(0);
