@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:dio/dio.dart';
@@ -102,9 +103,7 @@ class ApiService {
               error.type == DioExceptionType.connectionTimeout ||
               error.type == DioExceptionType.receiveTimeout);
       if (!canFallback && !gatewayError) rethrow;
-      final gatewayStatus = _gatewayErrorStatus(error);
-      final gatewayCanFallback =
-          gatewayError && gatewayStatus != 400 && gatewayStatus != 401;
+      final gatewayCanFallback = gatewayError && fallbackPath != null;
       if (!canFallback && !gatewayCanFallback) rethrow;
       if (error.requestOptions.extra['_gatewayRetried'] != true) {
         WsSessionService(http: true).reset();
@@ -234,7 +233,7 @@ class ApiService {
       final code = decoded['code'] is num
           ? (decoded['code'] as num).toInt()
           : int.tryParse('${decoded['code']}');
-      if (code != null && code != 200) {
+      if (code != null && (code < 200 || code >= 300)) {
         throw DioException(
           requestOptions: response.requestOptions,
           response: response,
@@ -252,7 +251,7 @@ class ApiService {
           ? (body['code'] as num).toInt()
           : int.tryParse('${body['code']}');
       final inner = body['body'];
-      if (code != 200) {
+      if (code < 200 || code >= 300) {
         throw DioException(
           requestOptions: response.requestOptions,
           response: response,
@@ -1148,15 +1147,28 @@ class ApiService {
           'groups',
           'items',
           'list',
+          'data',
+          'result',
         ]);
         return list
             .whereType<Map>()
             .map((raw) {
               final e = Map<String, dynamic>.from(raw);
+              final member = e['member'] is Map
+                  ? Map<String, dynamic>.from(e['member'] as Map)
+                  : e['current_member'] is Map
+                  ? Map<String, dynamic>.from(e['current_member'] as Map)
+                  : const <String, dynamic>{};
               return Conversation.fromJson({
                 ...e,
+                ...member,
                 'id': e['group_id'] ?? e['id'],
                 'type': 'group',
+                'owner_uid': e['owner_uid'] ?? e['group_owner_uid'] ?? e['ownerUid'],
+                'member_count': e['member_count'] ?? e['members_count'] ?? e['memberCount'],
+                'announcement': e['announcement'] ?? e['group_announcement'],
+                'is_admin': e['is_admin'] ?? member['is_admin'] ?? member['admin'],
+                'is_owner': e['is_owner'] ?? member['is_owner'] ?? member['owner'],
               });
             })
             .where((conversation) => conversation.id.trim().isNotEmpty)
@@ -1170,22 +1182,35 @@ class ApiService {
 
   Future<Map<String, dynamic>> createGroup(
     String name,
-    List<String> members,
-  ) async {
+    List<String> memberUids, {
+    String avatarUrl = '',
+  }) async {
     try {
       final response = await _v2Request(
         'POST',
         '/v2/groups/create',
         data: {
-          'name': name,
-          'members': members,
-          'member_uids': members,
-          'member_ncuids': members,
+          'name': name.trim(),
+          'avatar_url': avatarUrl.trim(),
+          'member_uids': memberUids
+              .map((uid) => uid.trim())
+              .where((uid) => uid.isNotEmpty)
+              .toSet()
+              .toList(),
         },
       );
-      return response.data;
+      final value = response.data;
+      if (value is Map) {
+        final result = Map<String, dynamic>.from(value);
+        final nested = result['data'];
+        if (nested is Map) {
+          return {...result, ...Map<String, dynamic>.from(nested)};
+        }
+        return result;
+      }
+      return <String, dynamic>{'data': value};
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('创建群聊失败', e);
     }
   }
 
@@ -1213,6 +1238,116 @@ class ApiService {
     }
   }
 
+  Map<String, dynamic> _normalizeGroupMemberResponse(dynamic raw) {
+    final value = raw is Map ? Map<String, dynamic>.from(raw) : <String, dynamic>{};
+    final nested = value['data'];
+    if (nested is Map) {
+      final nestedMap = Map<String, dynamic>.from(nested);
+      for (final entry in nestedMap.entries) {
+        value[entry.key] = entry.value;
+      }
+    }
+    final rawMembers = value['members'] ??
+        value['member_list'] ??
+        value['items'] ??
+        value['list'] ??
+        (nested is List ? nested : null);
+    final members = rawMembers is List
+        ? rawMembers.map((item) => item is Map
+            ? Map<String, dynamic>.from(item)
+            : item).toList()
+        : <dynamic>[];
+    value['members'] = members;
+    final owner = value['owner_uid'] ?? value['group_owner_uid'] ?? value['ownerUid'];
+    if (owner != null) value['owner_uid'] = owner.toString();
+    final count = value['member_count'] ?? value['members_count'] ?? value['memberCount'];
+    value['member_count'] = count is num
+        ? count.toInt()
+        : int.tryParse('$count') ?? members.length;
+    final currentRole = value['role'] ?? value['member_role'] ?? value['group_role'];
+    value['is_admin'] = _flag(value['is_admin'] ?? value['isAdmin']) ||
+        currentRole == 'admin' || currentRole == 'administrator';
+    value['is_owner'] = _flag(value['is_owner'] ?? value['isOwner']) ||
+        currentRole == 'owner' || currentRole == 'group_owner';
+    for (var index = 0; index < members.length; index++) {
+      final item = members[index];
+      if (item is! Map) continue;
+      final member = Map<String, dynamic>.from(item);
+      final uid = member['uid'] ?? member['user_uid'] ?? member['user_id'] ?? member['id'];
+      if (uid != null) member['uid'] = uid.toString();
+      final role = member['role'] ?? member['group_role'] ?? member['member_role'];
+      if (role != null) member['role'] = role.toString();
+      member['is_admin'] = _flag(member['is_admin'] ?? member['isAdmin'] ?? member['admin']) ||
+          member['role'] == 'admin' || member['role'] == 'administrator';
+      member['is_owner'] = _flag(member['is_owner'] ?? member['isOwner'] ?? member['owner']) ||
+          member['role'] == 'owner' || member['role'] == 'group_owner';
+      members[index] = member;
+    }
+    return value;
+  }
+
+  bool _flag(dynamic value) => value == true ||
+      value?.toString().trim().toLowerCase() == 'true' ||
+      value?.toString().trim() == '1';
+
+  Future<List<Map<String, dynamic>>> getCipStore() async {
+    Object? lastError;
+    for (final path in const ['/v2/cip/store', '/v1/cip/store']) {
+      try {
+        final response = await _requestV2WithV1Fallback('GET', path);
+        final value = _unwrapEnvelopeMap(response.data);
+        final items = _nestedList(value, const ['items', 'cips', 'plugins', 'data', 'result']);
+        return items.whereType<Map>().map((item) => Map<String, dynamic>.from(item)).toList();
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    throw Exception('CIP 商店加载失败：$lastError');
+  }
+
+  Future<dynamic> getCipStoreItem(String path) async {
+    if (!path.startsWith('/') || path.contains('..') || path.contains('://')) {
+      throw ArgumentError.value(path, 'path', 'Invalid CIP store path');
+    }
+    final response = await _requestV2WithV1Fallback('GET', path);
+    return response.data;
+  }
+
+  Future<Uint8List> downloadCipStoreItem(Map<String, dynamic> item) async {
+    final rawUrl = (item['download_url'] ??
+            item['downloadUrl'] ??
+            item['url'] ??
+            item['path'])
+        ?.toString()
+        .trim();
+    if (rawUrl == null || rawUrl.isEmpty) {
+      throw Exception('CIP 商店条目没有下载地址');
+    }
+    final uri = Uri.tryParse(rawUrl);
+    if (uri == null ||
+        (uri.scheme != 'http' && uri.scheme != 'https') &&
+            !rawUrl.startsWith('/')) {
+      throw Exception('CIP 下载地址无效');
+    }
+    final response = rawUrl.startsWith('/')
+        ? await _dio.get<List<int>>(
+            rawUrl,
+            options: Options(responseType: ResponseType.bytes),
+          )
+        : await Dio().get<List<int>>(
+            rawUrl,
+            options: Options(
+              responseType: ResponseType.bytes,
+              followRedirects: true,
+              validateStatus: (status) => status != null && status < 400,
+            ),
+          );
+    final bytes = response.data;
+    if (bytes == null || bytes.isEmpty) throw Exception('CIP 下载内容为空');
+    if (bytes.length > 2 * 1024 * 1024) throw Exception('CIP 文件不能超过 2 MiB');
+    return Uint8List.fromList(bytes);
+  }
+
   Future<Map<String, dynamic>> getGroupMembers(String groupId) async {
     try {
       final response = await _v2Request(
@@ -1220,16 +1355,7 @@ class ApiService {
         '/v2/groups/members',
         queryParameters: {'group_id': groupId.trim()},
       );
-      final raw = response.data;
-      if (raw is Map && raw['members'] is List)
-        return Map<String, dynamic>.from(raw);
-      if (raw is Map && raw['data'] is Map) {
-        return Map<String, dynamic>.from(raw['data'] as Map);
-      }
-      if (raw is Map && raw['data'] is List) {
-        return {'members': raw['data']};
-      }
-      return {'members': const <dynamic>[]};
+      return _normalizeGroupMemberResponse(response.data);
     } on DioException catch (e) {
       throw Exception('Network error: ${e.message}');
     }
@@ -1800,7 +1926,12 @@ class ApiService {
       final response = await _requestV2WithV1Fallback(
         'GET',
         '/v2/groups/messages/after',
-        queryParameters: {'group_id': groupId, 'seq': afterSeq, 'limit': limit},
+        queryParameters: {
+          'group_id': groupId,
+          'after_seq': afterSeq,
+          'seq': afterSeq,
+          'limit': limit,
+        },
       );
       final raw = response.data;
       final data = raw is Map

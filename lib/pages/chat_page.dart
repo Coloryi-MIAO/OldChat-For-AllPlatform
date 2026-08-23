@@ -1222,8 +1222,10 @@ class _ChatPageState extends State<ChatPage>
       await showDialog<void>(
         context: context,
         builder: (context) {
+          final ownerUid = response['owner_uid']?.toString() ?? '';
+          final memberCount = response['member_count']?.toString() ?? '${list.length}';
           return AlertDialog(
-            title: Text(AppLocalizations.current.t('群成员')),
+            title: Text('${AppLocalizations.current.t('群成员')} ($memberCount)'),
             content: SizedBox(
               width: 420,
               height: 360,
@@ -1245,6 +1247,12 @@ class _ChatPageState extends State<ChatPage>
                                     member['name'] ??
                                     uid)
                                 .toString();
+                        final isOwner = member['is_owner'] == true ||
+                            (ownerUid.isNotEmpty && ownerUid == uid);
+                        final isAdmin = member['is_admin'] == true ||
+                            member['isAdmin'] == true ||
+                            (member['role']?.toString().toLowerCase() == 'admin') ||
+                            (member['role']?.toString().toLowerCase() == 'administrator');
                         final rawAvatar =
                             member['avatar_url'] ??
                             member['avatar'] ??
@@ -1268,7 +1276,11 @@ class _ChatPageState extends State<ChatPage>
                           ),
                           title: Text(name),
                           subtitle: Text(
-                            _groupRoleLabel(member['role'] ?? member['group_role'] ?? member['member_role']),
+                            isOwner
+                                ? context.tr.text('群主', 'Owner')
+                                : isAdmin
+                                ? context.tr.text('群管理员', 'Administrator')
+                                : _groupRoleLabel(member['role'] ?? member['group_role'] ?? member['member_role']),
                           ),
                           onTap: uid.isEmpty
                               ? null

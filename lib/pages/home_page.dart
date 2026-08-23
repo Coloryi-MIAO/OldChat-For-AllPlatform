@@ -224,6 +224,14 @@ class _HomePageState extends State<HomePage> {
     return incoming.copyWith(
       name: keepName ? previous!.name : incoming.name ?? previous?.name,
       avatar: incoming.avatar ?? previous?.avatar,
+      ownerUid: incoming.ownerUid ?? previous?.ownerUid,
+      role: incoming.role ?? previous?.role,
+      isAdmin: incoming.isAdmin || previous?.isAdmin == true,
+      isOwner: incoming.isOwner || previous?.isOwner == true,
+      memberCount: incoming.memberCount > 0
+          ? incoming.memberCount
+          : (previous?.memberCount ?? 0),
+      announcement: incoming.announcement ?? previous?.announcement,
       lastMessage: _mergeLastMessage(
         incoming.lastMessage,
         previous?.lastMessage,
@@ -1281,7 +1289,7 @@ class _HomePageState extends State<HomePage> {
     if (result == null || result['name']!.trim().isEmpty) return;
     try {
       final members = result['members']!.split(',').map((item) => item.trim()).where((item) => item.isNotEmpty).toList();
-      await ApiService().createGroup(result['name']!.trim(), members);
+      await ApiService().createGroup(result['name']!.trim(), members, avatarUrl: '');
       await _loadConversations();
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(context.tr.text('群聊已创建', 'Group created'))));
     } catch (error) {
