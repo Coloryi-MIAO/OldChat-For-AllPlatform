@@ -184,6 +184,26 @@ class _ChatPageState extends State<ChatPage>
         conversationType: target.type,
         conversationId: target.id,
         messageIds: ids,
+        items: ids
+            .map((id) => _messageMap[id])
+            .whereType<Message>()
+            .map((message) {
+              final profileName = message.fromUid == context.read<AuthService>().userId
+                  ? 'Me'
+                  : message.fromUid;
+              final parsed = MessageParser.parseMessageBody(message.body, message.msgType);
+              return <String, dynamic>{
+                'source_message_id': message.id,
+                'from_uid': message.fromUid,
+                'from_name': profileName,
+                'from_avatar': '',
+                'type': message.msgType,
+                'media_kind': parsed['media_kind'] ?? message.msgType,
+                'text': parsed['text'] ?? message.displayText,
+                'thumb_url': message.thumbUrl,
+              };
+            })
+            .toList(growable: false),
       );
       _clearMessageSelection();
       if (mounted) {
@@ -1832,16 +1852,6 @@ class _ChatPageState extends State<ChatPage>
     }
   }
 
-  Future<void> _sendAnyFile() async {
-    if (widget.type == 'direct' && !_isFriend) {
-      final shouldSend = await _showFriendRequestDialog();
-      if (shouldSend) await _sendFriendRequest(widget.conversationId);
-      return;
-    }
-    final result = await FilePicker.pickFile();
-    if (result != null) await _sendPickedFile(result, 'file');
-  }
-
   // ★ 发红包
   Future<void> _sendRedPacket() async {
     if (widget.type == 'direct' && !_isFriend) {
@@ -2308,15 +2318,6 @@ class _ChatPageState extends State<ChatPage>
               },
             ),
             ListTile(
-              leading: const Icon(Icons.attach_file, color: Colors.orange),
-              title: Text(AppLocalizations.current.t('文件')),
-              onTap: () async {
-                Navigator.pop(context);
-                final result = await FilePicker.pickFile();
-                if (result != null) await _sendPickedFile(result, 'file');
-              },
-            ),
-            ListTile(
               leading: const Icon(
                 Icons.timer_outlined,
                 color: Colors.deepPurple,
@@ -2525,12 +2526,11 @@ class _ChatPageState extends State<ChatPage>
             title: Text(AppLocalizations.current.t('发送剪贴板内容？')),
             content: Text(
               visibleNames.length == 1
-                  ? '检测到剪贴板中的${_mediaTypeForFile(visibleNames.first) == 'image'
-                        ? '图片'
-                        : _mediaTypeForFile(visibleNames.first) == 'video'
-                        ? '视频'
-                        : '文件'}：\n${visibleNames.first}'
-                  : '检测到剪贴板中的 ${visibleNames.length} 个文件：\n${visibleNames.take(8).join('\n')}${visibleNames.length > 8 ? '\n……' : ''}',
+                  ? context.tr.text('Clipboard detected ${visibleNames.first}', 'Clipboard detected ${visibleNames.first}')
+                  : context.tr.text(
+                      'Clipboard detected ${visibleNames.length} files:\n${visibleNames.take(8).join('\n')}${visibleNames.length > 8 ? '\n...' : ''}',
+                      'Clipboard detected ${visibleNames.length} files:\n${visibleNames.take(8).join('\n')}${visibleNames.length > 8 ? '\n...' : ''}',
+                    ),
             ),
             actions: [
               TextButton(
@@ -2821,7 +2821,8 @@ class _ChatPageState extends State<ChatPage>
                                       isMe: msg.fromUid == userId,
                                       selected: _selectedMessageIds.contains(msg.id),
                                       groupRole: _groupRoleByUid[msg.fromUid],
-                                      onLongPress: () => _toggleMessageSelection(msg),
+                                      onTap: () => _selectionMode ? _toggleMessageSelection(msg) : null,
+                                      onLongPress: _selectionMode ? null : () => _showMessageMenu(msg),
                                       showAvatar:
                                           i == 0 ||
                                           _messages[i - 1].fromUid !=

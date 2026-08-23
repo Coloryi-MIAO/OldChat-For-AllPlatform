@@ -60,10 +60,27 @@ class _CipRunPageState extends State<CipRunPage> {
   }
 
   Widget _node(Map<String, dynamic> node) {
-    final type = node['type']?.toString() ?? 'text';
+    final rawType = node['type'] ?? node['kind'] ?? node['view'] ?? node['widget'];
+    final type = switch (rawType?.toString().toLowerCase()) {
+      'screen' => 'page',
+      'container' || 'vertical' => 'column',
+      'horizontal' => 'row',
+      'label' => 'text',
+      'edittext' => 'input',
+      'checkboxlisttile' => 'checkbox',
+      _ => rawType?.toString().toLowerCase() ?? 'text',
+    };
     final visible = node['visible']?.toString().toLowerCase() != 'false';
     if (!visible) return const SizedBox.shrink();
-    final children = (node['children'] is List ? node['children'] as List : const [])
+    final rawChildren = node['children'] ?? node['items'] ?? node['child'] ?? node['content'];
+    final childValues = rawChildren is List
+        ? rawChildren
+        : rawChildren is Map
+            ? rawChildren.values.toList()
+            : rawChildren == null
+                ? const <dynamic>[]
+                : <dynamic>[rawChildren];
+    final children = childValues
         .whereType<Map>()
         .map((child) => _node(Map<String, dynamic>.from(child)))
         .toList(growable: false);
@@ -74,15 +91,9 @@ class _CipRunPageState extends State<CipRunPage> {
       case 'page':
       case 'column':
       case 'list':
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: children,
-        );
+        return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: children);
       case 'row':
-        return SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(children: children),
-        );
+        return SingleChildScrollView(scrollDirection: Axis.horizontal, child: Row(children: children));
       case 'button':
         return Padding(
           padding: EdgeInsets.symmetric(vertical: margin),
@@ -97,6 +108,8 @@ class _CipRunPageState extends State<CipRunPage> {
           padding: EdgeInsets.symmetric(vertical: margin),
           child: TextField(
             controller: controller,
+            obscureText: node['input_type']?.toString() == 'password',
+            maxLength: int.tryParse(node['max_length']?.toString() ?? ''),
             maxLines: node['single_line']?.toString().toLowerCase() == 'false' ? null : 1,
             decoration: InputDecoration(
               labelText: context.tr.t(node['label']?.toString() ?? ''),
@@ -114,17 +127,16 @@ class _CipRunPageState extends State<CipRunPage> {
         );
       case 'image':
         final url = node['src']?.toString() ?? node['url']?.toString() ?? '';
-        return url.isEmpty
-            ? const SizedBox.shrink()
-            : Padding(
-                padding: EdgeInsets.symmetric(vertical: margin),
-                child: Image.network(url, height: height ?? 180, fit: BoxFit.contain),
-              );
+        return url.isEmpty ? const SizedBox.shrink() : Padding(
+          padding: EdgeInsets.symmetric(vertical: margin),
+          child: Image.network(url, height: height ?? 180, fit: BoxFit.contain),
+        );
       case 'spacer':
         return SizedBox(height: height ?? 12);
+      case 'text':
       default:
         return Padding(
-          padding: const EdgeInsets.symmetric(vertical: 4),
+          padding: EdgeInsets.symmetric(vertical: margin),
           child: Text(context.tr.t(node['text']?.toString() ?? node['value']?.toString() ?? '')),
         );
     }

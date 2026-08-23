@@ -1255,29 +1255,32 @@ class PluginService extends ChangeNotifier {
   }
 
   Map<String, dynamic>? _normalizeUiTree(Map<String, dynamic> raw, [String path = '0']) {
-    final type = (raw['type'] ?? raw['kind'] ?? 'text')
-        .toString()
-        .toLowerCase();
-    const allowed = {
-      'page',
-      'text',
-      'button',
-      'image',
-      'input',
-      'checkbox',
-      'list',
-      'spacer',
-      'column',
-      'row',
+    final rawType = raw['type'] ?? raw['kind'] ?? raw['view'] ?? raw['widget'];
+    final type = rawType?.toString().toLowerCase() ?? 'text';
+    const aliases = {
+      'screen': 'page',
+      'container': 'column',
+      'vertical': 'column',
+      'horizontal': 'row',
+      'label': 'text',
+      'edittext': 'input',
+      'checkboxlisttile': 'checkbox',
     };
-    if (!allowed.contains(type)) return null;
+    final normalizedType = aliases[type] ?? type;
+    const allowed = {
+      'page', 'text', 'button', 'image', 'input', 'checkbox', 'list',
+      'spacer', 'column', 'row',
+    };
+    if (!allowed.contains(normalizedType)) return null;
     final children = <Map<String, dynamic>>[];
-    final rawChildren = raw['children'] ?? raw['items'];
+    final rawChildren = raw['children'] ?? raw['items'] ?? raw['child'] ?? raw['content'];
     final childValues = rawChildren is List
         ? rawChildren
         : rawChildren is Map
-        ? rawChildren.values.toList()
-        : const <dynamic>[];
+            ? rawChildren.values.toList()
+            : rawChildren == null
+                ? const <dynamic>[]
+                : <dynamic>[rawChildren];
     for (final child in childValues.whereType<Map>()) {
       final normalized = _normalizeUiTree(
         Map<String, dynamic>.from(child),
@@ -1285,44 +1288,33 @@ class PluginService extends ChangeNotifier {
       );
       if (normalized != null) children.add(normalized);
     }
-    final result = <String, dynamic>{'type': type};
-    if ((type == 'button' || type == 'input' || type == 'checkbox') &&
+    final result = <String, dynamic>{'type': normalizedType};
+    if ((normalizedType == 'button' || normalizedType == 'input' || normalizedType == 'checkbox') &&
         (raw['id'] == null || raw['id'].toString().isEmpty)) {
-      final label = (raw['label'] ?? raw['text'] ?? type).toString();
-      result['id'] = '$path:$type:$label';
+      final label = (raw['label'] ?? raw['text'] ?? normalizedType).toString();
+      result['id'] = '$path:$normalizedType:$label';
     }
     for (final key in const [
-      'title',
-      'text',
-      'label',
-      'value',
-      'placeholder',
-      'hint',
-      'src',
-      'url',
-      'action',
-      'id',
-      'plugin_id',
-      'size',
-      'color',
-      'height',
-      'margin',
-      'visible',
-      'enabled',
-      'single_line',
+      'title', 'text', 'label', 'value', 'placeholder', 'hint', 'src', 'url',
+      'action', 'id', 'plugin_id', 'size', 'color', 'height', 'margin',
+      'visible', 'enabled', 'single_line', 'input_type', 'max_length',
     ]) {
       final value = raw[key];
-      if (value != null && value.toString().isNotEmpty)
-        result[key] = value.toString();
+      if (value != null) result[key] = value;
     }
     if (raw['checked'] is bool) result['checked'] = raw['checked'];
-    final callback = raw['on_click'];
-    if (callback is Map && callback['__lua_callback_ref'] is num) {
-      result['callback_ref'] = (callback['__lua_callback_ref'] as num).toInt();
+    for (final entry in const [
+      MapEntry('on_click', 'callback_ref'),
+      MapEntry('on_change', 'change_callback_ref'),
+      MapEntry('on_submit', 'submit_callback_ref'),
+      MapEntry('on_focus_lost', 'focus_lost_callback_ref'),
+    ]) {
+      final callback = raw[entry.key];
+      if (callback is Map && callback['__lua_callback_ref'] is num) {
+        result[entry.value] = (callback['__lua_callback_ref'] as num).toInt();
+      }
     }
-    if (raw['callback_ref'] is num) {
-      result['callback_ref'] = (raw['callback_ref'] as num).toInt();
-    }
+    if (raw['callback_ref'] is num) result['callback_ref'] = (raw['callback_ref'] as num).toInt();
     if (children.isNotEmpty) result['children'] = children;
     return result;
   }

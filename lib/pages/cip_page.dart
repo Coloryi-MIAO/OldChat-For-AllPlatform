@@ -47,9 +47,17 @@ class _CipPageState extends State<CipPage> {
     Map<String, dynamic> node, [
     String? inheritedPluginId,
   ]) {
-    final type = node['type']?.toString() ?? 'text';
+    final type = switch (node['type']?.toString().toLowerCase()) {
+      'screen' => 'page',
+      'container' || 'vertical' => 'column',
+      'horizontal' => 'row',
+      'label' => 'text',
+      'edittext' => 'input',
+      'checkboxlisttile' => 'checkbox',
+      _ => node['type']?.toString().toLowerCase() ?? 'text',
+    };
     final pluginId = node['plugin_id']?.toString() ?? inheritedPluginId;
-    final rawChildren = node['children'];
+    final rawChildren = node['children'] ?? node['items'] ?? node['child'] ?? node['content'];
     final childMaps = rawChildren is List
         ? rawChildren.whereType<Map>()
         : rawChildren is Map
@@ -105,6 +113,8 @@ class _CipPageState extends State<CipPage> {
           padding: const EdgeInsets.symmetric(vertical: 4),
           child: TextField(
             controller: controller,
+            obscureText: node['input_type']?.toString() == 'password',
+            maxLength: int.tryParse(node['max_length']?.toString() ?? ''),
             onChanged: (_) => setState(() {}),
             maxLines: node['single_line']?.toString().toLowerCase() == 'false' ? null : 1,
             decoration: InputDecoration(

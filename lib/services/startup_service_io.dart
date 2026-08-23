@@ -67,7 +67,8 @@ Future<void> startupSetEnabled(bool enabled) async {
         return;
       }
       final executable = File(Platform.resolvedExecutable).absolute.path;
-      final command = '"$executable"';
+      final escapedExecutable = executable.replaceAll("'", "''");
+      final command = "powershell.exe -NoProfile -WindowStyle Hidden -Command \"Start-Process -FilePath '$escapedExecutable' -WindowStyle Hidden\"";
       final value = arena.pcwstr(command);
       final result = RegSetValueEx(
         hKey,

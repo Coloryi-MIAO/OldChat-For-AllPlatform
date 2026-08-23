@@ -155,7 +155,22 @@ class MessageParser {
   static Map<String, dynamic>? parseForward(String body) {
     final parsed = _decodeObject(body);
     final value = parsed?['forward_v2'];
-    return value is Map ? Map<String, dynamic>.from(value) : null;
+    if (value is! Map) return null;
+    final bundle = Map<String, dynamic>.from(value);
+    final rawItems = bundle['items'];
+    if (rawItems is! List) return bundle;
+    bundle['items'] = rawItems.whereType<Map>().map((raw) {
+      final item = Map<String, dynamic>.from(raw);
+      item['source_message_id'] =
+          item['source_message_id'] ?? item['message_id'] ?? item['id'] ?? '';
+      item['from_uid'] = item['from_uid'] ?? item['sender_uid'] ?? '';
+      item['from_name'] = item['from_name'] ?? item['sender'] ?? item['from_uid'] ?? '';
+      item['from_avatar'] = item['from_avatar'] ?? item['avatar_url'] ?? '';
+      item['type'] = item['type'] ?? item['msg_type'] ?? 'text';
+      item['text'] = item['text'] ?? item['body'] ?? '';
+      return item;
+    }).toList(growable: false);
+    return bundle;
   }
 
   static Map<String, dynamic> parseV2(String body) {
