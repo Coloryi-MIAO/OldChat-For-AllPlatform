@@ -26,7 +26,17 @@ jobs:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           architecture: x64
           channel: stable
-          cache: true
+          cache: false
+      - name: 打印版本信息（确认环境）
+        run: |
+            flutter --version
+            dart --version
+
+      - name: 清理所有缓存
+        run: |
+          flutter clean
+          Remove-Item -Recurse -Force .dart_tool -ErrorAction SilentlyContinue
+          Remove-Item -Force pubspec.lock -ErrorAction SilentlyContinue
       - name: 获取依赖
         run: flutter pub get
       - name: 静态分析
