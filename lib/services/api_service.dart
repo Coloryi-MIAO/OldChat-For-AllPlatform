@@ -251,7 +251,7 @@ class ApiService {
           ? (body['code'] as num).toInt()
           : int.tryParse('${body['code']}');
       final inner = body['body'];
-      if (code < 200 || code >= 300) {
+      if (code != null && (code < 200 || code >= 300)) {
         throw DioException(
           requestOptions: response.requestOptions,
           response: response,

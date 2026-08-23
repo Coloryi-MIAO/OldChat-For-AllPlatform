@@ -488,7 +488,6 @@ class AppLocalizations {
     '导入 .cip': 'Import .cip',
     '暂无本地 CIP，点击右上角导入': 'No local CIP. Click the top-right button to import one.',
     'CIP 没有返回界面': 'The CIP did not return an interface',
-    'CIP 运行': 'CIP runtime',
     '打开运行界面': 'Open runtime interface',
     '本地 CIP': 'Local CIP',
     'CIP 商店': 'CIP store',

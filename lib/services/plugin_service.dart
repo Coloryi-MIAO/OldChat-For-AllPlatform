@@ -1760,7 +1760,7 @@ class PluginService extends ChangeNotifier {
     final children = node['children'];
     if (children is List) {
       for (final child in children.whereType<Map>()) {
-        _setUiField(child, id, field, value);
+        _setUiField(Map<String, dynamic>.from(child), id, field, value);
       }
     }
   }
