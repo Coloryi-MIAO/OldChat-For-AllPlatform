@@ -43,7 +43,9 @@ jobs:
         run: flutter analyze lib test --no-fatal-infos --no-fatal-warnings
       - name: 运行测试
         run: flutter test
-
+      - name: 安装 Windows 10 SDK（包含 Media Foundation）
+        run: |
+          choco install windows-sdk -y --version=10.0.19041.0
   build-windows7-x64:
     name: 构建 Windows 7 x64
     needs: analyze-and-test
