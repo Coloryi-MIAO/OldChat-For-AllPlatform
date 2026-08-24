@@ -1240,7 +1240,7 @@ class PluginService extends ChangeNotifier {
     while (ls.next(tableIndex)) {
       final key = ls.isNumber(-2) ? ls.toInteger(-2) : (ls.toStr(-2) ?? '');
       final value = _luaValue(ls, -1, depth + 1);
-      if (value != null) entries[key] = value;
+      entries[key] = value;
       ls.pop(1);
     }
     ls.pop(1);
@@ -1512,7 +1512,7 @@ class PluginService extends ChangeNotifier {
       normalized['plugin_id'] = id;
       _uiResults[id] = normalized;
       notifyListeners();
-      ls.pushString(id);
+      ls.pushValue(-1);
       return 1;
     }
 
