@@ -1,87 +1,57 @@
-import 'dart:ffi';
 import 'package:universal_io/io.dart';
-
-import 'package:ffi/ffi.dart';
-import 'package:win32/win32.dart';
 
 bool startupIsSupported() => Platform.isWindows;
 
-const _runPath = r'Software\Microsoft\Windows\CurrentVersion\Run';
+const _runKey = r'HKCU\Software\Microsoft\Windows\CurrentVersion\Run';
 const _valueName = 'OldChat For AllPlatform';
 const _appDataDirectory = 'OldChatForAllPlatform';
 
-bool startupIsEnabled() {
-  if (!Platform.isWindows) return false;
-  return using((arena) {
-    final key = arena<Pointer>();
-    final result = RegOpenKeyEx(
-      HKEY_CURRENT_USER,
-      arena.pcwstr(_runPath),
-      0,
-      KEY_READ,
-      key,
+String? _registryValue() {
+  if (!Platform.isWindows) return null;
+  try {
+    final result = Process.runSync(
+      'reg.exe',
+      ['query', _runKey, '/v', _valueName],
+      runInShell: true,
     );
-    if (!result.isOk) return false;
-    try {
-      final type = arena<Uint32>();
-      final size = arena<Uint32>()..value = 32768;
-      final buffer = arena<Uint16>(16384);
-      final status = RegQueryValueEx(
-        HKEY(key.value),
-        arena.pcwstr(_valueName),
-        type,
-        buffer.cast<Uint8>(),
-        size,
-      );
-      return status.isOk && buffer.value != 0;
-    } finally {
-      RegCloseKey(HKEY(key.value));
-    }
-  });
+    if (result.exitCode != 0) return null;
+    final output = '${result.stdout}';
+    final line = output.split(RegExp(r'\r?\n')).cast<String?>().firstWhere(
+          (line) => line != null && line.contains(_valueName),
+          orElse: () => null,
+        );
+    return line?.trim();
+  } catch (_) {
+    return null;
+  }
 }
+
+bool startupIsEnabled() => _registryValue() != null;
 
 Future<void> startupSetEnabled(bool enabled) async {
   if (!Platform.isWindows) return;
-  using((arena) {
-    final key = arena<Pointer>();
-    final createResult = RegCreateKeyEx(
-      HKEY_CURRENT_USER,
-      arena.pcwstr(_runPath),
-      null,
-      REG_OPTION_NON_VOLATILE,
-      KEY_WRITE,
-      nullptr,
-      key,
-      nullptr,
+  if (!enabled) {
+    final result = await Process.run(
+      'reg.exe',
+      ['delete', _runKey, '/v', _valueName, '/f'],
+      runInShell: true,
     );
-    if (!createResult.isOk) {
-      throw WindowsException(createResult.toHRESULT());
+    if (result.exitCode != 0 && !'${result.stderr}'.contains('unable to find')) {
+      throw ProcessException('reg.exe', [], '${result.stderr}', result.exitCode);
     }
-    final hKey = HKEY(key.value);
-    try {
-      if (!enabled) {
-        final result = RegDeleteValue(hKey, arena.pcwstr(_valueName));
-        if (!result.isOk && result != ERROR_FILE_NOT_FOUND) {
-          throw WindowsException(result.toHRESULT());
-        }
-        return;
-      }
-      final executable = File(Platform.resolvedExecutable).absolute.path;
-      final escapedExecutable = executable.replaceAll("'", "''");
-      final command = "powershell.exe -NoProfile -WindowStyle Hidden -Command \"Start-Process -FilePath '$escapedExecutable' -WindowStyle Hidden\"";
-      final value = arena.pcwstr(command);
-      final result = RegSetValueEx(
-        hKey,
-        arena.pcwstr(_valueName),
-        REG_SZ,
-        value.cast<Uint8>(),
-        (command.length + 1) * 2,
-      );
-      if (!result.isOk) throw WindowsException(result.toHRESULT());
-    } finally {
-      RegCloseKey(hKey);
-    }
-  });
+    return;
+  }
+  final executable = File(Platform.resolvedExecutable).absolute.path;
+  final escaped = executable.replaceAll("'", "''");
+  final command = "powershell.exe -NoProfile -WindowStyle Hidden -Command \"Start-Process -FilePath '$escaped' -WindowStyle Hidden\"";
+  final result = await Process.run(
+    'reg.exe',
+    ['add', _runKey, '/v', _valueName, '/t', 'REG_SZ', '/d', command, '/f'],
+    runInShell: true,
+  );
+  if (result.exitCode != 0) {
+    throw ProcessException('reg.exe', [], '${result.stderr}', result.exitCode);
+  }
 }
 
 Future<int> startupCleanupOnStartup() async {
