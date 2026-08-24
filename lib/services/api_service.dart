@@ -332,13 +332,6 @@ class ApiService {
         error.type == DioExceptionType.receiveTimeout;
   }
 
-  int? _gatewayErrorStatus(DioException error) {
-    final data = error.response?.data;
-    if (data is! Map) return null;
-    final raw = data['code'] ?? data['status'];
-    return raw is num ? raw.toInt() : int.tryParse('$raw');
-  }
-
   bool _hasV2GatewayError(dynamic data) {
     if (data is String) {
       final decoded = _decodeMap(data);

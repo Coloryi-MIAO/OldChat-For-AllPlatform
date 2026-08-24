@@ -2723,13 +2723,10 @@ class _ChatPageState extends State<ChatPage>
           ],
         ),
       ),
-      child: Listener(
-        onPointerDown: (event) {
-          if (event.kind == PointerDeviceKind.mouse &&
-              event.buttons == kSecondaryMouseButton) {
-            _showChatBackgroundMenu(event.position);
-          }
-        },
+      child: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onSecondaryTapDown: (details) =>
+            _showChatBackgroundMenu(details.globalPosition),
         child: Stack(
           children: [
             Column(
