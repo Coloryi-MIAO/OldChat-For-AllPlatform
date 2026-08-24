@@ -464,13 +464,13 @@ class _LoginPageState extends State<LoginPage>
         ],
       ),
       body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final compact = constraints.maxHeight < 720;
-            final card = Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 420),
-                child: Container(
+        child: SingleChildScrollView(
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: Container(
                 width: double.infinity,
                 margin: const EdgeInsets.symmetric(horizontal: 16),
                 padding: const EdgeInsets.all(24),
@@ -531,14 +531,12 @@ class _LoginPageState extends State<LoginPage>
                       ],
                     ),
                     const SizedBox(height: 16),
-                    Expanded(
+                    SizedBox(
+                      height: 380,
                       child: TabBarView(
                         controller: _tabController,
                         children: [
-                          SingleChildScrollView(
-                            padding: const EdgeInsets.only(top: 12),
-                            child: _buildLoginForm(),
-                          ),
+                          _buildLoginForm(),
                           SingleChildScrollView(
                             padding: const EdgeInsets.only(top: 12),
                             child: _buildRegisterForm(),
@@ -549,15 +547,8 @@ class _LoginPageState extends State<LoginPage>
                   ],
                 ),
               ),
-            );
-            return compact
-                ? SingleChildScrollView(
-                    keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    child: card,
-                  )
-                : card;
-          },
+            ),
+          ),
         ),
       ),
     );
