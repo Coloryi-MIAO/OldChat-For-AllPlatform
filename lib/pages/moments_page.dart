@@ -1069,7 +1069,7 @@ class _MomentsPageState extends State<MomentsPage>
                     ),
                   );
                 }
-                return _buildMomentCard(_moments[index]);
+                return _buildMomentCard(_moments[index], primaryColor, userId);
               },
             ),
           );

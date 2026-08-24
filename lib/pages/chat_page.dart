@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
@@ -2980,7 +2981,6 @@ class _ChatPageState extends State<ChatPage>
             ),
           ],
         ),
-      ),
       ),
     );
 
