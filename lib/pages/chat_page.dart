@@ -2738,11 +2738,7 @@ class _ChatPageState extends State<ChatPage>
           ],
         ),
       ),
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onSecondaryTapDown: (details) =>
-            _showChatBackgroundMenu(details.globalPosition),
-        child: Stack(
+      child: Stack(
           children: [
             Column(
               children: [
@@ -2763,9 +2759,9 @@ class _ChatPageState extends State<ChatPage>
                                 }),
                               );
                             }
-                            return false;
-                          },
-                          child: ListView.builder(
+                              return false;
+                            },
+                            child: ListView.builder(
                             controller: _scrollController,
                             reverse: false,
                             physics: const AlwaysScrollableScrollPhysics(),

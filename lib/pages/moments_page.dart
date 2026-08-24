@@ -18,7 +18,8 @@ import '../services/image_cache_service.dart';
 
 class MomentsPage extends StatefulWidget {
   final String? uid;
-  const MomentsPage({super.key, this.uid});
+  final bool embedded;
+  const MomentsPage({super.key, this.uid, this.embedded = false});
 
   @override
   State<MomentsPage> createState() => _MomentsPageState();
@@ -1005,6 +1006,74 @@ class _MomentsPageState extends State<MomentsPage>
     final userId = context.read<AuthService>().userId;
     final isMyMoments = widget.uid == null || widget.uid == userId;
 
+    final content = _loading
+        ? Center(child: CircularProgressIndicator())
+        : _hasError
+        ? Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.error_outline, size: 64, color: Colors.grey[400]),
+                SizedBox(height: 16),
+                Text(
+                  AppLocalizations.current.t('加载失败: $_errorMessage'),
+                  style: TextStyle(color: Colors.grey[600]),
+                ),
+                const SizedBox(height: 16),
+                ElevatedButton(
+                  onPressed: () => _loadMoments(initial: true),
+                  child: Text(AppLocalizations.current.t('重试')),
+                ),
+              ],
+            ),
+          )
+        : _moments.isEmpty
+        ? Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.photo_album, size: 64, color: Colors.grey[400]),
+                SizedBox(height: 16),
+                Text(
+                  widget.uid != null ? 'TA还没有动态' : '暂无动态，发布一条吧',
+                  style: TextStyle(color: Colors.grey[600]),
+                ),
+                if (isMyMoments) const SizedBox(height: 16),
+                if (isMyMoments)
+                  ElevatedButton.icon(
+                    onPressed: _showPostDialog,
+                    icon: const Icon(Icons.add),
+                    label: Text(AppLocalizations.current.t('发布动态')),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: primaryColor,
+                      foregroundColor: Colors.white,
+                    ),
+                  ),
+              ],
+            ),
+          )
+        : RefreshIndicator(
+            onRefresh: () => _loadMoments(initial: true),
+            child: ListView.builder(
+              controller: _scrollController,
+              padding: const EdgeInsets.all(16),
+              itemCount: _moments.length + (_hasMore ? 1 : 0),
+              itemBuilder: (context, index) {
+                if (index == _moments.length) {
+                  return Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Center(
+                      child: _isLoadingMore
+                          ? const CircularProgressIndicator()
+                          : Text(AppLocalizations.current.t('没有更多了')),
+                    ),
+                  );
+                }
+                return _buildMomentCard(_moments[index]);
+              },
+            ),
+          );
+    if (widget.embedded) return content;
     return Scaffold(
       appBar: AppBar(
         title: Text(AppLocalizations.current.t(widget.uid != null ? 'TA的动态' : '动态')),
