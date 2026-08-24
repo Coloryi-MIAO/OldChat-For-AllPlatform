@@ -2722,7 +2722,14 @@ class _ChatPageState extends State<ChatPage>
           ],
         ),
       ),
-      child: Stack(
+      child: Listener(
+        onPointerDown: (event) {
+          if (event.kind == PointerDeviceKind.mouse &&
+              event.buttons == kSecondaryMouseButton) {
+            _showChatBackgroundMenu(event.position);
+          }
+        },
+        child: Stack(
           children: [
             Column(
               children: [
@@ -2957,6 +2964,7 @@ class _ChatPageState extends State<ChatPage>
             ),
           ],
         ),
+      ),
       ),
     );
 
