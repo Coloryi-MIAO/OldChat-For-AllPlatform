@@ -44,6 +44,7 @@ class _MomentsPageState extends State<MomentsPage>
   final List<XFile> _selectedImageFiles = [];
   final List<String> _uploadedImageUrls = [];
   bool _isVisible = true;
+  final ScrollController _scrollController = ScrollController();
 
   @override
   void initState() {
@@ -58,6 +59,7 @@ class _MomentsPageState extends State<MomentsPage>
     WidgetsBinding.instance.removeObserver(this);
     _postController.dispose();
     _commentController.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -1069,7 +1071,7 @@ class _MomentsPageState extends State<MomentsPage>
                     ),
                   );
                 }
-                return _buildMomentCard(_moments[index]);
+                return _buildMomentCard(_moments[index], primaryColor, userId);
               },
             ),
           );
