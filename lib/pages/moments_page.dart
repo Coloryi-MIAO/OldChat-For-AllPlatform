@@ -44,7 +44,6 @@ class _MomentsPageState extends State<MomentsPage>
   final List<XFile> _selectedImageFiles = [];
   final List<String> _uploadedImageUrls = [];
   bool _isVisible = true;
-  final ScrollController _scrollController = ScrollController();
 
   @override
   void initState() {
@@ -59,7 +58,6 @@ class _MomentsPageState extends State<MomentsPage>
     WidgetsBinding.instance.removeObserver(this);
     _postController.dispose();
     _commentController.dispose();
-    _scrollController.dispose();
     super.dispose();
   }
 
@@ -1057,7 +1055,6 @@ class _MomentsPageState extends State<MomentsPage>
         : RefreshIndicator(
             onRefresh: () => _loadMoments(initial: true),
             child: ListView.builder(
-              controller: _scrollController,
               padding: const EdgeInsets.all(16),
               itemCount: _moments.length + (_hasMore ? 1 : 0),
               itemBuilder: (context, index) {
@@ -1071,7 +1068,7 @@ class _MomentsPageState extends State<MomentsPage>
                     ),
                   );
                 }
-                return _buildMomentCard(_moments[index], primaryColor, userId);
+                return _buildMomentCard(_moments[index]);
               },
             ),
           );
