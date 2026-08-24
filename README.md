@@ -1,89 +1,62 @@
 # OldChat For AllPlatform
 
-[![Latest Release](https://img.shields.io/github/v/release/Coloryi-MIAO/OldChat-For-AllPlatform?display_name=tag&sort=semver)](https://github.com/Coloryi-MIAO/OldChat-For-AllPlatform/releases)
-[![License](https://img.shields.io/github/license/Coloryi-MIAO/OldChat-For-AllPlatform)](LICENSE)
-[![Forks](https://img.shields.io/github/forks/Coloryi-MIAO/OldChat-For-AllPlatform?style=flat)](https://github.com/Coloryi-MIAO/OldChat-For-AllPlatform/network/members)
+OldChat For AllPlatform 是基于 Flutter 的跨平台聊天客户端。`main` 是全平台分支，目标平台为 Windows、Android、iOS、macOS、Linux 和 Web。
 
-OldChat For AllPlatform 是基于 Flutter 的跨平台聊天客户端。当前版本为 `1.4.8-beta.5+6`，同一套代码覆盖 Windows、Android、iOS、macOS、Linux 和 Web。
+## 当前约定
 
-## 功能范围
+- 所有常规业务请求默认使用 V2 协议。
+- 只有设置环境变量 `OLDCHAT_ENABLE_V1_FALLBACK=true` 时，客户端才允许在 V2 不可用时回退到 V1。
+- V1 回退服务器：`http://154.9.24.232:8080`。
+- HTTP 400 统一向用户显示“服务器开小差了”。
+- 登录、注册、人机验证、私聊、群聊、动态、公开法庭、插件和 CIP 均属于客户端支持范围。
+- CIP 小程序支持声明式 UI 返回值，UI 由客户端渲染。
+- 界面缩放范围为 50%–500%，首次进入会提示设置，之后可在设置中调整并持久化。
+- 聊天消息气泡和聊天背景使用分层右键菜单；免打扰只属于 Home 会话列表，不属于聊天内容菜单。
+- 资料页中的动态在嵌入模式显示，不额外显示动态页返回按钮。
 
-- 私聊、群聊、频道、动态、通知、收藏、音乐、表情和公开法庭。
-- WebSocket 会话与 HTTP API，支持消息刷新、重连和账户级缓存。
-- 本地账户与登录状态按 UID 隔离；移动端登录凭据保存在系统安全存储适配层中，不会因为普通启动而清理。
-- `.oldchat-plugin` 插件包和 `.cip` 小程序包导入、启用、运行、导出与账户级持久化。
-- CIP 使用受限 Lua 宿主 API 与声明式 UI，禁止直接访问系统文件、凭据或未声明网络。
-- 图片、视频、文件选择、系统通知和桌面能力按平台适配；Web 使用浏览器能力降级。
-
-## 平台标识
-
-- 产品名：`OldChat For AllPlatform`
-- Dart package：`oldchatforallplatform`
-- Android applicationId：`com.coloryi.oldchatforallplatform`
-- iOS Bundle ID：`com.coloryi.oldchatforallplatform`
-- macOS Bundle ID：`com.coloryi.oldchatforallplatform`
-- Linux application ID：`com.coloryi.oldchatforallplatform`
-- Windows 可执行文件：`OldChatForAllPlatform.exe`
-- Windows AUMID：`Coloryi.OldChatForAllPlatform`
-- Windows Toast CLSID：`936C39FC-6BBC-4A57-B8F8-7C627E401B2F`
-
-## 服务端与数据
-
-默认服务器为 `http://60.205.94.101:8080`；隐藏回退地址不会暴露给插件。服务器列表和账户设置按 UID 保存。Windows 账户数据目录为：
+## 平台与构建
 
 ```text
-%APPDATA%\\OldChatForAllPlatform\\accounts\\<UID>
+Dart package: oldchatforallplatform
+Android: com.coloryi.oldchatforallplatform
+iOS/macOS: com.coloryi.oldchatforallplatform
 ```
 
-不要把真实 token、密码、设备密钥或生产账户数据提交到 Git。
-
-## 本地开发
-
-需要 Flutter stable、Dart、对应平台 SDK，以及项目所需的系统依赖。项目 CI 固定使用 Flutter `3.44.8`。
+安装依赖并运行测试：
 
 ```bash
 flutter pub get
-flutter analyze lib test --no-fatal-infos --no-fatal-warnings
+flutter analyze lib test
 flutter test
-flutter build web --release
+```
+
+构建全平台 release 产物：
+
+```bash
 flutter build apk --release --split-per-abi
+flutter build web --release
 flutter build windows --release
 flutter build linux --release
 flutter build macos --release --no-codesign
 flutter build ios --release --no-codesign
 ```
 
-平台能力在运行时隔离；不支持的桌面能力不能阻塞登录、聊天或 Web 构建。Android 已允许访问当前服务端所需的明文 HTTP API。
+`file .github/workflows/build.yml` 负责全平台构建与产物上传。Apple 的人机验证页面使用 WebView；网络配置允许当前 HTTP 服务端所需的访问方式，应用不因验证码请求相机权限。
 
-## 构建与 CI
+## 目录与文档
 
-`file .github/workflows/build.yml` 执行分析、测试和最终产物构建：
-
-- Android：`armeabi-v7a`、`arm64-v8a`、`x86_64` 三个 APK。
-- Linux：x64 `.deb`、`.rpm` 与 `.AppImage`。
-- Windows：x64 安装/压缩产物。
-- macOS：x64 与 arm64 DMG。
-- iOS：开发测试用 ad hoc 签名 IPA；它不是 App Store 分发签名。
-- Web：release 静态站点；浏览器通知需用户授权。
-
-`file .github/workflows/cross_compile_engine.yml` 单独维护跨平台构建引擎验证，并记录每个平台、runner、架构和 Flutter 版本。GitHub Actions 不会把 info 或 warning 当作失败，但错误和测试失败仍会阻止发布。
-
-Apple 离线构建使用 `codesign -s -` ad hoc 签名，不依赖证书、P12、钥匙串或密码。OpenSSL 自签名证书不能替代 Apple 的有效开发者/分发证书，因此不会伪装成可上架签名。
-
-## 插件与 CIP
-
-插件中心负责 `.oldchat-plugin`，CIP 中心负责 `.cip`。导入后内容保存到当前 UID 的账户存储，不依赖临时选择路径；扩展名大小写不敏感。插件权限必须显式声明，未知权限直接拒绝。
-
-详细格式、权限、生命周期、宿主 API、UI 节点和示例见 `file PLUGIN_DEVELOPMENT.md`。
-
-## API 与协议文档
-
-- `file api.md`：客户端 API 约定。
-- `file api2.md`：新旧 API 差异。
+- `file lib/`：Flutter 客户端源码。
+- `file api2.md`：V2 API 与兼容边界。
+- `file api.md`：API 参考。
 - `file routes.md`：服务端路由。
-- `file client.md`：客户端行为说明。
-- `file lua-cip.md`：CIP Lua 参考。
+- `file lua-cip.md`：CIP Lua 与 UI 规范。
+- `file PLUGIN_DEVELOPMENT.md`：插件包、权限和生命周期。
+- `file .github/workflows/build.yml`：全平台 CI。
+
+## 安全
+
+不要提交真实密码、访问令牌、设备密钥或生产账户数据。V1 回退由本地环境变量显式启用，不由插件控制，也不在普通 UI 中默认开启。
 
 ## 许可
 
-本项目使用 MIT License，详见 `file LICENSE`。
+MIT License，详见 `file LICENSE`。
