@@ -435,14 +435,21 @@ class MyApp extends StatelessWidget {
             '/group_requests': (context) => const RequestListPage(groups: true),
           },
           builder: (context, child) {
+            final scale = context.watch<AppThemeController>().scaleFactor;
+            final scaledChild = MediaQuery(
+              data: MediaQuery.of(context).copyWith(
+                textScaler: TextScaler.linear(scale),
+              ),
+              child: child ?? const SizedBox.shrink(),
+            );
             final isLogin = ModalRoute.of(context)?.settings.name == '/';
-            if (isLogin) return child!;
-            if (kIsWeb || !Platform.isWindows && !Platform.isMacOS && !Platform.isLinux) return child!;
+            if (isLogin) return scaledChild;
+            if (kIsWeb || !Platform.isWindows && !Platform.isMacOS && !Platform.isLinux) return scaledChild;
             return Column(
               mainAxisSize: MainAxisSize.max,
               children: [
                 const SizedBox(height: 40, child: CustomTitleBar()),
-                Expanded(child: child!),
+                Expanded(child: scaledChild),
               ],
             );
           },
