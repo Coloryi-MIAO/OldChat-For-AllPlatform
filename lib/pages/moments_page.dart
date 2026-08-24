@@ -44,6 +44,7 @@ class _MomentsPageState extends State<MomentsPage>
   final List<XFile> _selectedImageFiles = [];
   final List<String> _uploadedImageUrls = [];
   bool _isVisible = true;
+  final ScrollController _scrollController = ScrollController();
 
   @override
   void initState() {
