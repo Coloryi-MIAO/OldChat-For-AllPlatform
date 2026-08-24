@@ -1326,7 +1326,9 @@ class _MessageTileState extends State<MessageTile> {
     final senderDisplayName = _senderName ?? msg.fromUid;
 
     if (widget.isRedPacket) {
-      return GestureDetector(
+      return Align(
+        alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+        child: GestureDetector(
         onTap: widget.onTap,
       onLongPress: widget.onLongPress,
         onSecondaryTap: widget.onSecondaryTap,
@@ -1334,6 +1336,7 @@ class _MessageTileState extends State<MessageTile> {
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
           child: Row(
+            mainAxisSize: MainAxisSize.min,
             mainAxisAlignment: isMe
                 ? MainAxisAlignment.end
                 : MainAxisAlignment.start,
@@ -1405,6 +1408,7 @@ class _MessageTileState extends State<MessageTile> {
                   ),
                 ),
             ],
+          ),
           ),
         ),
       );
@@ -1495,20 +1499,17 @@ class _MessageTileState extends State<MessageTile> {
     final myAvatar = _myAvatarUrl != null ? resolveMediaUrl(_myAvatarUrl!) : '';
     final double maxBubbleWidth = MediaQuery.of(context).size.width * 0.3;
 
-    return Listener(
-      onPointerDown: (event) {
-        if (event.kind == PointerDeviceKind.mouse &&
-            event.buttons == kSecondaryMouseButton) {
-          widget.onSecondaryTap?.call();
-        }
-      },
+    return Align(
+      alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
       child: GestureDetector(
-        onTap: widget.onTap,
-        onLongPress: widget.onLongPress,
-        behavior: HitTestBehavior.opaque,
-        child: Padding(
+      onTap: widget.onTap,
+      onLongPress: widget.onLongPress,
+      onSecondaryTap: widget.onSecondaryTap,
+      behavior: HitTestBehavior.opaque,
+      child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
         child: Row(
+          mainAxisSize: MainAxisSize.min,
           mainAxisAlignment: isMe
               ? MainAxisAlignment.end
               : MainAxisAlignment.start,

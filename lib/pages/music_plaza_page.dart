@@ -76,11 +76,11 @@ class _MusicPlazaPageState extends State<MusicPlazaPage> {
   String _getEndpoint() {
     switch (_currentTab) {
       case MusicTab.ranking:
-        return Constants.apiPath('/v1/music/plaza/ranking');
+        return '/v2/music/plaza/ranking';
       case MusicTab.mine:
-        return Constants.apiPath('/v1/music/plaza/mine');
+        return '/v2/music/plaza/mine';
       default:
-        return Constants.apiPath('/v1/music/plaza');
+        return '/v2/music/plaza';
     }
   }
   String _cacheKey() {

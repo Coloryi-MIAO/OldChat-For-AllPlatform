@@ -1485,13 +1485,17 @@ class PluginService extends ChangeNotifier {
       return 1;
     }
 
-    int widgetFactory(LuaState ls) {
-      if (ls.getTop() > 0 && ls.isTable(1)) {
-        ls.pushValue(1);
-      } else {
-        ls.newTable();
-      }
-      return 1;
+    DartFunction widgetFactory(String type) {
+      return (LuaState ls) {
+        if (ls.getTop() > 0 && ls.isTable(1)) {
+          ls.pushValue(1);
+        } else {
+          ls.newTable();
+        }
+        ls.pushString(type);
+        ls.setField(-2, 'type');
+        return 1;
+      };
     }
 
     int widgetResult(LuaState ls) {
@@ -1773,16 +1777,16 @@ class PluginService extends ChangeNotifier {
       },
     });
     installTable('ui', {
-      'page': widgetFactory,
-      'text': widgetFactory,
-      'label': widgetFactory,
-      'button': widgetFactory,
-      'image': widgetFactory,
-      'input': widgetFactory,
-      'checkbox': widgetFactory,
-      'list': widgetFactory,
-      'scroll': widgetFactory,
-      'spacer': widgetFactory,
+      'page': widgetFactory('page'),
+      'text': widgetFactory('text'),
+      'label': widgetFactory('text'),
+      'button': widgetFactory('button'),
+      'image': widgetFactory('image'),
+      'input': widgetFactory('input'),
+      'checkbox': widgetFactory('checkbox'),
+      'list': widgetFactory('list'),
+      'scroll': widgetFactory('column'),
+      'spacer': widgetFactory('spacer'),
     });
     state.register('ui_result', widgetResult);
     state.register('ui_clear', (LuaState ls) {

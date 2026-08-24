@@ -332,13 +332,6 @@ class ApiService {
         error.type == DioExceptionType.receiveTimeout;
   }
 
-  int? _gatewayErrorStatus(DioException error) {
-    final data = error.response?.data;
-    if (data is! Map) return null;
-    final raw = data['code'] ?? data['status'];
-    return raw is num ? raw.toInt() : int.tryParse('$raw');
-  }
-
   bool _hasV2GatewayError(dynamic data) {
     if (data is String) {
       final decoded = _decodeMap(data);
@@ -1326,7 +1319,7 @@ class ApiService {
   Future<List<Map<String, dynamic>>> getCipStore() async {
     try {
       final response = await _dio.get(
-        '/v1/cip/store',
+        '/v2/cip/store',
         options: Options(headers: {'Accept': 'application/json'}),
       );
       final value = _unwrapEnvelopeMap(response.data);
@@ -3624,7 +3617,8 @@ class ApiService {
     if (!path.startsWith('/') || path.contains('..') || path.contains('://')) {
       throw Exception('Invalid API path');
     }
-    final response = await _dio.get(Constants.apiPath(path));
+    final v2Path = path.startsWith('/v2/') ? path : '/v2$path';
+    final response = await _v2Request('GET', v2Path);
     return response.data;
   }
 }

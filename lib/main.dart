@@ -19,6 +19,7 @@ import 'pages/home_page.dart';
 import 'pages/profile_page.dart';
 import 'pages/user_profile_page.dart';
 import 'pages/moments_page.dart';
+import 'pages/music_plaza_page.dart';
 import 'pages/emoji_plaza_page.dart';
 import 'pages/notifications_page.dart';
 import 'pages/checkin_wall_page.dart';
@@ -400,6 +401,7 @@ class MyApp extends StatelessWidget {
               return UserProfilePage(uid: uid);
             },
             '/moments': (context) => const MomentsPage(),
+            '/music_plaza': (context) => const MusicPlazaPage(),
             '/user_moments': (context) {
               final args = ModalRoute.of(context)?.settings.arguments;
               final uid = args is String ? args : null;
