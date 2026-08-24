@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 
 import '../services/app_localizations.dart';
 import '../services/plugin_service.dart';
+import '../services/api_service.dart';
+import 'cip_run_page.dart';
 
 class CipPage extends StatefulWidget {
   const CipPage({super.key});
@@ -14,6 +16,8 @@ class CipPage extends StatefulWidget {
 class _CipPageState extends State<CipPage> {
   final _service = PluginService();
   bool _busy = false;
+  bool _storeLoading = false;
+  List<Map<String, dynamic>> _storeItems = const [];
   final Map<String, TextEditingController> _inputControllers = {};
   final Map<String, bool> _checkboxValues = {};
 
@@ -43,9 +47,17 @@ class _CipPageState extends State<CipPage> {
     Map<String, dynamic> node, [
     String? inheritedPluginId,
   ]) {
-    final type = node['type']?.toString() ?? 'text';
+    final type = switch (node['type']?.toString().toLowerCase()) {
+      'screen' => 'page',
+      'container' || 'vertical' => 'column',
+      'horizontal' => 'row',
+      'label' => 'text',
+      'edittext' => 'input',
+      'checkboxlisttile' => 'checkbox',
+      _ => node['type']?.toString().toLowerCase() ?? 'text',
+    };
     final pluginId = node['plugin_id']?.toString() ?? inheritedPluginId;
-    final rawChildren = node['children'];
+    final rawChildren = node['children'] ?? node['items'] ?? node['child'] ?? node['content'];
     final childMaps = rawChildren is List
         ? rawChildren.whereType<Map>()
         : rawChildren is Map
@@ -58,6 +70,10 @@ class _CipPageState extends State<CipPage> {
         )
         .toList(growable: false);
     final nodeId = node['id']?.toString() ?? '';
+    final visible = node['visible']?.toString().toLowerCase() != 'false';
+    if (!visible) return const SizedBox.shrink();
+    final height = double.tryParse(node['height']?.toString() ?? '');
+    final margin = double.tryParse(node['margin']?.toString() ?? '') ?? 4;
     switch (type) {
       case 'page':
       case 'column':
@@ -73,7 +89,7 @@ class _CipPageState extends State<CipPage> {
         );
       case 'button':
         return Padding(
-          padding: const EdgeInsets.symmetric(vertical: 4),
+          padding: EdgeInsets.symmetric(vertical: margin),
           child: FilledButton(
             onPressed: _busy
                 ? null
@@ -97,7 +113,10 @@ class _CipPageState extends State<CipPage> {
           padding: const EdgeInsets.symmetric(vertical: 4),
           child: TextField(
             controller: controller,
+            obscureText: node['input_type']?.toString() == 'password',
+            maxLength: int.tryParse(node['max_length']?.toString() ?? ''),
             onChanged: (_) => setState(() {}),
+            maxLines: node['single_line']?.toString().toLowerCase() == 'false' ? null : 1,
             decoration: InputDecoration(
               labelText: context.tr.t(node['label']?.toString() ?? ''),
               hintText: context.tr.t(node['placeholder']?.toString() ?? ''),
@@ -124,11 +143,11 @@ class _CipPageState extends State<CipPage> {
         return url.isEmpty
             ? const SizedBox.shrink()
             : Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                child: Image.network(url, height: 160, fit: BoxFit.contain),
+                padding: EdgeInsets.symmetric(vertical: margin),
+                child: Image.network(url, height: height ?? 160, fit: BoxFit.contain),
               );
       case 'spacer':
-        return const SizedBox(height: 12);
+        return SizedBox(height: height ?? 12);
       case 'text':
       default:
         return Padding(
@@ -149,6 +168,22 @@ class _CipPageState extends State<CipPage> {
     if (action == 'clear') {
       if (pluginId != null && pluginId.isNotEmpty) {
         _service.clearUiResult(pluginId);
+      }
+      return;
+    }
+    final callbackRef = int.tryParse(node['callback_ref']?.toString() ?? '');
+    if (callbackRef != null && pluginId != null && pluginId.isNotEmpty) {
+      setState(() => _busy = true);
+      try {
+        await _service.executeCipCallback(pluginId, callbackRef);
+      } catch (error) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('${context.tr.t('CIP 执行失败')}：$error')),
+          );
+        }
+      } finally {
+        if (mounted) setState(() => _busy = false);
       }
       return;
     }
@@ -217,15 +252,25 @@ class _CipPageState extends State<CipPage> {
   }
 
   Future<void> _run(Map<String, dynamic> plugin) async {
+    final id = plugin['id']?.toString() ?? '';
     final script = plugin['cip_main']?.toString();
-    if (script == null || script.isEmpty) return;
+    if (id.isEmpty || script == null || script.isEmpty) return;
     setState(() => _busy = true);
     try {
-      await _service.executeCip(plugin['id'].toString(), script);
-      if (mounted) {
-        ScaffoldMessenger.of(
+      await _service.executeCip(id, script);
+      final uiResult = _service.uiResult(id);
+      if (!mounted) return;
+      if (uiResult == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(context.tr.t('CIP 没有返回界面'))),
+        );
+      } else {
+        await Navigator.push(
           context,
-        ).showSnackBar(SnackBar(content: Text(context.tr.t('CIP 已执行'))));
+          MaterialPageRoute(
+            builder: (_) => CipRunPage(pluginId: id, uiResult: uiResult),
+          ),
+        );
       }
     } catch (error) {
       if (mounted) {
@@ -236,6 +281,153 @@ class _CipPageState extends State<CipPage> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  Future<void> _loadStore() async {
+    if (_storeLoading) return;
+    setState(() => _storeLoading = true);
+    try {
+      _storeItems = await ApiService().getCipStore();
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${context.tr.t('CIP 商店加载失败')}：$error')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _storeLoading = false);
+    }
+  }
+
+  Future<void> _installStoreItem(Map<String, dynamic> item) async {
+    setState(() => _busy = true);
+    try {
+      final bytes = await ApiService().downloadCipStoreItem(item);
+      await _service.importCipBytes(bytes);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(context.tr.t('CIP 已下载并导入'))),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${context.tr.t('CIP 下载失败')}：$error')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Widget _localTab(BuildContext context, List<Map<String, dynamic>> cips) {
+    if (cips.isEmpty) {
+      return Center(child: Text(context.tr.t('暂无本地 CIP，点击右上角导入')));
+    }
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: cips.length,
+      itemBuilder: (context, index) {
+        final plugin = cips[index];
+        final enabled = plugin['enabled'] == true;
+        final uiResult = _service.uiResult(plugin['id'].toString());
+        return Card(
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.widgets_outlined),
+                  title: Text(plugin['name'].toString()),
+                  subtitle: Text(
+                    '${plugin['version']} · ${enabled ? context.tr.t('已启用') : context.tr.t('已停用')}',
+                  ),
+                  trailing: Wrap(
+                    spacing: 6,
+                    children: [
+                      Switch(
+                        value: enabled,
+                        onChanged: _busy
+                            ? null
+                            : (value) => _service.setEnabled(
+                                  plugin['id'].toString(),
+                                  value,
+                                ),
+                      ),
+                      FilledButton(
+                        onPressed: _busy || !enabled ? null : () => _run(plugin),
+                        child: Text(context.tr.t('运行')),
+                      ),
+                    ],
+                  ),
+                ),
+                if (uiResult != null)
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      onPressed: _busy
+                          ? null
+                          : () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => CipRunPage(
+                                    pluginId: plugin['id'].toString(),
+                                    uiResult: uiResult,
+                                  ),
+                                ),
+                              ),
+                      icon: const Icon(Icons.open_in_new),
+                      label: Text(context.tr.t('打开运行界面')),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _storeTab(BuildContext context) {
+    if (_storeLoading) return const Center(child: CircularProgressIndicator());
+    if (_storeItems.isEmpty) {
+      return Center(
+        child: FilledButton.icon(
+          onPressed: _loadStore,
+          icon: const Icon(Icons.refresh),
+          label: Text(context.tr.t('加载 CIP 商店')),
+        ),
+      );
+    }
+    return RefreshIndicator(
+      onRefresh: _loadStore,
+      child: ListView.builder(
+        padding: const EdgeInsets.all(16),
+        itemCount: _storeItems.length,
+        itemBuilder: (context, index) {
+          final item = _storeItems[index];
+          final name = (item['name'] ?? item['title'] ?? item['id'] ?? 'CIP').toString();
+          final version = (item['version'] ?? '').toString();
+          final description = (item['description'] ?? '').toString();
+          return Card(
+            child: ListTile(
+              leading: const Icon(Icons.storefront_outlined),
+              title: Text(name),
+              subtitle: Text(
+                [version, description]
+                    .where((value) => value.isNotEmpty)
+                    .join(' · '),
+              ),
+              trailing: FilledButton(
+                onPressed: _busy ? null : () => _installStoreItem(item),
+                child: Text(context.tr.t('下载')),
+              ),
+            ),
+          );
+        },
+      ),
+    );
   }
 
   @override
@@ -254,62 +446,27 @@ class _CipPageState extends State<CipPage> {
           ),
         ],
       ),
-      body: cips.isEmpty
-          ? Center(child: Text(context.tr.t('暂无本地 CIP，点击右上角导入')))
-          : ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: cips.length,
-              itemBuilder: (context, index) {
-                final plugin = cips[index];
-                final enabled = plugin['enabled'] == true;
-                final uiResult = _service.uiResult(plugin['id'].toString());
-                return Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        ListTile(
-                          leading: const Icon(Icons.widgets_outlined),
-                          title: Text(plugin['name'].toString()),
-                          subtitle: Text(
-                            '${plugin['version']} · ${enabled ? context.tr.t('已启用') : context.tr.t('已停用')}',
-                          ),
-                          trailing: Wrap(
-                            spacing: 6,
-                            children: [
-                              Switch(
-                                value: enabled,
-                                onChanged: _busy
-                                    ? null
-                                    : (value) => _service.setEnabled(
-                                        plugin['id'].toString(),
-                                        value,
-                                      ),
-                              ),
-                              FilledButton(
-                                onPressed: _busy || !enabled
-                                    ? null
-                                    : () => _run(plugin),
-                                child: Text(context.tr.t('运行')),
-                              ),
-                            ],
-                          ),
-                        ),
-                        if (uiResult != null) ...[
-                          const Divider(),
-                          _buildUiNode(
-                            context,
-                            uiResult,
-                            plugin['id'].toString(),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                );
+      body: DefaultTabController(
+        length: 2,
+        child: Column(
+          children: [
+            TabBar(
+              tabs: [
+                Tab(text: context.tr.t('本地 CIP')),
+                Tab(text: context.tr.t('CIP 商店')),
+              ],
+              onTap: (index) {
+                if (index == 1 && _storeItems.isEmpty) _loadStore();
               },
             ),
+            Expanded(
+              child: TabBarView(
+                children: [_localTab(context, cips), _storeTab(context)],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

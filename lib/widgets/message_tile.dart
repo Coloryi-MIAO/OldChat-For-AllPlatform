@@ -617,8 +617,8 @@ class _MessageTileState extends State<MessageTile> {
   }
 
   Widget _buildForwardChatCard(Map<String, dynamic> forwardData) {
-    final title = forwardData['title'] ?? '聊天记录';
-    final items = forwardData['items'] as List? ?? [];
+    final title = forwardData['title'] ?? 'Chat history';
+    final items = forwardData['items'] as List? ?? const [];
     final count = items.length;
 
     return GestureDetector(
@@ -661,7 +661,7 @@ class _MessageTileState extends State<MessageTile> {
             if (items.isNotEmpty) ...[
               const SizedBox(height: 6),
               ...items.take(2).map((item) {
-                final fromName = item['from_name'] ?? '未知';
+                final fromName = item['from_name'] ?? item['from_uid'] ?? 'Unknown';
                 final text = item['text'] ?? '';
                 final type = item['type'] ?? 'text';
                 if (widget.message.burnAfterSeconds > 0 &&
@@ -762,7 +762,8 @@ class _MessageTileState extends State<MessageTile> {
                   separatorBuilder: (_, __) => const Divider(height: 4),
                   itemBuilder: (context, index) {
                     final item = items[index];
-                    final fromName = item['from_name'] ?? '未知';
+                    final fromName = item['from_name'] ?? item['from_uid'] ?? 'Unknown';
+                    final fromAvatar = item['from_avatar']?.toString() ?? '';
                     final text = item['text'] ?? '';
                     final type = item['type'] ?? 'text';
                     String displayText = text;
@@ -777,6 +778,17 @@ class _MessageTileState extends State<MessageTile> {
                     return Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        if (fromAvatar.isNotEmpty)
+                          ClipOval(
+                            child: CachedImage(
+                              resolveMediaUrl(fromAvatar),
+                              width: 22,
+                              height: 22,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                            ),
+                          ),
+                        if (fromAvatar.isNotEmpty) const SizedBox(width: 6),
                         Text(
                           '$fromName: ',
                           style: const TextStyle(

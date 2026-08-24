@@ -184,6 +184,26 @@ class _ChatPageState extends State<ChatPage>
         conversationType: target.type,
         conversationId: target.id,
         messageIds: ids,
+        items: ids
+            .map((id) => _messageMap[id])
+            .whereType<Message>()
+            .map((message) {
+              final profileName = message.fromUid == context.read<AuthService>().userId
+                  ? 'Me'
+                  : message.fromUid;
+              final parsed = MessageParser.parseMessageBody(message.body, message.msgType);
+              return <String, dynamic>{
+                'source_message_id': message.id,
+                'from_uid': message.fromUid,
+                'from_name': profileName,
+                'from_avatar': '',
+                'type': message.msgType,
+                'media_kind': parsed['media_kind'] ?? message.msgType,
+                'text': parsed['text'] ?? message.displayText,
+                'thumb_url': message.thumbUrl,
+              };
+            })
+            .toList(growable: false),
       );
       _clearMessageSelection();
       if (mounted) {
@@ -2506,12 +2526,11 @@ class _ChatPageState extends State<ChatPage>
             title: Text(AppLocalizations.current.t('发送剪贴板内容？')),
             content: Text(
               visibleNames.length == 1
-                  ? '检测到剪贴板中的${_mediaTypeForFile(visibleNames.first) == 'image'
-                        ? '图片'
-                        : _mediaTypeForFile(visibleNames.first) == 'video'
-                        ? '视频'
-                        : '文件'}：\n${visibleNames.first}'
-                  : '检测到剪贴板中的 ${visibleNames.length} 个文件：\n${visibleNames.take(8).join('\n')}${visibleNames.length > 8 ? '\n……' : ''}',
+                  ? context.tr.text('Clipboard detected ${visibleNames.first}', 'Clipboard detected ${visibleNames.first}')
+                  : context.tr.text(
+                      'Clipboard detected ${visibleNames.length} files:\n${visibleNames.take(8).join('\n')}${visibleNames.length > 8 ? '\n...' : ''}',
+                      'Clipboard detected ${visibleNames.length} files:\n${visibleNames.take(8).join('\n')}${visibleNames.length > 8 ? '\n...' : ''}',
+                    ),
             ),
             actions: [
               TextButton(

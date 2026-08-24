@@ -85,7 +85,7 @@ class _CheckinWallPageState extends State<CheckinWallPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            result['already_checked'] == true ? '今天已经签到过了' : '签到成功',
+            result['already_checked'] == true ? context.tr.text('今天已经签到过了', 'You have already checked in today') : context.tr.text('签到成功', 'Check-in successful'),
           ),
         ),
       );

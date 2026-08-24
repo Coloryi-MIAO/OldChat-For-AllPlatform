@@ -293,6 +293,7 @@ class _SettingsPageState extends State<SettingsPage> {
               value: theme.isPink,
               onChanged: (v) => theme.setPink(v),
             ),
+            _buildScaleSetting(theme, primary),
           ], 1),
           const SizedBox(height: 12),
           _animatedCategory(context.tr.t('通知'), Icons.notifications_none, [
@@ -1081,6 +1082,36 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
               style: const TextStyle(fontSize: 14),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildScaleSetting(AppThemeController theme, Color primary) {
+    final percent = (theme.scaleFactor * 100).round();
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.zoom_in, color: primary),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(context.tr.text('界面缩放', 'Interface scale')),
+              ),
+              Text('$percent%'),
+            ],
+          ),
+          Slider(
+            value: theme.scaleFactor,
+            min: 0.5,
+            max: 5.0,
+            divisions: 90,
+            label: '$percent%',
+            onChanged: (value) => theme.setScaleFactor(value),
           ),
         ],
       ),

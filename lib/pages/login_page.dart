@@ -464,12 +464,12 @@ class _LoginPageState extends State<LoginPage>
         ],
       ),
       body: SafeArea(
-        child: SingleChildScrollView(
-          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 420),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final compact = constraints.maxHeight < 720;
+            final card = Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 420),
               child: Container(
                 width: double.infinity,
                 margin: const EdgeInsets.symmetric(horizontal: 16),
@@ -531,12 +531,14 @@ class _LoginPageState extends State<LoginPage>
                       ],
                     ),
                     const SizedBox(height: 16),
-                    SizedBox(
-                      height: 380,
+                    Expanded(
                       child: TabBarView(
                         controller: _tabController,
                         children: [
-                          _buildLoginForm(),
+                          SingleChildScrollView(
+                            padding: const EdgeInsets.only(top: 12),
+                            child: _buildLoginForm(),
+                          ),
                           SingleChildScrollView(
                             padding: const EdgeInsets.only(top: 12),
                             child: _buildRegisterForm(),
@@ -547,8 +549,15 @@ class _LoginPageState extends State<LoginPage>
                   ],
                 ),
               ),
-            ),
-          ),
+            );
+            return compact
+                ? SingleChildScrollView(
+                    keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    child: card,
+                  )
+                : card;
+          },
         ),
       ),
     );

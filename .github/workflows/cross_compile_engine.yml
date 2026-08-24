@@ -1,4 +1,4 @@
-name: 构建 OldChat 跨平台引擎
+name: Build OldChat cross-platform engine
 
 on:
   push:
@@ -11,42 +11,40 @@ permissions:
   contents: read
 
 env:
-  FLUTTER_VERSION: '3.44.8'
+  FLUTTER_VERSION: '3.19.6'
 
 jobs:
   engine:
-    runs-on: windows-2025
+    runs-on: windows-2022
     steps:
-      - name: 检出代码
+      - name: Checkout
         uses: actions/checkout@v4
-
-      - name: 安装 Flutter
+      - name: Install Flutter
         uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           architecture: x64
           channel: stable
           cache: true
-
-      - name: 获取依赖
+      - name: Get dependencies
+        shell: pwsh
         run: flutter pub get
-
-      - name: 构建平台产物
-        shell: bash
+      - name: Analyze
+        shell: pwsh
+        run: flutter analyze lib test --no-fatal-infos --no-fatal-warnings
+      - name: Test
+        shell: pwsh
+        run: flutter test
+      - name: Build Windows engine
+        shell: pwsh
         run: flutter build windows --release
-
-      - name: 验证预期产物
-        shell: bash
+      - name: Verify build
+        shell: pwsh
         run: |
-          set -euo pipefail
-          test -d build/windows/x64/runner/Release
-
-      - name: 记录引擎结果
-        shell: bash
-        run: printf 'platform=windows\nflutter=%s\nrunner=windows-2025\narchitecture=x64\n' '${{ env.FLUTTER_VERSION }}' > engine-result.txt
-
-      - name: 上传引擎结果
+          if (-not (Test-Path -LiteralPath 'build/windows/x64/runner/Release')) { throw 'Windows release bundle was not produced' }
+      - name: Upload engine result
         uses: actions/upload-artifact@v4
         with:
-          name: OldChat 跨平台引擎 windows x64
-          path: engine-result.txt
+          name: OldChat-engine-windows-x64-${{ github.sha }}
+          path: build/windows/x64/runner/Release/**
+          if-no-files-found: error

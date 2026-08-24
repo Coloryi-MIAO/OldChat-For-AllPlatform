@@ -88,6 +88,11 @@ class ConversationTile extends StatelessWidget {
           ),
           subtitle: Row(
             children: [
+              if (conversation.type == 'group' && conversation.memberCount > 0)
+                Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: Text('${conversation.memberCount}人', style: TextStyle(fontSize: 11, color: Colors.grey[600])),
+                ),
               Expanded(child: Text(_previewText(), maxLines: 1, overflow: TextOverflow.ellipsis)),
               if (lastMessage != null) ...[
                 const SizedBox(width: 8),

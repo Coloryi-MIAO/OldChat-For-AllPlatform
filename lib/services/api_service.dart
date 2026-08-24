@@ -929,13 +929,13 @@ class ApiService {
     required String captchaCode,
     required String deviceId,
     required String deviceName,
-    String platform = 'windows',
+    String? platform,
     String appVersion = '1.4.5-beta.5+7',
     Map<String, dynamic>? captchaResult,
   }) async {
     try {
       final response = await _dio.post(
-        Constants.apiPath('/v1/auth/web/register'),
+        Constants.apiPath('/v1/auth/register'),
         data: {
           'email': email,
           'username': username,
@@ -943,8 +943,9 @@ class ApiService {
           'email_code': emailCode,
           'device_id': deviceId,
           'device_name': deviceName,
-          'platform': platform,
-          'app_version': appVersion,
+          'platform': platform ?? _clientPlatformName(),
+          'app_version': appVersion ?? await _appVersion(),
+          if (captchaResult != null) ..._geetestFields(captchaResult),
         },
       );
       if (response.statusCode == 200 || response.statusCode == 201) {
@@ -1028,7 +1029,7 @@ class ApiService {
       if (error is Map && error.containsKey('error')) {
         throw Exception(error['error']);
       }
-      throw Exception('鍙戦€侀獙璇佺爜澶辫触: ${e.message}');
+      throw Exception('发送验证码失败: ${e.message}');
     }
   }
 

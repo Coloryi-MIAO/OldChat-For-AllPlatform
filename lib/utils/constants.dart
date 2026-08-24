@@ -114,8 +114,10 @@ class Constants {
   static String get momentsPath => '/v2/moments/feed';
   static String get wsPath => '/v2/ws';
 
-  static String resolveMediaUrl(String raw) {
-    final value = raw.trim();
+  static String resolveMediaUrl(String? raw) {
+    final value = raw?.trim() ?? '';
+    if (value.isEmpty) return '';
+    if (value.startsWith('cip://')) return value;
     if (value.startsWith('channel-private:')) {
       return '$defaultBaseUrl/channel-media/${value.substring('channel-private:'.length)}';
     }
