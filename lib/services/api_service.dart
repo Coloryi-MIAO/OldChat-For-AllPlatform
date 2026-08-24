@@ -1319,7 +1319,7 @@ class ApiService {
   Future<List<Map<String, dynamic>>> getCipStore() async {
     try {
       final response = await _dio.get(
-        '/v1/cip/store',
+        '/v2/cip/store',
         options: Options(headers: {'Accept': 'application/json'}),
       );
       final value = _unwrapEnvelopeMap(response.data);
