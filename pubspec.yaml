@@ -1,7 +1,7 @@
-name: oldchatforallplatform
-description: OldChat For AllPlatform — cross-platform Flutter chat client.
+name: oldchatforwin7
+description: OldChat For win7
 publish_to: 'none'
-version: 1.4.8-beta.5+6
+version: 1.4.9-beta.9+8
 
 environment:
   sdk: ">=3.0.0 <4.0.0"

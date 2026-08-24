@@ -1493,12 +1493,18 @@ class _MessageTileState extends State<MessageTile> {
     final myAvatar = _myAvatarUrl != null ? resolveMediaUrl(_myAvatarUrl!) : '';
     final double maxBubbleWidth = MediaQuery.of(context).size.width * 0.3;
 
-    return GestureDetector(
-      onTap: widget.onTap,
-      onLongPress: widget.onLongPress,
-      onSecondaryTap: widget.onSecondaryTap,
-      behavior: HitTestBehavior.opaque,
-      child: Padding(
+    return Listener(
+      onPointerDown: (event) {
+        if (event.kind == PointerDeviceKind.mouse &&
+            event.buttons == kSecondaryMouseButton) {
+          widget.onSecondaryTap?.call();
+        }
+      },
+      child: GestureDetector(
+        onTap: widget.onTap,
+        onLongPress: widget.onLongPress,
+        behavior: HitTestBehavior.opaque,
+        child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
         child: Row(
           mainAxisAlignment: isMe
@@ -1664,6 +1670,7 @@ class _MessageTileState extends State<MessageTile> {
                 ),
               ),
           ],
+        ),
         ),
       ),
     );

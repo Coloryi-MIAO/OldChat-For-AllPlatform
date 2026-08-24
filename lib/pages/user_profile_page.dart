@@ -187,7 +187,7 @@ class _UserProfilePageState extends State<UserProfilePage> {
                         ),
                         // 右侧动态
                         Expanded(
-                          child: MomentsPage(uid: widget.uid),
+                          child: MomentsPage(uid: widget.uid, embedded: true),
                         ),
                       ],
                     ),
