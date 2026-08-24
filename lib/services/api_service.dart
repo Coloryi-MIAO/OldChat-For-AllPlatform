@@ -3202,10 +3202,6 @@ class ApiService {
           'content_text': text.trim(),
           'image_urls': urls,
         },
-        options: Options(headers: const {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json; charset=utf-8',
-        }),
       );
       return response.data is Map
           ? Map<String, dynamic>.from(response.data as Map)
