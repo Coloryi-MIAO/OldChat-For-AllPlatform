@@ -1240,7 +1240,7 @@ class PluginService extends ChangeNotifier {
     while (ls.next(tableIndex)) {
       final key = ls.isNumber(-2) ? ls.toInteger(-2) : (ls.toStr(-2) ?? '');
       final value = _luaValue(ls, -1, depth + 1);
-      entries[key] = value;
+      if (value != null) entries[key] = value;
       ls.pop(1);
     }
     ls.pop(1);
@@ -1485,17 +1485,13 @@ class PluginService extends ChangeNotifier {
       return 1;
     }
 
-    DartFunction widgetFactory(String type) {
-      return (LuaState ls) {
-        if (ls.getTop() > 0 && ls.isTable(1)) {
-          ls.pushValue(1);
-        } else {
-          ls.newTable();
-        }
-        ls.pushString(type);
-        ls.setField(-2, 'type');
-        return 1;
-      };
+    int widgetFactory(LuaState ls) {
+      if (ls.getTop() > 0 && ls.isTable(1)) {
+        ls.pushValue(1);
+      } else {
+        ls.newTable();
+      }
+      return 1;
     }
 
     int widgetResult(LuaState ls) {
