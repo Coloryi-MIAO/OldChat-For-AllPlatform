@@ -1516,7 +1516,7 @@ class PluginService extends ChangeNotifier {
       normalized['plugin_id'] = id;
       _uiResults[id] = normalized;
       notifyListeners();
-      ls.pushValue(-1);
+      ls.pushString(id);
       return 1;
     }
 
