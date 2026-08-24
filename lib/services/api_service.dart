@@ -3624,7 +3624,8 @@ class ApiService {
     if (!path.startsWith('/') || path.contains('..') || path.contains('://')) {
       throw Exception('Invalid API path');
     }
-    final response = await _dio.get(Constants.apiPath(path));
+    final v2Path = path.startsWith('/v2/') ? path : '/v2$path';
+    final response = await _v2Request('GET', v2Path);
     return response.data;
   }
 }

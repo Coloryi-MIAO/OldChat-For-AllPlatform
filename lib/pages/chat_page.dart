@@ -2067,28 +2067,12 @@ class _ChatPageState extends State<ChatPage>
             contentPadding: EdgeInsets.zero,
           ),
         ),
-        PopupMenuItem<String>(
-          value: 'mute',
-          child: ListTile(
-            leading: Icon(
-              _conversationMuted
-                  ? Icons.notifications_active_outlined
-                  : Icons.notifications_off_outlined,
-            ),
-            title: Text(
-              AppLocalizations.current.t(_conversationMuted ? '取消免打扰' : '免打扰'),
-            ),
-            contentPadding: EdgeInsets.zero,
-          ),
-        ),
       ],
     ).then((value) {
       if (value == 'bottom') {
         unawaited(_scheduleScrollToBottom());
       } else if (value == 'refresh') {
         unawaited(_refreshConversation());
-      } else if (value == 'mute') {
-        unawaited(_toggleConversationMute());
       }
     });
   }
@@ -3019,9 +3003,6 @@ class _ChatPageState extends State<ChatPage>
                       case 'refresh':
                         _refreshConversation();
                         break;
-                      case 'mute':
-                        _toggleConversationMute();
-                        break;
                       case 'bottom':
                         _scrollToBottom();
                         break;
@@ -3055,14 +3036,6 @@ class _ChatPageState extends State<ChatPage>
                     PopupMenuItem(
                       value: 'refresh',
                       child: Text(AppLocalizations.current.t('刷新消息')),
-                    ),
-                    PopupMenuItem(
-                      value: 'mute',
-                      child: Text(
-                        AppLocalizations.current.t(
-                          _conversationMuted ? '取消免打扰' : '免打扰',
-                        ),
-                      ),
                     ),
                     PopupMenuItem(
                       value: 'bottom',
@@ -3118,9 +3091,6 @@ class _ChatPageState extends State<ChatPage>
                 case 'refresh':
                   _refreshConversation();
                   break;
-                case 'mute':
-                  _toggleConversationMute();
-                  break;
                 case 'bottom':
                   _scrollToBottom();
                   break;
@@ -3146,14 +3116,6 @@ class _ChatPageState extends State<ChatPage>
               PopupMenuItem(
                 value: 'refresh',
                 child: Text(AppLocalizations.current.t('刷新消息')),
-              ),
-              PopupMenuItem(
-                value: 'mute',
-                child: Text(
-                  AppLocalizations.current.t(
-                    _conversationMuted ? '取消免打扰' : '免打扰',
-                  ),
-                ),
               ),
               PopupMenuItem(
                 value: 'bottom',
