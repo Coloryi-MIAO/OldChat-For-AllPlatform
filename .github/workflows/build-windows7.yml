@@ -40,7 +40,7 @@ jobs:
 
       - name: Install dependencies
         shell: pwsh
-        run: flutter pub get
+        run: flutter pub get --enforce-lockfile
 
       - name: Analyze
         shell: pwsh
