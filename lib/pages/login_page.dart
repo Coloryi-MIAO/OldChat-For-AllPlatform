@@ -470,7 +470,7 @@ class _LoginPageState extends State<LoginPage>
             final card = Center(
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 420),
-              child: Container(
+                child: Container(
                 width: double.infinity,
                 margin: const EdgeInsets.symmetric(horizontal: 16),
                 padding: const EdgeInsets.all(24),
