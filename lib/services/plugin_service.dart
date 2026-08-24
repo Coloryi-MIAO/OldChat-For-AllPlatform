@@ -1240,7 +1240,7 @@ class PluginService extends ChangeNotifier {
     while (ls.next(tableIndex)) {
       final key = ls.isNumber(-2) ? ls.toInteger(-2) : (ls.toStr(-2) ?? '');
       final value = _luaValue(ls, -1, depth + 1);
-      entries[key] = value;
+      if (value != null) entries[key] = value;
       ls.pop(1);
     }
     ls.pop(1);
