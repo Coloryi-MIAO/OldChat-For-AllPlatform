@@ -40,6 +40,7 @@ class _ToolsHubPageState extends State<ToolsHubPage> {
     _ToolEntry('scratch', '每日刮刮乐', Icons.local_activity_outlined, '/scratch'),
     _ToolEntry('plugins', '插件', Icons.extension_outlined, '/plugins'),
     _ToolEntry('cip', 'CIP 小程序', Icons.widgets_outlined, '/cip'),
+    _ToolEntry('music', '音乐广场', Icons.music_note_outlined, '/music_plaza'),
     _ToolEntry(
       'friend_requests',
       '好友申请',
