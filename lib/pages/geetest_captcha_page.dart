@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../services/app_localizations.dart';
 import '../utils/user_error.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:webview_windows/webview_windows.dart';
 import 'package:webview_flutter/webview_flutter.dart' as flutter_webview;
 
@@ -33,6 +34,12 @@ class _GeeTestCaptchaPageState extends State<GeeTestCaptchaPage> {
 
   Future<void> _initialize() async {
     try {
+      if (kIsWeb) {
+        final uri = Uri.tryParse(widget.pageUrl);
+        if (uri != null) await launchUrl(uri, webOnlyWindowName: '_blank');
+        if (mounted) setState(() => _error = AppLocalizations.current.t('验证页面已在新窗口打开，完成后返回注册页'));
+        return;
+      }
       if (!kIsWeb && defaultTargetPlatform != TargetPlatform.windows &&
           defaultTargetPlatform != TargetPlatform.macOS &&
           defaultTargetPlatform != TargetPlatform.iOS &&

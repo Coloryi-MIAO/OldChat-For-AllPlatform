@@ -268,7 +268,7 @@ class WsSessionService {
     final existing = storage.getString('device_id')?.trim();
     if (existing != null && existing.isNotEmpty) return existing;
     final id =
-        'flutter-${DateTime.now().millisecondsSinceEpoch}-${Random.secure().nextInt(1 << 32)}';
+        'flutter-${DateTime.now().millisecondsSinceEpoch}-${Random.secure().nextInt(0x7fffffff)}';
     await storage.setString('device_id', id);
     return id;
   }

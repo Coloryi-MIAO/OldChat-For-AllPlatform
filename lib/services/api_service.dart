@@ -24,6 +24,11 @@ import 'ws_session_service.dart';
 class ApiService {
   static final Map<String, DateTime> _v2CircuitOpenUntil = <String, DateTime>{};
   static const Duration _v2CircuitDuration = Duration(minutes: 2);
+  static const bool _v1FallbackEnabled = bool.fromEnvironment(
+    'OLDCHAT_ENABLE_V1_FALLBACK',
+    defaultValue: false,
+  );
+  static const String _serverGlitchMessage = '服务器开小差了';
 
   bool _v2CircuitOpen(String path) {
     final until = _v2CircuitOpenUntil[path];
@@ -67,11 +72,20 @@ class ApiService {
 
     final fallbackPath = _v1FallbackPath(v2Path);
     final endpointKey = v2Path.split('?').first;
-    if (_v2CircuitOpen(endpointKey)) {
-      if (fallbackPath == null) {
-        throw StateError('v2 endpoint unavailable: $v2Path');
+    if (data is FormData) {
+      try {
+        return await sendDirect(v2Path, v2: true);
+      } on DioException {
+        if (!_v1FallbackEnabled || fallbackPath == null) rethrow;
+        _openV2Circuit(endpointKey);
+        return sendDirect(fallbackPath, v2: false);
       }
-      return sendDirect(fallbackPath, v2: false);
+    }
+    if (_v2CircuitOpen(endpointKey)) {
+      if (fallbackPath != null && _v1FallbackEnabled) {
+        return sendDirect(fallbackPath, v2: false);
+      }
+      throw StateError('v2 endpoint unavailable: $v2Path');
     }
 
     try {
@@ -117,13 +131,13 @@ class ApiService {
           if (!_hasV2GatewayError(retry.data)) return retry;
         } catch (_) {}
       }
-      if ((canFallback || gatewayCanFallback) && fallbackPath != null) {
+      if (_v1FallbackEnabled && (canFallback || gatewayCanFallback) && fallbackPath != null) {
         _openV2Circuit(endpointKey);
         return sendDirect(fallbackPath, v2: false);
       }
       rethrow;
     } catch (_) {
-      if (fallbackPath == null) rethrow;
+      if (!_v1FallbackEnabled || fallbackPath == null) rethrow;
       _openV2Circuit(endpointKey);
       return sendDirect(fallbackPath, v2: false);
     }
@@ -683,8 +697,16 @@ class ApiService {
     return {'messages': const <dynamic>[]};
   }
 
+  int? _effectiveErrorStatus(DioException error) {
+    final direct = error.response?.statusCode;
+    final data = error.response?.data;
+    final text = '${error.error ?? ''} ${data ?? ''}';
+    final match = RegExp(r'(?:gateway\s+code|status|code)\s*[:=]?\s*(\d{3})', caseSensitive: false).firstMatch(text);
+    return match == null ? direct : int.tryParse(match.group(1)!);
+  }
+
   Exception _apiError(String prefix, DioException error) {
-    final status = error.response?.statusCode;
+    final status = _effectiveErrorStatus(error);
     final data = error.response?.data;
     var code = '';
     var detail = '';
@@ -704,7 +726,7 @@ class ApiService {
       return Exception('$prefix$statusText: 请求的接口或资源不存在${code.isEmpty ? '' : ' [$code]'}');
     }
     if (status == 400) {
-      return Exception('$prefix$statusText: ${detail.isEmpty ? '请求参数无效' : detail}${code.isEmpty ? '' : ' [$code]'}');
+      return Exception('$prefix$statusText: $_serverGlitchMessage');
     }
     if (detail.isNotEmpty) return Exception('$prefix$statusText: $detail${code.isEmpty ? '' : ' [$code]'}');
     return Exception('$prefix$statusText: ${error.message ?? '网络错误'}');
@@ -907,13 +929,13 @@ class ApiService {
     required String captchaCode,
     required String deviceId,
     required String deviceName,
-    String platform = 'windows',
+    String? platform,
     String appVersion = '1.4.5-beta.5+7',
     Map<String, dynamic>? captchaResult,
   }) async {
     try {
       final response = await _dio.post(
-        Constants.apiPath('/v1/auth/web/register'),
+        Constants.apiPath('/v1/auth/register'),
         data: {
           'email': email,
           'username': username,
@@ -921,8 +943,9 @@ class ApiService {
           'email_code': emailCode,
           'device_id': deviceId,
           'device_name': deviceName,
-          'platform': platform,
-          'app_version': appVersion,
+          'platform': platform ?? _clientPlatformName(),
+          'app_version': appVersion ?? await _appVersion(),
+          if (captchaResult != null) ..._geetestFields(captchaResult),
         },
       );
       if (response.statusCode == 200 || response.statusCode == 201) {
@@ -935,7 +958,7 @@ class ApiService {
       if (error is Map && error.containsKey('error')) {
         throw Exception(error['error']);
       }
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('请求失败', e);
     }
   }
 
@@ -964,7 +987,7 @@ class ApiService {
     try {
       await _dio.post(Constants.apiPath('/v1/auth/logout'));
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('请求失败', e);
     }
   }
 
@@ -1006,7 +1029,7 @@ class ApiService {
       if (error is Map && error.containsKey('error')) {
         throw Exception(error['error']);
       }
-      throw Exception('鍙戦€侀獙璇佺爜澶辫触: ${e.message}');
+      throw Exception('发送验证码失败: ${e.message}');
     }
   }
 
@@ -1022,7 +1045,7 @@ class ApiService {
       );
       return response.data;
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('请求失败', e);
     }
   }
 
@@ -1119,7 +1142,7 @@ class ApiService {
         },
       );
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('请求失败', e);
     }
   }
 
@@ -1131,7 +1154,7 @@ class ApiService {
         data: {'uid': uid, 'friend_uid': uid, 'friend_ncuid': uid},
       );
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('请求失败', e);
     }
   }
 
@@ -1303,7 +1326,7 @@ class ApiService {
   Future<List<Map<String, dynamic>>> getCipStore() async {
     try {
       final response = await _dio.get(
-        Constants.apiPath('/v1/cip/store'),
+        '/v1/cip/store',
         options: Options(headers: {'Accept': 'application/json'}),
       );
       final value = _unwrapEnvelopeMap(response.data);
@@ -1453,7 +1476,7 @@ class ApiService {
         data: {'group_id': groupId.trim(), 'user_uid': uid.trim()},
       );
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('请求失败', e);
     }
   }
 
@@ -1465,7 +1488,7 @@ class ApiService {
         data: {'group_id': groupId, 'uid': uid, 'is_admin': isAdmin},
       );
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('请求失败', e);
     }
   }
 
@@ -1473,7 +1496,7 @@ class ApiService {
     try {
       await _v2Request('POST', '/v2/groups/avatar', data: formData);
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('请求失败', e);
     }
   }
 
@@ -1485,7 +1508,7 @@ class ApiService {
         data: {'group_id': groupId, 'uid': uid},
       );
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('请求失败', e);
     }
   }
 
@@ -1497,7 +1520,7 @@ class ApiService {
         data: {'group_id': groupId, 'name': name},
       );
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('请求失败', e);
     }
   }
 
@@ -1512,7 +1535,7 @@ class ApiService {
         data: {'group_id': groupId, ...settings},
       );
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('请求失败', e);
     }
   }
 
@@ -1524,7 +1547,7 @@ class ApiService {
         data: {'group_id': groupId, 'announcement': announcement},
       );
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('请求失败', e);
     }
   }
 
@@ -1539,7 +1562,7 @@ class ApiService {
         data: {'group_id': groupId, 'announcement_id': announcementId},
       );
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('请求失败', e);
     }
   }
 
@@ -1630,7 +1653,7 @@ class ApiService {
     try {
       await _v2Request('POST', '/v2/groups/leave', data: {'group_id': groupId});
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('请求失败', e);
     }
   }
 
@@ -1642,7 +1665,7 @@ class ApiService {
         data: {'group_id': groupId},
       );
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('请求失败', e);
     }
   }
 
@@ -1729,8 +1752,9 @@ class ApiService {
             if (afterCreatedAt != null) 'after_created_at': afterCreatedAt,
             if (afterId != null && afterId.isNotEmpty) 'after_id': afterId,
           };
-          final response = await _dio.get(
-            Constants.apiPath('/v1/direct/messages/v2'),
+          final response = await _v2Request(
+            'GET',
+            Constants.directMessagesPath,
             queryParameters: fallbackQuery,
           );
           final data = _unwrapEnvelopeMap(response.data);
@@ -1769,8 +1793,8 @@ class ApiService {
     String query,
   ) async {
     try {
-      final response = await _dio.get(
-        Constants.apiPath('/v1/direct/messages/search'),
+      final response = await _v2Request('GET',
+        '/v2/direct/messages/search',
         queryParameters: {'with_uid': withUid, 'keyword': query, 'limit': 100},
       );
       return _normalizeSearchResponse(response.data);
@@ -1861,12 +1885,11 @@ class ApiService {
     String type = 'direct',
   }) async {
     try {
-      await _dio.post(
-        Constants.apiPath('/v1/chats/typing'),
+      await _v2Request('POST', '/v2/chats/typing',
         data: {'target_id': targetId, 'typing': typing, 'type': type},
       );
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('请求失败', e);
     }
   }
 
@@ -1897,20 +1920,19 @@ class ApiService {
 
   Future<void> openBurnMessage(String messageId) async {
     try {
-      await _dio.post(
-        Constants.apiPath('/v1/direct/burn/open'),
+      await _v2Request('POST', '/v2/direct/burn/open',
         data: {'message_id': messageId},
       );
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('请求失败', e);
     }
   }
 
   Future<void> recallDirectMessage(String messageId) async {
     try {
-      await _dio.delete(Constants.apiPath('/v1/direct/messages/$messageId'));
+      await _v2Request('DELETE', '/v2/direct/messages/$messageId');
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('请求失败', e);
     }
   }
 
@@ -2017,7 +2039,7 @@ class ApiService {
         'server_group_seq': data['server_group_seq'],
       };
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('请求失败', e);
     }
   }
 
@@ -2026,8 +2048,8 @@ class ApiService {
     String query,
   ) async {
     try {
-      final response = await _dio.get(
-        Constants.apiPath('/v1/groups/messages/search'),
+      final response = await _v2Request('GET',
+        '/v2/groups/messages/search',
         queryParameters: {'group_id': groupId, 'keyword': query, 'limit': 100},
       );
       return _normalizeSearchResponse(response.data);
@@ -2067,18 +2089,17 @@ class ApiService {
         throw Exception('Send group message failed');
       }
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('请求失败', e);
     }
   }
 
   Future<void> sendGroupTyping(String groupId, bool typing) async {
     try {
-      await _dio.post(
-        Constants.apiPath('/v1/groups/typing'),
+      await _v2Request('POST', '/v2/groups/typing',
         data: {'group_id': groupId, 'typing': typing},
       );
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('请求失败', e);
     }
   }
 
@@ -2109,20 +2130,19 @@ class ApiService {
 
   Future<void> openGroupBurnMessage(String messageId) async {
     try {
-      await _dio.post(
-        Constants.apiPath('/v1/groups/burn/open'),
+      await _v2Request('POST', '/v2/groups/burn/open',
         data: {'message_id': messageId},
       );
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('请求失败', e);
     }
   }
 
   Future<void> recallGroupMessage(String messageId) async {
     try {
-      await _dio.delete(Constants.apiPath('/v1/groups/messages/$messageId'));
+      await _v2Request('DELETE', '/v2/groups/messages/$messageId');
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('请求失败', e);
     }
   }
 
@@ -2130,8 +2150,8 @@ class ApiService {
 
   Future<Map<String, dynamic>> getUserProfile(String uid) async {
     try {
-      final response = await _dio.get(
-        Constants.apiPath('/v1/users/profile'),
+      final response = await _v2Request('GET',
+        '/v2/users/profile',
         queryParameters: {'uid': uid.trim()},
       );
       final raw = response.data;
@@ -2146,16 +2166,16 @@ class ApiService {
 
   Future<Map<String, dynamic>> getMyProfile() async {
     try {
-      final response = await _dio.get(Constants.apiPath('/v1/me'));
+      final response = await _v2Request('GET', '/v2/me/profile');
       return response.data;
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('请求失败', e);
     }
   }
 
   Future<void> updateProfile(Map<String, dynamic> data) async {
     try {
-      await _dio.post(Constants.apiPath('/v1/me/profile'), data: data);
+      await _v2Request('POST', '/v2/me/profile', data: data);
     } on DioException catch (e) {
       throw _apiError('更新个人资料失败', e);
     }
@@ -2163,8 +2183,7 @@ class ApiService {
 
   Future<void> updateUid(String newUid) async {
     try {
-      await _dio.post(
-        Constants.apiPath('/v1/me/uid'),
+      await _v2Request('POST', '/v2/me/uid',
         data: {'uid': newUid.trim()},
       );
     } on DioException catch (e) {
@@ -2174,36 +2193,35 @@ class ApiService {
 
   Future<void> updatePassword(String oldPassword, String newPassword) async {
     try {
-      await _dio.post(
-        Constants.apiPath('/v1/me/password'),
+      await _v2Request('POST', '/v2/me/password',
         data: {'old_password': oldPassword, 'new_password': newPassword},
       );
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('请求失败', e);
     }
   }
 
   Future<void> updateAvatar(FormData formData) async {
     try {
-      await _dio.post(Constants.apiPath('/v1/me/avatar'), data: formData);
+      await _v2Request('POST', '/v2/me/avatar', data: formData);
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('请求失败', e);
     }
   }
 
   Future<void> updateCover(FormData formData) async {
     try {
-      await _dio.post(Constants.apiPath('/v1/me/cover'), data: formData);
+      await _v2Request('POST', '/v2/me/cover', data: formData);
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('请求失败', e);
     }
   }
 
   Future<void> deleteAccount() async {
     try {
-      await _dio.post(Constants.apiPath('/v1/me/delete'));
+      await _v2Request('POST', '/v2/me/delete');
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('请求失败', e);
     }
   }
 
@@ -2227,8 +2245,7 @@ class ApiService {
         if (coverUrl != null && coverUrl.isNotEmpty) 'cover_url': coverUrl,
       };
 
-      final response = await _dio.post(
-        Constants.apiPath('/v1/redpackets/send'),
+      final response = await _v2Request('POST', '/v2/redpackets/send',
         data: payload,
       );
       if (response.statusCode == 201 || response.statusCode == 200) {
@@ -2260,7 +2277,7 @@ class ApiService {
       if (error is String && error.isNotEmpty) {
         throw Exception(error);
       }
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('请求失败', e);
     }
   }
 
@@ -2281,12 +2298,12 @@ class ApiService {
 
   Future<Map<String, dynamic>> getRedPacketInfo(String packetId) async {
     try {
-      final response = await _dio.get(
-        Constants.apiPath('/v1/redpackets/$packetId'),
+      final response = await _v2Request('GET',
+        '/v2/redpackets/$packetId',
       );
       return response.data;
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('请求失败', e);
     }
   }
 
@@ -2294,29 +2311,23 @@ class ApiService {
 
   Future<Map<String, dynamic>> uploadFile(FormData formData) async {
     try {
-      final response = await _dio.post(
-        Constants.apiPath('/v1/media'),
-        data: formData,
-      );
+      final response = await _v2Request('POST', '/v2/media', data: formData);
       if (response.statusCode == 200 || response.statusCode == 201) {
         return response.data;
       } else {
         throw Exception('Upload failed');
       }
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('请求失败', e);
     }
   }
 
   Future<Map<String, dynamic>> voiceASR(FormData formData) async {
     try {
-      final response = await _dio.post(
-        Constants.apiPath('/v1/voice/asr'),
-        data: formData,
-      );
+      final response = await _v2Request('POST', '/v2/voice/asr', data: formData);
       return response.data;
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('请求失败', e);
     }
   }
 
@@ -2337,8 +2348,7 @@ class ApiService {
               .where((url) => url.isNotEmpty)
               .toSet()
               .toList();
-      final response = await _dio.post(
-        Constants.apiPath('/v1/moments'),
+      final response = await _v2Request('POST', '/v2/moments',
         data: {
           'body': body,
           if (urls.length == 1) 'image_url': urls.first,
@@ -2349,7 +2359,7 @@ class ApiService {
       );
       return response.data;
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('请求失败', e);
     }
   }
 
@@ -2358,7 +2368,8 @@ class ApiService {
     int offset = 0,
   }) async {
     try {
-      final response = await _dio.get(
+      final response = await _v2Request(
+        'GET',
         Constants.momentsPath,
         queryParameters: {'limit': limit, 'offset': offset},
       );
@@ -2368,7 +2379,7 @@ class ApiService {
         throw Exception('Failed to get moments');
       }
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('请求失败', e);
     }
   }
 
@@ -2378,8 +2389,8 @@ class ApiService {
     int limit = 20,
   }) async {
     try {
-      final response = await _dio.get(
-        Constants.apiPath('/v1/moments/user'),
+      final response = await _v2Request('GET',
+        '/v2/moments/user',
         queryParameters: {'uid': uid, 'limit': limit, 'offset': offset},
       );
       if (response.statusCode == 200) {
@@ -2388,40 +2399,37 @@ class ApiService {
         throw Exception('Failed to get user moments');
       }
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('请求失败', e);
     }
   }
 
   Future<void> likeMoment(String momentId) async {
     try {
-      await _dio.post(
-        Constants.apiPath('/v1/moments/like'),
+      await _v2Request('POST', '/v2/moments/like',
         data: {'moment_id': momentId},
       );
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('请求失败', e);
     }
   }
 
   Future<void> unlikeMoment(String momentId) async {
     try {
-      await _dio.post(
-        Constants.apiPath('/v1/moments/unlike'),
+      await _v2Request('POST', '/v2/moments/unlike',
         data: {'moment_id': momentId},
       );
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('请求失败', e);
     }
   }
 
   Future<void> deleteMoment(String momentId) async {
     try {
-      await _dio.post(
-        Constants.apiPath('/v1/moments/delete'),
+      await _v2Request('POST', '/v2/moments/delete',
         data: {'moment_id': momentId},
       );
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('请求失败', e);
     }
   }
 
@@ -2430,24 +2438,22 @@ class ApiService {
     String text,
   ) async {
     try {
-      final response = await _dio.post(
-        Constants.apiPath('/v1/moments/comment'),
+      final response = await _v2Request('POST', '/v2/moments/comment',
         data: {'moment_id': momentId, 'body': text},
       );
       return response.data;
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('请求失败', e);
     }
   }
 
   Future<void> deleteMomentComment(String commentId) async {
     try {
-      await _dio.post(
-        Constants.apiPath('/v1/moments/comment/delete'),
+      await _v2Request('POST', '/v2/moments/comment/delete',
         data: {'comment_id': commentId},
       );
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('请求失败', e);
     }
   }
 
@@ -2457,8 +2463,8 @@ class ApiService {
     int offset = 0,
   }) async {
     try {
-      final response = await _dio.get(
-        Constants.apiPath('/v1/moments/comments'),
+      final response = await _v2Request('GET',
+        '/v2/moments/comments',
         queryParameters: {
           'moment_id': momentId,
           'limit': limit,
@@ -2467,7 +2473,7 @@ class ApiService {
       );
       return response.data;
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('请求失败', e);
     }
   }
 
@@ -2482,8 +2488,8 @@ class ApiService {
     int offset = 0,
   }) async {
     try {
-      final response = await _dio.get(
-        Constants.apiPath('/v1/public-court/cases'),
+      final response = await _v2Request('GET',
+        '/v2/public-court/cases',
         queryParameters: {'limit': limit, 'offset': offset, 'status': 'all'},
       );
       final value = _unwrapEnvelopeMap(response.data);
@@ -2506,9 +2512,7 @@ class ApiService {
 
   Future<Map<String, dynamic>> getPublicCourtCase(String caseId) async {
     try {
-      final response = await _dio.get(
-        Constants.apiPath('/v1/public-court/cases/$caseId'),
-      );
+      final response = await _v2Request('GET', '/v2/public-court/cases/$caseId');
       return _unwrapEnvelopeMap(response.data);
     } on DioException catch (e) {
       throw _apiError('加载公开案件详情失败', e);
@@ -2529,17 +2533,13 @@ class ApiService {
       if (normalizedCaseId.isEmpty || normalizedVote.isEmpty || normalizedReason.isEmpty) {
         throw Exception('投票参数不能为空');
       }
-      final response = await _dio.post(
-        Constants.apiPath('/v1/public-court/cases/${Uri.encodeComponent(normalizedCaseId)}/vote'),
+      final response = await _v2Request(
+        'POST', '/v2/public-court/cases/${Uri.encodeComponent(normalizedCaseId)}/vote',
         data: {
           'vote': normalizedVote,
           'reason': normalizedReason,
           'evidence': normalizedEvidence,
         },
-        options: Options(headers: const {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json; charset=utf-8',
-        }),
       );
       return _unwrapEnvelopeMap(response.data);
     } on DioException catch (e) {
@@ -2552,8 +2552,7 @@ class ApiService {
     String text,
   ) async {
     try {
-      final response = await _dio.post(
-        Constants.apiPath('/v1/public-court/cases/$caseId/statement'),
+      final response = await _v2Request('POST', '/v2/public-court/cases/$caseId/statement',
         data: {'reason': text, 'evidence': ''},
       );
       return _unwrapEnvelopeMap(response.data);
@@ -2564,9 +2563,7 @@ class ApiService {
 
   Future<Map<String, dynamic>> getPublicCourtVotes(String caseId) async {
     try {
-      final response = await _dio.get(
-        Constants.apiPath('/v1/public-court/cases/$caseId/votes'),
-      );
+      final response = await _v2Request('GET', '/v2/public-court/cases/$caseId/votes');
       final value = _unwrapEnvelopeMap(response.data);
       final nested = value['data'];
       if (nested is Map) value.addAll(Map<String, dynamic>.from(nested));
@@ -2578,9 +2575,7 @@ class ApiService {
 
   Future<Map<String, dynamic>> getPublicCourtDiscussions(String caseId) async {
     try {
-      final response = await _dio.get(
-        Constants.apiPath('/v1/public-court/cases/$caseId/discussions'),
-      );
+      final response = await _v2Request('GET', '/v2/public-court/cases/$caseId/discussions');
       final value = _unwrapEnvelopeMap(response.data);
       final items = _nestedList(value, const [
         'discussions',
@@ -2602,8 +2597,7 @@ class ApiService {
     String text,
   ) async {
     try {
-      final response = await _dio.post(
-        Constants.apiPath('/v1/public-court/cases/$caseId/discussion'),
+      final response = await _v2Request('POST', '/v2/public-court/cases/$caseId/discussion',
         data: {'body': text},
       );
       return _asMap(response.data);
@@ -2614,9 +2608,7 @@ class ApiService {
 
   Future<void> withdrawPublicCourtStatement(String caseId) async {
     try {
-      await _dio.post(
-        Constants.apiPath('/v1/public-court/cases/$caseId/withdraw'),
-      );
+      await _v2Request('POST', '/v2/public-court/cases/$caseId/withdraw');
     } on DioException catch (e) {
       throw _apiError('撤回案件陈述失败', e);
     }
@@ -2630,9 +2622,10 @@ class ApiService {
     String? endpoint,
     String? query,
   }) async {
-    final path = endpoint ?? Constants.apiPath('/v1/music/plaza');
+    final path = endpoint ?? '/v2/music/plaza';
     try {
-      final response = await _dio.get(
+      final response = await _v2Request(
+        'GET',
         path,
         queryParameters: {
           'limit': limit,
@@ -2642,30 +2635,27 @@ class ApiService {
       );
       return response.data;
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('请求失败', e);
     }
   }
 
   Future<Map<String, dynamic>> getMyMusic() async {
     try {
-      final response = await _dio.get(
-        Constants.apiPath('/v1/music/plaza/mine'),
-      );
+      final response = await _v2Request('GET', '/v2/music/plaza/mine');
       return response.data;
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('请求失败', e);
     }
   }
 
   Future<Map<String, dynamic>> uploadMusic(FormData formData) async {
     try {
-      final response = await _dio.post(
-        Constants.apiPath('/v1/music/plaza/upload'),
+      final response = await _v2Request('POST', '/v2/music/plaza/upload',
         data: formData,
       );
       return response.data;
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('请求失败', e);
     }
   }
 
@@ -2674,13 +2664,12 @@ class ApiService {
     Map<String, dynamic> data,
   ) async {
     try {
-      final response = await _dio.post(
-        Constants.apiPath('/v1/music/plaza/update'),
+      final response = await _v2Request('POST', '/v2/music/plaza/update',
         data: {'music_id': musicId, ...data},
       );
       return response.data;
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('请求失败', e);
     }
   }
 
@@ -2698,8 +2687,7 @@ class ApiService {
 
   Future<Map<String, dynamic>> getMusicLyrics(String musicId) async {
     try {
-      final response = await _dio.get(
-        Constants.apiPath('/v1/music/plaza/lyrics'),
+      final response = await _v2Request('GET', '/v2/music/plaza/lyrics',
         queryParameters: {'item_id': musicId},
       );
       final data = response.data;
@@ -2708,14 +2696,13 @@ class ApiService {
       if (e.response?.statusCode == 404 ||
           e.response?.statusCode == 405 ||
           e.response?.statusCode == 400) {
-        final response = await _dio.post(
-          Constants.apiPath('/v1/music/plaza/lyrics'),
+        final response = await _v2Request('POST', '/v2/music/plaza/lyrics',
           data: {'music_id': musicId},
         );
         final data = response.data;
         return data is Map ? Map<String, dynamic>.from(data) : {'data': data};
       }
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('请求失败', e);
     }
   }
 
@@ -2727,74 +2714,68 @@ class ApiService {
       );
       return response.data ?? '';
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('请求失败', e);
     }
   }
 
   Future<void> deleteMusic(String musicId) async {
     try {
-      await _dio.post(
-        Constants.apiPath('/v1/music/plaza/delete'),
+      await _v2Request('POST', '/v2/music/plaza/delete',
         data: {'music_id': musicId},
       );
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('请求失败', e);
     }
   }
 
   Future<void> deleteMultipleMusic(List<String> musicIds) async {
     try {
-      await _dio.post(
-        Constants.apiPath('/v1/music/plaza/mine/delete-batch'),
+      await _v2Request('POST', '/v2/music/plaza/mine/delete-batch',
         data: {'music_ids': musicIds},
       );
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('请求失败', e);
     }
   }
 
   Future<void> likeMusic(String musicId) async {
     try {
-      await _dio.post(
-        Constants.apiPath('/v1/music/plaza/like'),
+      await _v2Request('POST', '/v2/music/plaza/like',
         data: {'music_id': musicId},
       );
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('请求失败', e);
     }
   }
 
   Future<void> unlikeMusic(String musicId) async {
     try {
-      await _dio.post(
-        Constants.apiPath('/v1/music/plaza/unlike'),
+      await _v2Request('POST', '/v2/music/plaza/unlike',
         data: {'music_id': musicId},
       );
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('请求失败', e);
     }
   }
 
   Future<Map<String, dynamic>> commentMusic(String musicId, String text) async {
     try {
-      final response = await _dio.post(
-        Constants.apiPath('/v1/music/plaza/comment'),
+      final response = await _v2Request('POST', '/v2/music/plaza/comment',
         data: {'music_id': musicId, 'text': text},
       );
       return response.data;
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('请求失败', e);
     }
   }
 
   Future<void> deleteMusicComment(String commentId) async {
     try {
-      await _dio.post(
-        Constants.apiPath('/v1/music/plaza/comment/delete'),
+      await _v2Request('POST', '/v2/music/plaza/comment/delete',
         data: {'comment_id': commentId},
       );
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('请求失败', e);
     }
   }
 
@@ -2804,8 +2785,7 @@ class ApiService {
     int offset = 0,
   }) async {
     try {
-      final response = await _dio.get(
-        Constants.apiPath('/v1/music/plaza/comments'),
+      final response = await _v2Request('GET', '/v2/music/plaza/comments',
         queryParameters: {
           'music_id': musicId,
           'limit': limit,
@@ -2814,29 +2794,27 @@ class ApiService {
       );
       return response.data;
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('请求失败', e);
     }
   }
 
   Future<Map<String, dynamic>> getMusicRanking() async {
     try {
-      final response = await _dio.get(
-        Constants.apiPath('/v1/music/plaza/ranking'),
+      final response = await _v2Request('GET', '/v2/music/plaza/ranking',
       );
       return response.data;
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('请求失败', e);
     }
   }
 
   Future<void> playMusic(String musicId) async {
     try {
-      await _dio.post(
-        Constants.apiPath('/v1/music/plaza/play'),
+      await _v2Request('POST', '/v2/music/plaza/play',
         data: {'music_id': musicId},
       );
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('请求失败', e);
     }
   }
 
@@ -2847,59 +2825,54 @@ class ApiService {
     int offset = 0,
   }) async {
     try {
-      final response = await _dio.get(
-        Constants.apiPath('/v1/emoji/plaza'),
+      final response = await _v2Request('GET', '/v2/emoji/plaza',
         queryParameters: {'limit': limit, 'offset': offset},
       );
       return response.data;
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('请求失败', e);
     }
   }
 
   Future<Map<String, dynamic>> getMyEmojis() async {
     try {
-      final response = await _dio.get(
-        Constants.apiPath('/v1/emoji/plaza/mine'),
+      final response = await _v2Request('GET', '/v2/emoji/plaza/mine',
       );
       return response.data;
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('请求失败', e);
     }
   }
 
   Future<Map<String, dynamic>> uploadEmoji(FormData formData) async {
     try {
-      final response = await _dio.post(
-        Constants.apiPath('/v1/emoji/plaza/upload'),
+      final response = await _v2Request('POST', '/v2/emoji/plaza/upload',
         data: formData,
       );
       return response.data;
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('请求失败', e);
     }
   }
 
   Future<Map<String, dynamic>> saveEmoji(String emojiId) async {
     try {
-      final response = await _dio.post(
-        Constants.apiPath('/v1/emoji/plaza/save'),
+      final response = await _v2Request('POST', '/v2/emoji/plaza/save',
         data: {'emoji_id': emojiId},
       );
       return response.data;
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('请求失败', e);
     }
   }
 
   Future<void> deleteEmoji(String emojiId) async {
     try {
-      await _dio.post(
-        Constants.apiPath('/v1/emoji/plaza/delete'),
+      await _v2Request('POST', '/v2/emoji/plaza/delete',
         data: {'emoji_id': emojiId},
       );
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('请求失败', e);
     }
   }
 
@@ -3114,32 +3087,34 @@ class ApiService {
 
   Future<Map<String, dynamic>> getFavorites() async {
     try {
-      final response = await _dio.get(Constants.apiPath('/v1/favorites'));
+      final response = await _v2Request('GET', '/v2/favorites');
       return response.data;
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('请求失败', e);
     }
   }
 
   Future<void> addFavorite(String targetId, String type) async {
     try {
-      await _dio.post(
-        Constants.apiPath('/v1/favorites/add'),
+      await _v2Request(
+        'POST',
+        '/v2/favorites/add',
         data: {'target_id': targetId, 'type': type},
       );
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('请求失败', e);
     }
   }
 
   Future<void> removeFavorite(String targetId, String type) async {
     try {
-      await _dio.post(
-        Constants.apiPath('/v1/favorites/remove'),
+      await _v2Request(
+        'POST',
+        '/v2/favorites/remove',
         data: {'target_id': targetId, 'type': type},
       );
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('请求失败', e);
     }
   }
 
@@ -3150,8 +3125,9 @@ class ApiService {
     int offset = 0,
   }) async {
     try {
-      final response = await _dio.get(
-        Constants.apiPath('/v1/notifications'),
+      final response = await _v2Request(
+        'GET',
+        '/v2/notifications',
         queryParameters: {'limit': limit, 'offset': offset},
       );
       final value = _asMap(response.data);
@@ -3178,13 +3154,12 @@ class ApiService {
 
   Future<Map<String, dynamic>> reportUser(String uid, String reason) async {
     try {
-      final response = await _dio.post(
-        Constants.apiPath('/v1/reports/user'),
+      final response = await _v2Request('POST', '/v2/reports/user',
         data: {'uid': uid, 'reason': reason},
       );
       return response.data;
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('请求失败', e);
     }
   }
 
@@ -3193,13 +3168,12 @@ class ApiService {
     String reason,
   ) async {
     try {
-      final response = await _dio.post(
-        Constants.apiPath('/v1/reports/group'),
+      final response = await _v2Request('POST', '/v2/reports/group',
         data: {'group_id': groupId, 'reason': reason},
       );
       return response.data;
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('请求失败', e);
     }
   }
 
@@ -3207,10 +3181,10 @@ class ApiService {
 
   Future<Map<String, dynamic>> getCheckinWall() async {
     try {
-      final response = await _dio.get(Constants.apiPath('/v1/me/checkin/wall'));
+      final response = await _v2Request('GET', '/v2/me/checkin/wall');
       return response.data;
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('请求失败', e);
     }
   }
 
@@ -3223,16 +3197,11 @@ class ApiService {
           .map((value) => value.trim())
           .where((value) => value.isNotEmpty)
           .toList();
-      final response = await _dio.post(
-        Constants.apiPath('/v1/me/checkin/wall'),
+      final response = await _v2Request('POST', '/v2/me/checkin/wall',
         data: {
           'content_text': text.trim(),
           'image_urls': urls,
         },
-        options: Options(headers: const {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json; charset=utf-8',
-        }),
       );
       return response.data is Map
           ? Map<String, dynamic>.from(response.data as Map)
@@ -3244,23 +3213,25 @@ class ApiService {
 
   Future<void> likeCheckinWall(String postId) async {
     try {
-      await _dio.post(
-        Constants.apiPath('/v1/me/checkin/wall/like'),
+      await _v2Request(
+        'POST',
+        '/v2/me/checkin/wall/like',
         data: {'post_id': postId},
       );
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('请求失败', e);
     }
   }
 
   Future<void> unlikeCheckinWall(String postId) async {
     try {
-      await _dio.post(
-        Constants.apiPath('/v1/me/checkin/wall/unlike'),
+      await _v2Request(
+        'POST',
+        '/v2/me/checkin/wall/unlike',
         data: {'post_id': postId},
       );
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('请求失败', e);
     }
   }
 
@@ -3269,13 +3240,12 @@ class ApiService {
     String text,
   ) async {
     try {
-      final response = await _dio.post(
-        Constants.apiPath('/v1/me/checkin/wall/comment'),
+      final response = await _v2Request('POST', '/v2/me/checkin/wall/comment',
         data: {'post_id': postId, 'text': text},
       );
       return response.data;
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('请求失败', e);
     }
   }
 
@@ -3285,13 +3255,12 @@ class ApiService {
     int offset = 0,
   }) async {
     try {
-      final response = await _dio.get(
-        Constants.apiPath('/v1/me/checkin/wall/comments'),
+      final response = await _v2Request('GET', '/v2/me/checkin/wall/comments',
         queryParameters: {'post_id': postId, 'limit': limit, 'offset': offset},
       );
       return response.data;
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('请求失败', e);
     }
   }
 
@@ -3321,10 +3290,10 @@ class ApiService {
 
   Future<Map<String, dynamic>> getAIQuota() async {
     try {
-      final response = await _dio.get(Constants.apiPath('/v1/ai/quota'));
+      final response = await _v2Request('GET', '/v2/ai/quota');
       return response.data;
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('请求失败', e);
     }
   }
 
@@ -3363,8 +3332,7 @@ class ApiService {
       return Map<String, dynamic>.from(response.data as Map);
     }
     try {
-      final response = await _dio.post(
-        Constants.apiPath('/v1/ai/chat/completions'),
+      final response = await _v2Request('POST', '/v2/ai/chat/completions',
         data: {
           'messages': [
             {'role': 'user', 'content': message},
@@ -3374,7 +3342,7 @@ class ApiService {
       );
       return response.data;
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('请求失败', e);
     }
   }
 
@@ -3390,10 +3358,10 @@ class ApiService {
 
   Future<Map<String, dynamic>> dailyCheckin() async {
     try {
-      final response = await _dio.post(Constants.apiPath('/v1/me/checkin'));
+      final response = await _v2Request('POST', '/v2/me/checkin');
       return response.data;
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('请求失败', e);
     }
   }
 
@@ -3401,26 +3369,26 @@ class ApiService {
 
   Future<Map<String, dynamic>> getDevices() async {
     try {
-      final response = await _dio.get(Constants.apiPath('/v1/me/devices'));
+      final response = await _v2Request('GET', '/v2/me/devices');
       return response.data;
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('请求失败', e);
     }
   }
 
   Future<void> cleanupDevices() async {
     try {
-      await _dio.post(Constants.apiPath('/v1/me/devices/cleanup'));
+      await _v2Request('POST', '/v2/me/devices/cleanup');
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('请求失败', e);
     }
   }
 
   Future<void> cleanupOtherDevices() async {
     try {
-      await _dio.post(Constants.apiPath('/v1/me/devices/cleanup-others'));
+      await _v2Request('POST', '/v2/me/devices/cleanup-others');
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('请求失败', e);
     }
   }
 
@@ -3432,8 +3400,7 @@ class ApiService {
     List<String>? images,
   }) async {
     try {
-      final response = await _dio.post(
-        Constants.apiPath('/v1/feedback'),
+      final response = await _v2Request('POST', '/v2/feedback',
         data: {
           'type': type,
           'content': content,
@@ -3442,7 +3409,7 @@ class ApiService {
       );
       return response.data;
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('请求失败', e);
     }
   }
 
@@ -3450,8 +3417,8 @@ class ApiService {
 
   Future<Map<String, dynamic>> getResourceSections() async {
     try {
-      final response = await _dio.get(
-        Constants.apiPath('/v1/resources/sections'),
+      final response = await _v2Request(
+        'GET', '/v2/resources/sections',
         queryParameters: {'limit': 200, 'offset': 0},
       );
       final data = response.data;
@@ -3461,7 +3428,7 @@ class ApiService {
       debugPrint(
         '[资源广场] sections error ${e.response?.statusCode}: ${e.response?.data}',
       );
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('请求失败', e);
     }
   }
 
@@ -3469,47 +3436,45 @@ class ApiService {
     Map<String, dynamic> data,
   ) async {
     try {
-      final response = await _dio.post(
-        Constants.apiPath('/v1/resources/sections'),
+      final response = await _v2Request(
+        'POST', '/v2/resources/sections',
         data: data,
       );
       return response.data;
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('请求失败', e);
     }
   }
 
   Future<void> deleteResourceSection(String sectionId) async {
     try {
-      await _dio.post(
-        Constants.apiPath('/v1/resources/sections/delete'),
+      await _v2Request(
+        'POST', '/v2/resources/sections/delete',
         data: {'section_id': sectionId},
       );
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('请求失败', e);
     }
   }
 
   Future<Map<String, dynamic>> uploadResource(FormData formData) async {
     try {
-      final response = await _dio.post(
-        Constants.apiPath('/v1/resources/upload'),
+      final response = await _v2Request(
+        'POST', '/v2/resources/upload',
         data: formData,
       );
       return response.data;
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('请求失败', e);
     }
   }
 
   Future<Map<String, dynamic>> getResourceQuota() async {
     try {
-      final response = await _dio.get(
-        Constants.apiPath('/v1/me/resources/quota'),
-      );
+      final response = await _v2Request('GET', '/v2/me/resources/quota');
       return response.data;
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('请求失败', e);
     }
   }
 
@@ -3520,8 +3485,8 @@ class ApiService {
   }) async {
     try {
       final normalizedSectionId = sectionId?.trim();
-      final response = await _dio.get(
-        Constants.apiPath('/v1/resources/items'),
+      final response = await _v2Request(
+        'GET', '/v2/resources/items',
         queryParameters: {
           if (normalizedSectionId != null && normalizedSectionId.isNotEmpty)
             'section_id': normalizedSectionId,
@@ -3548,8 +3513,8 @@ class ApiService {
 
   Future<Map<String, dynamic>> searchResources(String query) async {
     try {
-      final response = await _dio.get(
-        Constants.apiPath('/v1/resources/search'),
+      final response = await _v2Request(
+        'GET', '/v2/resources/search',
         queryParameters: {'q': query.trim()},
       );
       final data = response.data;
@@ -3561,40 +3526,40 @@ class ApiService {
       debugPrint(
         '[资源广场] search error ${e.response?.statusCode}: ${e.response?.data}',
       );
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('请求失败', e);
     }
   }
 
   Future<void> deleteResource(String resourceId) async {
     try {
-      await _dio.post(
-        Constants.apiPath('/v1/resources/items/delete'),
+      await _v2Request(
+        'POST', '/v2/resources/items/delete',
         data: {'resource_id': resourceId},
       );
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('请求失败', e);
     }
   }
 
   Future<void> likeResource(String resourceId) async {
     try {
-      await _dio.post(
-        Constants.apiPath('/v1/resources/like'),
+      await _v2Request(
+        'POST', '/v2/resources/like',
         data: {'resource_id': resourceId},
       );
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('请求失败', e);
     }
   }
 
   Future<void> unlikeResource(String resourceId) async {
     try {
-      await _dio.post(
-        Constants.apiPath('/v1/resources/unlike'),
+      await _v2Request(
+        'POST', '/v2/resources/unlike',
         data: {'resource_id': resourceId},
       );
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('请求失败', e);
     }
   }
 
@@ -3603,13 +3568,13 @@ class ApiService {
     String text,
   ) async {
     try {
-      final response = await _dio.post(
-        Constants.apiPath('/v1/resources/comment'),
+      final response = await _v2Request(
+        'POST', '/v2/resources/comment',
         data: {'resource_id': resourceId, 'text': text},
       );
       return response.data;
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('请求失败', e);
     }
   }
 
@@ -3619,8 +3584,8 @@ class ApiService {
     int offset = 0,
   }) async {
     try {
-      final response = await _dio.get(
-        Constants.apiPath('/v1/resources/comments'),
+      final response = await _v2Request(
+        'GET', '/v2/resources/comments',
         queryParameters: {
           'resource_id': resourceId,
           'limit': limit,
@@ -3629,29 +3594,29 @@ class ApiService {
       );
       return response.data;
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('请求失败', e);
     }
   }
 
   Future<void> deleteResourceComment(String commentId) async {
     try {
-      await _dio.post(
-        Constants.apiPath('/v1/resources/comment/delete'),
+      await _v2Request(
+        'POST', '/v2/resources/comment/delete',
         data: {'comment_id': commentId},
       );
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('请求失败', e);
     }
   }
 
   Future<void> reportResource(String resourceId, String reason) async {
     try {
-      await _dio.post(
-        Constants.apiPath('/v1/resources/report'),
+      await _v2Request(
+        'POST', '/v2/resources/report',
         data: {'resource_id': resourceId, 'reason': reason},
       );
     } on DioException catch (e) {
-      throw Exception('Network error: ${e.message}');
+      throw _apiError('请求失败', e);
     }
   }
 
