@@ -58,6 +58,7 @@ class _MomentsPageState extends State<MomentsPage>
     WidgetsBinding.instance.removeObserver(this);
     _postController.dispose();
     _commentController.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
