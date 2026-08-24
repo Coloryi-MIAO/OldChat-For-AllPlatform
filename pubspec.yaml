@@ -46,8 +46,7 @@ dependencies:
   tray_manager: ^0.5.3
   path_provider: ^2.1.0
 
-  # 音频（通知音）
-  audioplayers: ^5.2.1
+  # 音频（Windows 7 构建不加载 Media Foundation 音频插件）
   flutter_local_notifications: ^17.0.0
   windows_single_instance: ^1.1.0
 
