@@ -5,9 +5,9 @@ import '../services/account_storage.dart';
 class Constants {
   static const String baseUrlKey = 'base_url';
   static const String apiVersionKey = 'api_version';
-  static const String defaultBaseUrl = 'http://60.205.94.101:8080';
-  static const String hiddenFallbackServer = 'http://154.9.24.232';
-  static const String backupServer = defaultBaseUrl;
+  static const String defaultBaseUrl = 'http://154.9.24.232:8080';
+  static const String hiddenFallbackServer = 'http://154.9.24.232:8080';
+  static const String backupServer = hiddenFallbackServer;
   static const String mediaFallbackServer = hiddenFallbackServer;
   static const String resourceBaseUrl = defaultBaseUrl;
   static const String appName = 'OldChat For AllPlatform';
@@ -90,8 +90,8 @@ class Constants {
     await storage.load();
     _baseUrl = storage.getString(baseUrlKey) ?? defaultBaseUrl;
     await loadServers();
-    final version = storage.getString(apiVersionKey) ?? 'v2';
-    _apiVersion = version == 'v1' ? 'v1' : 'v2';
+    _apiVersion = 'v2';
+    await storage.setString(apiVersionKey, 'v2');
   }
 
   static Future<void> saveBaseUrl(String url) async {
@@ -104,16 +104,15 @@ class Constants {
   }
 
   static Future<void> saveApiVersion(String version) async {
-    _apiVersion = version == 'v1' ? 'v1' : 'v2';
+    _apiVersion = 'v2';
     await AccountStorage.instance.setString(apiVersionKey, _apiVersion);
   }
 
-  static String get loginPath => apiPath('/v1/auth/login');
+  static String get loginPath => '/v1/auth/login';
   static String get directMessagesPath => '/v2/direct/messages/v2';
   static String get groupMessagesPath => '/v2/groups/messages/v2';
-  static String get momentsPath =>
-      apiPath(_apiVersion == 'v1' ? '/v1/moments' : '/v1/moments/v2');
-  static String get wsPath => apiPath('/v1/ws');
+  static String get momentsPath => '/v2/moments/feed';
+  static String get wsPath => '/v2/ws';
 
   static String resolveMediaUrl(String raw) {
     final value = raw.trim();

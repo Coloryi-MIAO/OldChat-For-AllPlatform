@@ -1499,7 +1499,7 @@ class PluginService extends ChangeNotifier {
         ls.pushNil();
         return 1;
       }
-      final result = _luaValue(ls, 1);
+      final result = _luaValue(ls, -1);
       if (result is! Map) {
         ls.pushNil();
         return 1;
@@ -1509,6 +1509,7 @@ class PluginService extends ChangeNotifier {
         ls.pushNil();
         return 1;
       }
+      normalized['plugin_id'] = id;
       _uiResults[id] = normalized;
       notifyListeners();
       ls.pushString(id);

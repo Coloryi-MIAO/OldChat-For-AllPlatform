@@ -38,6 +38,7 @@ dependencies:
   archive: ^4.0.9
   lua_dardo_plus: ^0.3.0
   universal_io: 2.2.2
+  camera: 0.10.6
   web: 0.5.1
 
   # 桌面功能
