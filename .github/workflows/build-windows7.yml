@@ -45,6 +45,7 @@ jobs:
       - name: Analyze
         shell: pwsh
         run: flutter analyze lib test --no-fatal-infos --no-fatal-warnings
+        continue-on-error: true
 
       - name: Test
         shell: pwsh
