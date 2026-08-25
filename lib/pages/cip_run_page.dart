@@ -90,11 +90,13 @@ class _CipRunPageState extends State<CipRunPage> {
     final rawChildren = node['children'] ?? node['items'] ?? node['child'] ?? node['content'];
     final childValues = rawChildren is List
         ? rawChildren
-        : rawChildren is Map
-            ? rawChildren.values.toList()
-            : rawChildren == null
-                ? const <dynamic>[]
-                : <dynamic>[rawChildren];
+        : rawChildren is Map && rawChildren.containsKey('type')
+            ? <dynamic>[rawChildren]
+            : rawChildren is Map
+                ? rawChildren.values.toList()
+                : rawChildren == null
+                    ? const <dynamic>[]
+                    : <dynamic>[rawChildren];
     final children = childValues
         .whereType<Map>()
         .map((child) => _node(Map<String, dynamic>.from(child)))

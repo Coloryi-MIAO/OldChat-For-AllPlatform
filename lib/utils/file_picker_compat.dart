@@ -1,5 +1,4 @@
 import 'dart:typed_data';
-import 'package:universal_io/io.dart';
 
 import 'package:file_picker/file_picker.dart' as picker;
 
@@ -11,8 +10,7 @@ Future<picker.FilePickerResult?> pickFilesCompat({
   List<String>? allowedExtensions,
   bool allowMultiple = false,
   bool withData = false,
-}) =>
-    picker.FilePicker.platform.pickFiles(
+}) => picker.FilePicker.platform.pickFiles(
       type: type,
       allowedExtensions: allowedExtensions,
       allowMultiple: allowMultiple,
@@ -26,8 +24,7 @@ Future<String?> saveFileCompat({
   picker.FileType type = picker.FileType.any,
   List<String>? allowedExtensions,
   Uint8List? bytes,
-}) =>
-    picker.FilePicker.platform.saveFile(
+}) => picker.FilePicker.platform.saveFile(
       dialogTitle: dialogTitle,
       fileName: fileName,
       initialDirectory: initialDirectory,
@@ -39,8 +36,7 @@ Future<String?> saveFileCompat({
 Future<String?> getDirectoryPathCompat({
   String? dialogTitle,
   String? initialDirectory,
-}) =>
-    picker.FilePicker.platform.getDirectoryPath(
+}) => picker.FilePicker.platform.getDirectoryPath(
       dialogTitle: dialogTitle,
       initialDirectory: initialDirectory,
     );
@@ -58,10 +54,8 @@ List<picker.PlatformFile> filePickerFiles(Object? result) {
 
 Future<Uint8List?> filePickerBytes(picker.PlatformFile file) async {
   if (file.bytes != null) return file.bytes;
-  final path = file.path;
-  if (path == null || path.isEmpty) return null;
   try {
-    return await File(path).readAsBytes();
+    return await file.readAsBytes();
   } catch (_) {
     return null;
   }
