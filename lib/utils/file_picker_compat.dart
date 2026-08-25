@@ -5,26 +5,26 @@ import 'package:file_picker/file_picker.dart' as picker;
 export 'package:file_picker/file_picker.dart'
     show FilePicker, FileType, PlatformFile;
 
-Future<picker.FilePickerResult?> pickFilesCompat({
+Future<List<picker.PlatformFile>> pickFilesCompat({
   picker.FileType type = picker.FileType.any,
   List<String>? allowedExtensions,
   bool allowMultiple = false,
   bool withData = false,
-}) => picker.FilePicker.platform.pickFiles(
+}) => picker.FilePicker.pickFiles(
       type: type,
       allowedExtensions: allowedExtensions,
       allowMultiple: allowMultiple,
       withData: withData,
     );
 
-Future<String?> saveFileCompat({
+Future<Uri?> saveFileCompat({
   String? dialogTitle,
-  String? fileName,
+  required String fileName,
   String? initialDirectory,
   picker.FileType type = picker.FileType.any,
   List<String>? allowedExtensions,
-  Uint8List? bytes,
-}) => picker.FilePicker.platform.saveFile(
+  required Uint8List bytes,
+}) => picker.FilePicker.saveFile(
       dialogTitle: dialogTitle,
       fileName: fileName,
       initialDirectory: initialDirectory,
@@ -36,13 +36,12 @@ Future<String?> saveFileCompat({
 Future<String?> getDirectoryPathCompat({
   String? dialogTitle,
   String? initialDirectory,
-}) => picker.FilePicker.platform.getDirectoryPath(
+}) => picker.FilePicker.getDirectoryPath(
       dialogTitle: dialogTitle,
       initialDirectory: initialDirectory,
     );
 
 List<picker.PlatformFile> filePickerFiles(Object? result) {
-  if (result is picker.FilePickerResult) return result.files;
   if (result is picker.PlatformFile) return <picker.PlatformFile>[result];
   if (result is Iterable) {
     return List<picker.PlatformFile>.unmodifiable(
@@ -63,9 +62,6 @@ Future<Uint8List?> filePickerBytes(picker.PlatformFile file) async {
 
 String? filePickerPath(Object? result) {
   if (result == null) return null;
-  if (result is picker.FilePickerResult) {
-    return result.files.isEmpty ? null : _clean(result.files.first.path);
-  }
   if (result is picker.PlatformFile) return _clean(result.path);
   if (result is Uri) {
     final value = result.scheme == 'file'
