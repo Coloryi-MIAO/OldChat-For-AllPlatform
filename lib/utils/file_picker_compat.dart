@@ -52,7 +52,6 @@ List<picker.PlatformFile> filePickerFiles(Object? result) {
 }
 
 Future<Uint8List?> filePickerBytes(picker.PlatformFile file) async {
-  if (file.bytes != null) return file.bytes;
   try {
     return await file.readAsBytes();
   } catch (_) {
