@@ -84,6 +84,20 @@ class PluginService extends ChangeNotifier {
     _uiResults.remove(id);
     notifyListeners();
   }
+  void setUiTextValue(String id, String nodeId, String value) {
+    final root = _uiResults[id];
+    if (root == null || nodeId.isEmpty) return;
+    _setUiFieldValue(root, nodeId, 'value', value);
+    _setUiFieldValue(root, nodeId, 'text', value);
+    notifyListeners();
+  }
+
+  void setUiCheckedValue(String id, String nodeId, bool value) {
+    final root = _uiResults[id];
+    if (root == null || nodeId.isEmpty) return;
+    _setUiFieldValue(root, nodeId, 'checked', value);
+    notifyListeners();
+  }
 
   Future<void> load() async {
     final userId = AuthService().userId ?? 'guest';

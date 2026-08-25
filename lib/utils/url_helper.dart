@@ -48,6 +48,7 @@ List<String> _candidateUrls(
     preferredOrigin,
     Constants.defaultBaseUrl,
     ...Constants.mediaServers,
+    Constants.fallbackBaseUrl,
   ].map((value) => value.replaceFirst(RegExp(r'/+$'), '')).toSet();
   final candidates = <String>[];
 
