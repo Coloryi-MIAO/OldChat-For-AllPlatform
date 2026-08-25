@@ -2958,7 +2958,6 @@ class _ChatPageState extends State<ChatPage>
             ),
           ],
         ),
-      ),
     );
 
     if (widget.embed) {
