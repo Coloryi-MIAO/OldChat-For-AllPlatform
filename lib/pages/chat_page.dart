@@ -2746,7 +2746,15 @@ class _ChatPageState extends State<ChatPage>
                             }
                               return false;
                             },
-                            child: ListView.builder(
+                            child: Listener(
+                              behavior: HitTestBehavior.opaque,
+                              onPointerDown: (event) {
+                                if (event.kind == PointerDeviceKind.mouse &&
+                                    event.buttons == kSecondaryMouseButton) {
+                                  _showChatBackgroundMenu(event.position);
+                                }
+                              },
+                              child: ListView.builder(
                             controller: _scrollController,
                             reverse: false,
                             physics: const AlwaysScrollableScrollPhysics(),
@@ -2837,7 +2845,8 @@ class _ChatPageState extends State<ChatPage>
                                 ),
                               );
                             },
-                          ),
+                              ),
+                            ),
                         ),
                 ),
                 _buildQuotePreview(),

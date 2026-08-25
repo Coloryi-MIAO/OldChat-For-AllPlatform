@@ -54,9 +54,6 @@ class WsSessionService {
       '${Constants.baseUrl}${Constants.apiPath('/v1/auth/handshake')}',
       data: {
         'client_pub': base64Encode(clientDer),
-        'client_random': base64Encode(
-          List<int>.generate(16, (_) => Random.secure().nextInt(256)),
-        ),
       },
       options: Options(
         headers: {
@@ -75,9 +72,12 @@ class WsSessionService {
       throw StateError('握手响应不是有效 JSON 对象');
     }
     final serverRaw = data['server_pub'] ?? data['server_public_key'];
-    if (serverRaw == null) throw StateError('握手响应缺少服务器公钥');
+    if (serverRaw is! String || serverRaw.trim().isEmpty) {
+      reset();
+      throw StateError('握手响应缺少有效的 server_pub');
+    }
     final serverKey = _parsePublicKey(
-      base64Decode(serverRaw.toString()),
+      base64Decode(serverRaw.trim()),
       domain,
     );
     final agreement = pc.ECDHBasicAgreement()..init(keyPair.privateKey);

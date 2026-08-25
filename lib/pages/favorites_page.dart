@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/app_localizations.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:webview_flutter/webview_flutter.dart';
 import '../services/api_service.dart';
 import '../utils/url_helper.dart';
 import '../widgets/image_viewer.dart';
@@ -292,26 +292,35 @@ class _FavoritesPageState extends State<FavoritesPage>
   }
 }
 
-class WebViewPage extends StatelessWidget {
+// ===== WebView 页面 =====
+class WebViewPage extends StatefulWidget {
   final String url;
   const WebViewPage({super.key, required this.url});
 
   @override
+  State<WebViewPage> createState() => _WebViewPageState();
+}
+
+class _WebViewPageState extends State<WebViewPage> {
+  late final WebViewController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = WebViewController()
+      ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..loadRequest(Uri.parse(widget.url));
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final uri = Uri.tryParse(url);
     return Scaffold(
       appBar: AppBar(
         title: Text(AppLocalizations.current.t('详情')),
         backgroundColor: Theme.of(context).primaryColor,
         foregroundColor: Colors.white,
       ),
-      body: Center(
-        child: FilledButton.icon(
-          onPressed: uri == null ? null : () => launchUrl(uri, mode: LaunchMode.externalApplication),
-          icon: const Icon(Icons.open_in_new),
-          label: Text(AppLocalizations.current.t('在系统浏览器中打开')),
-        ),
-      ),
+      body: WebViewWidget(controller: _controller),
     );
   }
 }

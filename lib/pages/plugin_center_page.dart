@@ -312,7 +312,7 @@ class _PluginCenterPageState extends State<PluginCenterPage> {
   }
 
   Future<void> _importPackage() async {
-    final result = await pickFilesCompat(
+    final result = await FilePicker.pickFiles(
       type: FileType.custom,
       allowedExtensions: const ['oldchat-plugin'],
       withData: false,
@@ -349,12 +349,13 @@ class _PluginCenterPageState extends State<PluginCenterPage> {
           : await _service.exportPlugin(plugin['id'].toString());
       final extension = isCip ? 'cip' : 'oldchat-plugin';
       final path = filePickerPath(
-        await saveFileCompat(
+        await FilePicker.saveFile(
           dialogTitle: context.tr.t('导出插件'),
           fileName: '${plugin['id']}.$extension',
           type: FileType.custom,
           allowedExtensions: [extension],
           bytes: bytes,
+          lockParentWindow: true,
         ),
       );
       if (path != null && mounted) _show('${context.tr.t('插件已导出：')}$path');

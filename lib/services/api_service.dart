@@ -1331,6 +1331,8 @@ class ApiService {
           .toList(growable: false);
     } on DioException catch (error) {
       throw _apiError('CIP 商店加载失败', error);
+    } catch (error) {
+      throw Exception('CIP 商店加载失败：$error');
     }
   }
 

@@ -7,6 +7,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:window_manager/window_manager.dart';
+import 'package:win_toast/win_toast.dart';
+import 'package:flutter_desktop_notifications/flutter_desktop_notifications.dart';
 import 'web_notification_service.dart';
 import 'app_localizations.dart';
 import 'account_storage.dart';
@@ -21,12 +23,18 @@ class NotificationService {
   static final FlutterLocalNotificationsPlugin _notifications =
       FlutterLocalNotificationsPlugin();
   static bool _enabled = true;
+  static bool _winToastInitialized = false;
   static bool _windowIsVisible = true;
   static bool _taskbarFlashEnabled = true;
   static final List<String> _pendingActivationPayloads = <String>[];
+  static String? _toastInitError;
   static File? _toastLogFile;
   static final Set<String> _shownMessageNotificationIds = <String>{};
   static Future<void> _toastQueue = Future<void>.value();
+  static final DesktopNotifier _desktopNotifier = DesktopNotifier(
+    appName: Constants.appName,
+    appId: Constants.appAumid,
+  );
   static final WebNotificationService _webNotifier = WebNotificationService();
 
   static void setWindowVisible(bool visible) {
@@ -34,6 +42,8 @@ class NotificationService {
   }
 
   bool get enabled => _enabled;
+  bool get winToastInitialized => _winToastInitialized;
+  String? get toastInitError => _toastInitError;
   String? get toastLogPath => _toastLogFile?.path;
 
   static void handleLaunchArguments(List<String> args) {
@@ -94,6 +104,20 @@ class NotificationService {
     }
   }
 
+  String _notificationIconPath() {
+    final executableDir = File(Platform.resolvedExecutable).parent.path;
+    final candidates = <String>[
+      '${executableDir}${Platform.pathSeparator}data${Platform.pathSeparator}flutter_assets${Platform.pathSeparator}assets${Platform.pathSeparator}app_icon.ico',
+      '${executableDir}${Platform.pathSeparator}app_icon.ico',
+      '${Directory.current.path}${Platform.pathSeparator}assets${Platform.pathSeparator}app_icon.ico',
+      '${executableDir}${Platform.pathSeparator}data${Platform.pathSeparator}flutter_assets${Platform.pathSeparator}assets${Platform.pathSeparator}app_icon.png',
+      '${Directory.current.path}${Platform.pathSeparator}assets${Platform.pathSeparator}app_icon.png',
+    ];
+    return candidates.firstWhere(
+      (path) => File(path).existsSync(),
+      orElse: () => '',
+    );
+  }
 
   Future<void> init() async {
     await AccountStorage.instance.load();
@@ -103,7 +127,81 @@ class NotificationService {
     _taskbarFlashEnabled = storage.getBool(Constants.taskbarFlashKey) ?? true;
 
     if (Platform.isWindows) {
-      await _writeToastLog('Windows 7 使用 flutter_local_notifications；不依赖 WebView2 或 WinToast');
+      NotificationService.setWindowVisible(await windowManager.isVisible());
+      // ========== 步骤 1：注册 AUMID 和 COM 服务器（非 MSIX 必需） ==========
+      const String aumid = Constants.appAumid;
+      const String clsid = Constants.appClsid;
+
+      try {
+        await WindowsNotification.registerAumid(
+          aumid: aumid,
+          displayName: Constants.appName,
+        );
+        await _writeToastLog('AUMID/COM 注册成功');
+      } catch (e) {
+        await _writeToastLog('AUMID/COM 注册异常：$e');
+      }
+
+      // ========== 步骤 2：初始化 win_toast（必须传入 clsid） ==========
+      try {
+        final iconPath = _notificationIconPath();
+        _toastInitError = iconPath.isEmpty ? '未找到通知图标，尝试无图标注册' : null;
+        final toast = WinToast.instance();
+
+        _winToastInitialized = await toast.initialize(
+          aumId: aumid,
+          displayName: Constants.appName,
+          iconPath: iconPath,
+          clsid: clsid,
+        );
+        await _writeToastLog(
+          _winToastInitialized
+              ? 'WinToast 注册成功：AUMID=$aumid, CLSID=$clsid'
+              : 'WinToast 注册返回 false',
+        );
+
+        if (!_winToastInitialized && iconPath.isNotEmpty) {
+          await _writeToastLog('带图标注册失败，重试无图标注册');
+          _winToastInitialized = await toast.initialize(
+            aumId: aumid,
+            displayName: Constants.appName,
+            iconPath: '',
+            clsid: clsid,
+          );
+          await _writeToastLog(
+            _winToastInitialized ? 'WinToast 无图标回退注册成功' : 'WinToast 无图标回退注册失败',
+          );
+        }
+      } catch (error) {
+        _winToastInitialized = false;
+        _toastInitError = error.toString();
+        await _writeToastLog('初始化失败：$error');
+        debugPrint('[Windows 通知] 初始化失败：$error');
+      }
+
+      // ========== 步骤 3：设置激活回调（点击通知时触发） ==========
+      if (_winToastInitialized) {
+        WinToast.instance().setActivatedCallback((event) {
+          unawaited(_writeToastLog('通知被点击：${event.argument}'));
+          openConversationFromNotification(event.argument);
+        });
+      }
+      if (!_winToastInitialized) {
+        await _writeToastLog('WinToast 未初始化，继续使用 WindowsNotification/备用通知');
+      }
+      await _desktopNotifier.requestPermission();
+      await WindowsNotification(applicationId: Constants.appAumid).init();
+      await _desktopNotifier.setCallback((event) {
+        if (event.event == NotificationEvent.activated) {
+          openConversationFromNotification(event.arguments);
+        }
+      });
+
+      await _writeToastLog(
+        _winToastInitialized
+            ? '初始化成功'
+            : '初始化返回 false${_toastInitError == null ? '' : '：$_toastInitError'}',
+      );
     }
 
     // Mobile and web notifications use the Flutter local notification backend.
@@ -244,7 +342,65 @@ class NotificationService {
       return;
     }
     if (!kIsWeb && Platform.isWindows) {
-      await _writeToastLog('Windows 7 通知已跳过原生 Toast，使用跨平台通知后端：$title');
+      final notificationId = 'oldchat-${DateTime.now().microsecondsSinceEpoch}';
+      var shown = false;
+      if (_winToastInitialized) {
+        try {
+          final toastPayload = _escapeXml(payload ?? '');
+          final toast = Toast(
+            launch: toastPayload,
+            duration: ToastDuration.short,
+            children: [
+              ToastChildAudio(source: ToastAudioSource.defaultSound),
+              ToastChildVisual(
+                binding: ToastVisualBinding(
+                  children: [
+                    ToastVisualBindingChildText(text: title, id: 1),
+                    ToastVisualBindingChildText(text: body, id: 2),
+                  ],
+                ),
+              ),
+            ],
+          );
+          await WinToast.instance().showToast(
+            toast: toast,
+            tag: notificationId,
+            group: 'oldchat',
+          );
+          shown = true;
+          await _writeToastLog('显示通知：$title（WinToast）');
+        } catch (winToastError) {
+          await _writeToastLog('WinToast 发送失败：$winToastError');
+        }
+      }
+      if (!shown) {
+        try {
+          await WindowsNotification(
+            applicationId: Constants.appAumid,
+          ).showNotificationPluginTemplate(
+            NotificationMessage.fromPluginTemplate(
+              notificationId,
+              title,
+              body,
+              launch: payload,
+              group: 'oldchat',
+              audio: const NotificationAudio(sound: NotificationSound.Default),
+            ),
+          );
+          shown = true;
+          await _writeToastLog('WindowsNotification 已显示：$title');
+        } catch (windowsNotificationError) {
+          await _writeToastLog(
+            'WindowsNotification 发送失败：$windowsNotificationError',
+          );
+        }
+      }
+      if (!shown) {
+        shown = await _showDesktopFallback(title, body, payload);
+      }
+      if (!shown) {
+        await _writeToastLog('Windows 通知最终发送失败：$title');
+      }
       if (withFlash && _taskbarFlashEnabled && !_windowIsVisible) {
         await NativeWindowService.flashTaskbar();
       }
@@ -292,6 +448,30 @@ class NotificationService {
     }
   }
 
+  Future<bool> _showDesktopFallback(
+    String title,
+    String body,
+    String? payload,
+  ) async {
+    try {
+      await _desktopNotifier.show(
+        NotificationMessage.fromPluginTemplate(
+          'oldchat-${DateTime.now().microsecondsSinceEpoch}',
+          title,
+          body,
+          launch: payload,
+          group: 'oldchat',
+          audio: const NotificationAudio(sound: NotificationSound.Default),
+        ),
+      );
+      await _writeToastLog('备用通知已显示：$title');
+      return true;
+    } catch (error) {
+      await _writeToastLog('备用通知失败：$error');
+      return false;
+    }
+  }
+
   /// 测试 Windows Toast 通知
   Future<void> testWindowsToast() async {
     await showNotification(
@@ -299,7 +479,9 @@ class NotificationService {
       body: AppLocalizations.current.t('Windows 通知测试成功'),
       withFlash: true,
     );
-    await _writeToastLog(AppLocalizations.current.t('Windows 通知测试已完成'));
+    if (!_winToastInitialized) {
+      await _writeToastLog(AppLocalizations.current.t('测试通知未发送：WinToast 未初始化'));
+    }
   }
 
   Future<void> showMessageNotification({
@@ -361,4 +543,10 @@ class NotificationService {
     );
   }
 
+  String _escapeXml(String value) => value
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
+      .replaceAll("'", '&apos;');
 }

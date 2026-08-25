@@ -122,7 +122,10 @@ class _CipRunPageState extends State<CipRunPage> {
           ),
         );
       case 'input':
-        final controller = _inputs.putIfAbsent(id, TextEditingController.new);
+        final controller = _inputs.putIfAbsent(
+          id,
+          () => TextEditingController(text: node['value']?.toString() ?? ''),
+        );
         return Padding(
           padding: EdgeInsets.symmetric(vertical: margin),
           child: TextField(
@@ -143,11 +146,13 @@ class _CipRunPageState extends State<CipRunPage> {
         return CheckboxListTile(
           contentPadding: EdgeInsets.zero,
           value: checked,
-          onChanged: (value) {
-            final next = value ?? false;
-            setState(() => _checks[id] = next);
-            _syncCheck(id, next);
-          },
+          onChanged: _busy
+              ? null
+              : (value) {
+                  final next = value ?? false;
+                  setState(() => _checks[id] = next);
+                  _syncCheck(id, next);
+                },
           title: Text(context.tr.t(node['label']?.toString() ?? node['text']?.toString() ?? '选项')),
         );
       case 'image':

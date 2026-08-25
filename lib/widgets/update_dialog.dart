@@ -195,7 +195,7 @@ class _UpdateDialogState extends State<UpdateDialog> {
                 constraints: const BoxConstraints(maxHeight: 220),
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: SingleChildScrollView(

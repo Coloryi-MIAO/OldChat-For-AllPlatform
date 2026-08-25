@@ -451,12 +451,12 @@ class _AIChatPageState extends State<AIChatPage> with WidgetsBindingObserver {
           SizedBox(
             width: 220,
             child: Material(
-              color: primaryColor.withOpacity(0.08),
+              color: primaryColor.withValues(alpha: 0.08),
               child: DecoratedBox(
                 decoration: BoxDecoration(
                   border: Border(
                     right: BorderSide(
-                      color: primaryColor.withOpacity(0.08),
+                      color: primaryColor.withValues(alpha: 0.18),
                     ),
                   ),
                 ),
