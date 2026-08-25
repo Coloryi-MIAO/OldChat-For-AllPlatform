@@ -2723,11 +2723,7 @@ class _ChatPageState extends State<ChatPage>
           ],
         ),
       ),
-      child: GestureDetector(
-        behavior: HitTestBehavior.translucent,
-        onSecondaryTapDown: (details) =>
-            _showChatBackgroundMenu(details.globalPosition),
-        child: Stack(
+      child: Stack(
           children: [
             Column(
               children: [

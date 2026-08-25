@@ -44,36 +44,10 @@ class _CipRunPageState extends State<CipRunPage> {
 
   Future<void> _action(Map<String, dynamic> node) async {
     final callback = int.tryParse(node['callback_ref']?.toString() ?? '');
-    final action = node['action']?.toString();
-    if (callback == null && action != 'submit' && action != 'run') return;
+    if (callback == null) return;
     setState(() => _busy = true);
     try {
-      if (callback != null) {
-        await _service.executeCipCallback(widget.pluginId, callback);
-      } else {
-        final plugin = _service.plugins.firstWhere(
-          (item) => item['id']?.toString() == widget.pluginId,
-          orElse: () => <String, dynamic>{},
-        );
-        final script = plugin['cip_main']?.toString();
-        if (script == null || script.isEmpty || plugin['enabled'] != true) {
-          throw Exception('CIP 未启用或脚本不存在');
-        }
-        await _service.executeCip(
-          widget.pluginId,
-          script,
-          event: {
-            'type': 'ui.action',
-            'action': action,
-            'node_id': node['id'],
-            'value': _inputs[node['id']?.toString()]?.text,
-            'values': {
-              for (final entry in _inputs.entries) entry.key: entry.value.text,
-              for (final entry in _checks.entries) entry.key: entry.value,
-            },
-          },
-        );
-      }
+      await _service.executeCipCallback(widget.pluginId, callback);
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
