@@ -1,5 +1,4 @@
 import '../utils/file_picker_compat.dart';
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import '../services/app_localizations.dart';
@@ -61,6 +60,8 @@ class _CipPageState extends State<CipPage> {
     final rawChildren = node['children'] ?? node['items'] ?? node['child'] ?? node['content'];
     final childMaps = rawChildren is List
         ? rawChildren.whereType<Map>()
+        : rawChildren is Map && rawChildren.containsKey('type')
+        ? <Map>[rawChildren]
         : rawChildren is Map
         ? rawChildren.values.whereType<Map>()
         : const <Map>[];

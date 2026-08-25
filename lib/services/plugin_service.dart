@@ -1533,10 +1533,18 @@ class PluginService extends ChangeNotifier {
       return 1;
     }
 
-    void installTable(String name, Map<String, DartFunction> functions) {
+    void installTable(
+      String name,
+      Map<String, DartFunction> functions, {
+      Map<String, DartFunctionAsync> asyncFunctions = const {},
+    }) {
       state.newTable();
       for (final entry in functions.entries) {
         state.pushDartFunction(entry.value);
+        state.setField(-2, entry.key);
+      }
+      for (final entry in asyncFunctions.entries) {
+        state.pushDartFunctionAsync(entry.value);
         state.setField(-2, entry.key);
       }
       state.setGlobal(name);
@@ -1657,7 +1665,8 @@ class PluginService extends ChangeNotifier {
     int setHint(LuaState ls) => setUiField(ls, 'hint');
 
     state.register('app_asset', asset);
-    state.registerAsync('app_http_get', (LuaState ls) async {
+
+    Future<int> httpGet(LuaState ls) async {
       if (!permissions.contains('network') &&
           !permissions.contains('network_external')) {
         ls.pushNil();
@@ -1720,7 +1729,9 @@ class PluginService extends ChangeNotifier {
         ls.pushNil();
       }
       return 2;
-    });
+    }
+
+    state.registerAsync('app_http_get', httpGet);
     state.register('app_set_text', setText);
     state.register('app_set_image', setImage);
     state.register('app_set_visible', setVisible);
@@ -1750,45 +1761,49 @@ class PluginService extends ChangeNotifier {
       }
       return 0;
     });
-    installTable('app', {
-      'toast': toast,
-      'camera': camera,
-      'file_read': fileRead,
-      'storage_get': storageGet,
-      'storage_set': storageSet,
-      'storage_remove': storageRemove,
-      'storage_clear': storageClear,
-      'asset': asset,
-      'set_text': setText,
-      'append_text': appendText,
-      'get_text': getText,
-      'set_image': setImage,
-      'set_visible': setVisible,
-      'get_visible': getVisible,
-      'set_enabled': setEnabled,
-      'set_hint': setHint,
-      'get_checked': getChecked,
-      'set_checked': setChecked,
-      'focus': focus,
-      'json_decode': jsonDecodeApi,
-      'json_encode': jsonEncodeApi,
-      'delay': (LuaState ls) {
-        final milliseconds = (ls.toNumberX(1) ?? 0).clamp(0, 60000).toInt();
-        if (ls.getTop() >= 2 && ls.isFunction(2)) {
-          ls.pushValue(2);
-          final callbackRef = ls.ref(luaRegistryIndex);
-          Future<void>.delayed(Duration(milliseconds: milliseconds), () async {
-            try {
-              state.rawGetI(luaRegistryIndex, callbackRef);
-              if (state.isFunction(-1)) await state.callAsync(0, 0);
-            } finally {
-              state.unRef(luaRegistryIndex, callbackRef);
-            }
-          });
-        }
-        return 0;
+    installTable(
+      'app',
+      {
+        'toast': toast,
+        'camera': camera,
+        'file_read': fileRead,
+        'storage_get': storageGet,
+        'storage_set': storageSet,
+        'storage_remove': storageRemove,
+        'storage_clear': storageClear,
+        'asset': asset,
+        'set_text': setText,
+        'append_text': appendText,
+        'get_text': getText,
+        'set_image': setImage,
+        'set_visible': setVisible,
+        'get_visible': getVisible,
+        'set_enabled': setEnabled,
+        'set_hint': setHint,
+        'get_checked': getChecked,
+        'set_checked': setChecked,
+        'focus': focus,
+        'json_decode': jsonDecodeApi,
+        'json_encode': jsonEncodeApi,
+        'delay': (LuaState ls) {
+          final milliseconds = (ls.toNumberX(1) ?? 0).clamp(0, 60000).toInt();
+          if (ls.getTop() >= 2 && ls.isFunction(2)) {
+            ls.pushValue(2);
+            final callbackRef = ls.ref(luaRegistryIndex);
+            Future<void>.delayed(Duration(milliseconds: milliseconds), () async {
+              try {
+                state.rawGetI(luaRegistryIndex, callbackRef);
+                if (state.isFunction(-1)) await state.callAsync(0, 0);
+              } finally {
+                state.unRef(luaRegistryIndex, callbackRef);
+              }
+            });
+          }
+          return 0;
+        },
       },
-    });
+      asyncFunctions: {'http_get': httpGet},
+    );
     installTable('ui', {
       'page': widgetFactory('page'),
       'text': widgetFactory('text'),
