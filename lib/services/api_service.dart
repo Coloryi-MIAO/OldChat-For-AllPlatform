@@ -937,21 +937,13 @@ class ApiService {
           'device_id': deviceId,
           'device_name': deviceName,
           'platform': platform ?? _clientPlatformName(),
-          'app_version': appVersion ?? await _appVersion(),
+          'app_version': appVersion,
           if (captchaResult != null) ..._geetestFields(captchaResult),
         },
       );
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        return response.data;
-      } else {
-        throw Exception('Register failed');
-      }
+      return _unwrapEnvelopeMap(response.data);
     } on DioException catch (e) {
-      final error = e.response?.data;
-      if (error is Map && error.containsKey('error')) {
-        throw Exception(error['error']);
-      }
-      throw _apiError('请求失败', e);
+      throw _apiError('注册失败', e);
     }
   }
 
@@ -3615,12 +3607,40 @@ class ApiService {
     }
   }
 
+  Future<dynamic> getCipExternal(String url) async {
+    final uri = Uri.tryParse(url.trim());
+    if (uri == null || (uri.scheme != 'http' && uri.scheme != 'https') || uri.host.isEmpty) {
+      throw Exception('Invalid external URL');
+    }
+    if (!kIsWeb) {
+      final response = await Dio().get<dynamic>(
+        url,
+        options: Options(
+          responseType: ResponseType.json,
+          followRedirects: false,
+          validateStatus: (status) => status != null && status >= 200 && status < 300,
+        ),
+      );
+      return response.data;
+    }
+    final response = await _dio.get<dynamic>(
+      '/__cip_external',
+      queryParameters: {'url': url},
+      options: Options(
+        responseType: ResponseType.json,
+        extra: {'_skipV2Signing': true, '_skipAuthRecovery': true},
+        headers: const {'Accept': 'application/json'},
+      ),
+    );
+    return response.data;
+  }
+
   Future<dynamic> getRaw(String path) async {
     if (!path.startsWith('/') || path.contains('..') || path.contains('://')) {
       throw Exception('Invalid API path');
     }
-    final v2Path = path.startsWith('/v2/') ? path : '/v2$path';
-    final response = await _v2Request('GET', v2Path);
+    final normalized = path.startsWith('/v1/') ? path : '/v2$path';
+    final response = await _requestV2WithV1Fallback('GET', normalized);
     return response.data;
   }
 }

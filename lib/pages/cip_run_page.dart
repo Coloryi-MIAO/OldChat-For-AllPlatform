@@ -21,6 +21,7 @@ class _CipRunPageState extends State<CipRunPage> {
   final _service = PluginService();
   final Map<String, TextEditingController> _inputs = {};
   final Map<String, bool> _checks = {};
+  bool _callbackBusy = false;
   bool _busy = false;
 
   @override
@@ -67,6 +68,17 @@ class _CipRunPageState extends State<CipRunPage> {
     final callback = int.tryParse(node['submit_callback_ref']?.toString() ?? '');
     if (callback != null) {
       await _action({...node, 'callback_ref': callback});
+    }
+  }
+
+  Future<void> _fieldAction(Map<String, dynamic> node, String field) async {
+    final callback = int.tryParse(node[field]?.toString() ?? '');
+    if (callback == null || _busy || _callbackBusy) return;
+    _callbackBusy = true;
+    try {
+      await _action({...node, 'callback_ref': callback});
+    } finally {
+      _callbackBusy = false;
     }
   }
 
@@ -130,7 +142,11 @@ class _CipRunPageState extends State<CipRunPage> {
           padding: EdgeInsets.symmetric(vertical: margin),
           child: TextField(
             controller: controller,
-            onChanged: (value) => _syncInput(id, value),
+            onChanged: (value) {
+              _syncInput(id, value);
+              _fieldAction(node, 'change_callback_ref');
+            },
+            onEditingComplete: () => _fieldAction(node, 'focus_lost_callback_ref'),
             obscureText: node['input_type']?.toString() == 'password',
             maxLength: int.tryParse(node['max_length']?.toString() ?? ''),
             maxLines: node['single_line']?.toString().toLowerCase() == 'false' ? null : 1,
@@ -152,6 +168,7 @@ class _CipRunPageState extends State<CipRunPage> {
                   final next = value ?? false;
                   setState(() => _checks[id] = next);
                   _syncCheck(id, next);
+                  _fieldAction(node, 'change_callback_ref');
                 },
           title: Text(context.tr.t(node['label']?.toString() ?? node['text']?.toString() ?? '选项')),
         );

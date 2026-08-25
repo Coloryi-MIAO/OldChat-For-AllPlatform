@@ -17,7 +17,14 @@ class WsSessionService {
       http ? _httpInstance : _instance;
   WsSessionService._internal();
 
-  final Dio _dio = Dio();
+  final Dio _dio = Dio(
+    BaseOptions(
+      connectTimeout: const Duration(seconds: 12),
+      receiveTimeout: const Duration(seconds: 25),
+      headers: const {'Accept': 'application/json'},
+      validateStatus: (status) => status != null && status >= 200 && status < 300,
+    ),
+  );
   crypto.SecretKey? _encKey;
   crypto.SecretKey? _macKey;
   Future<void>? _pendingHandshake;

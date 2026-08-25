@@ -79,9 +79,7 @@ class _SettingsPageState extends State<SettingsPage> {
           storage.getBool(Constants.messageOrderCorrectionKey) ?? true;
       _autoUpdateEnabled = storage.getBool(Constants.autoUpdateKey) ?? true;
       _launchAtStartup = launchAtStartup;
-      _apiVersion = storage.getString(Constants.apiVersionKey) == 'v1'
-          ? 'v1'
-          : 'v2';
+      _apiVersion = 'v2';
       _showAria2 = storage.getBool('aria2_show_settings') ?? false;
       _splashDuration =
           (storage.getDouble(Constants.splashDurationKey) ??
@@ -134,7 +132,7 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Future<void> _chooseCacheLocation() async {
-    final result = await getDirectoryPathCompat();
+    final result = await FilePicker.getDirectoryPath();
     if (result != null) {
       await CacheService().setLocation(result);
       if (mounted) {
@@ -832,28 +830,14 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
                   items: [
                     DropdownMenuItem(
-                      value: 'v1',
-                      child: Text(AppLocalizations.current.t('v1（兼容旧服务端）')),
-                    ),
-                    DropdownMenuItem(
                       value: 'v2',
-                      child: Text(AppLocalizations.current.t('v2（新版服务端）')),
+                      child: Text(AppLocalizations.current.t('v2（默认）')),
                     ),
                   ],
                   onChanged: (value) async {
-                    if (value == null || value == _apiVersion) return;
-                    setState(() => _apiVersion = value);
-                    await Constants.saveApiVersion(value);
-                    if (mounted)
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            AppLocalizations.current.t(
-                              'API 已切换为 $value，重新进入页面后生效',
-                            ),
-                          ),
-                        ),
-                      );
+                    if (value == null) return;
+                    setState(() => _apiVersion = 'v2');
+                    await Constants.saveApiVersion('v2');
                   },
                 ),
               ],

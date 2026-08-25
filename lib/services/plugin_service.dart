@@ -301,6 +301,14 @@ class PluginService extends ChangeNotifier {
               .map((item) => Map<String, dynamic>.from(item))
               .toList()
         : <Map<String, dynamic>>[];
+    final rawAllowedHosts = manifest['allowed_hosts'];
+    final allowedHosts = rawAllowedHosts is List
+        ? rawAllowedHosts
+              .map((value) => value.toString().trim().toLowerCase())
+              .where((value) => value.isNotEmpty)
+              .take(32)
+              .toList(growable: false)
+        : const <String>[];
     return {
       'id': id,
       'name': (manifest['name'] ?? id).toString().trim(),
@@ -309,6 +317,7 @@ class PluginService extends ChangeNotifier {
       'builtIn': manifest['builtIn'] == true,
       'enabled': false,
       'permissions': permissions,
+      'allowed_hosts': allowedHosts,
       'rules': rules,
       'config': manifest['config'] is Map
           ? Map<String, dynamic>.from(manifest['config'])
@@ -427,7 +436,7 @@ class PluginService extends ChangeNotifier {
       ..add(ArchiveFile('manifest.json', manifestBytes.length, manifestBytes));
     final bytes = ZipEncoder().encodeBytes(archive);
     final selected = filePickerPath(
-      await saveFileCompat(
+      await FilePicker.saveFile(
         dialogTitle: '导出插件',
         fileName: '${plugin['id']}.oldchat-plugin',
         type: FileType.custom,
@@ -1129,6 +1138,18 @@ class PluginService extends ChangeNotifier {
     _log(plugin, '主题已应用');
   }
 
+  bool _externalHostAllowed(Map<String, dynamic> plugin, String host) {
+    final raw = plugin['allowed_hosts'];
+    if (raw is! List || raw.isEmpty) return true;
+    final normalized = host.toLowerCase();
+    for (final item in raw) {
+      final pattern = item.toString().trim().toLowerCase();
+      if (pattern == '*' || pattern == normalized) return true;
+      if (pattern.startsWith('*.') && normalized.endsWith(pattern.substring(1))) return true;
+    }
+    return false;
+  }
+
   bool _hasPermission(Map<String, dynamic> plugin, String permission) {
     final permissions = plugin['permissions'];
     return permissions is List &&
@@ -1689,7 +1710,8 @@ class PluginService extends ChangeNotifier {
       final isExternal = uri != null &&
           (uri.scheme == 'http' || uri.scheme == 'https') &&
           uri.host.isNotEmpty &&
-          permissions.contains('network_external');
+          permissions.contains('network_external') &&
+          _externalHostAllowed(plugin, uri.host);
       if (!isLocal && !isExternal) {
         ls.pushNil();
         ls.pushString('invalid or unauthorized path');
@@ -1706,14 +1728,7 @@ class PluginService extends ChangeNotifier {
       try {
         value = isLocal
             ? await ApiService().getRaw(target)
-            : await Dio().get<dynamic>(
-                target,
-                options: Options(
-                  responseType: ResponseType.json,
-                  followRedirects: false,
-                  validateStatus: (status) => status != null && status >= 200 && status < 300,
-                ),
-              ).then((response) => response.data);
+            : await ApiService().getCipExternal(target);
       } catch (e) {
         error = e.toString();
       }
@@ -1837,7 +1852,7 @@ class PluginService extends ChangeNotifier {
     state.registerAsync('app_file_pick', (LuaState ls) async {
       if (!permissions.contains('files.local')) return deniedCapability(ls);
       try {
-        final result = await pickFilesCompat(
+        final result = await FilePicker.pickFiles(
           withData: false,
           allowMultiple: false,
         );
@@ -1917,6 +1932,22 @@ class PluginService extends ChangeNotifier {
     notifyListeners();
   }
 
+  Map<String, dynamic> _uiValues(Map<String, dynamic> node) {
+    final values = <String, dynamic>{};
+    final id = node['id']?.toString();
+    if (id != null && id.isNotEmpty) {
+      if (node['value'] != null) values[id] = node['value'];
+      if (node['checked'] != null) values[id] = node['checked'];
+    }
+    final children = node['children'];
+    if (children is List) {
+      for (final child in children.whereType<Map>()) {
+        values.addAll(_uiValues(Map<String, dynamic>.from(child)));
+      }
+    }
+    return values;
+  }
+
   Future<void> executeCipCallback(
     String id,
     int callbackRef,
@@ -1930,7 +1961,11 @@ class PluginService extends ChangeNotifier {
       state.setTop(0);
       throw Exception('CIP 按钮回调不存在');
     }
-    final status = await state.pCallAsync(0, luaMultret, 0);
+    final root = _uiResults[id];
+    if (root != null) {
+      _pushLuaValue(state, {'type': 'ui.action', 'values': _uiValues(root)});
+    }
+    final status = await state.pCallAsync(root == null ? 0 : 1, luaMultret, 0);
     if (status != ThreadStatus.luaOk) {
       state.setTop(0);
       throw Exception('CIP 按钮执行失败');
