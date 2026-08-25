@@ -95,10 +95,10 @@ class _ToolsHubPageState extends State<ToolsHubPage> {
     final result = <_ToolEntry>[];
     for (final id in order) {
       final entry = byId.remove(id);
-      if (entry != null && !hidden.contains(id)) result.add(entry);
+      if (entry != null && (id == 'music' || !hidden.contains(id))) result.add(entry);
     }
     for (final entry in source) {
-      if (byId.containsKey(entry.id) && !hidden.contains(entry.id))
+      if (byId.containsKey(entry.id) && (entry.id == 'music' || !hidden.contains(entry.id)))
         result.add(entry);
     }
     return result;

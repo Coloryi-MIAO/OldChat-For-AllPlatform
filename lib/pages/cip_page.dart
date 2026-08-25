@@ -20,6 +20,7 @@ class _CipPageState extends State<CipPage> {
   List<Map<String, dynamic>> _storeItems = const [];
   final Map<String, TextEditingController> _inputControllers = {};
   final Map<String, bool> _checkboxValues = {};
+  String? _activePluginId;
 
   @override
   void initState() {
@@ -57,6 +58,7 @@ class _CipPageState extends State<CipPage> {
       _ => node['type']?.toString().toLowerCase() ?? 'text',
     };
     final pluginId = node['plugin_id']?.toString() ?? inheritedPluginId;
+    final effectivePluginId = pluginId ?? _activePluginId;
     final rawChildren = node['children'] ?? node['items'] ?? node['child'] ?? node['content'];
     final childMaps = rawChildren is List
         ? rawChildren.whereType<Map>()
@@ -68,7 +70,7 @@ class _CipPageState extends State<CipPage> {
     final children = childMaps
         .map(
           (item) =>
-              _buildUiNode(context, Map<String, dynamic>.from(item), pluginId),
+              _buildUiNode(context, Map<String, dynamic>.from(item), effectivePluginId),
         )
         .toList(growable: false);
     final nodeId = node['id']?.toString() ?? '';
@@ -97,7 +99,7 @@ class _CipPageState extends State<CipPage> {
                 ? null
                 : () => _runUiAction({
                     ...node,
-                    if (pluginId != null) 'plugin_id': pluginId,
+                    if (effectivePluginId != null) 'plugin_id': effectivePluginId,
                   }),
             child: Text(
               context.tr.t(
@@ -116,8 +118,18 @@ class _CipPageState extends State<CipPage> {
           child: TextField(
             controller: controller,
             onChanged: (value) {
-              _service.setUiTextValue(pluginId ?? '', nodeId, value);
+              _service.setUiTextValue(effectivePluginId ?? '', nodeId, value);
               setState(() {});
+              final callback = int.tryParse(node['change_callback_ref']?.toString() ?? '');
+              if (callback != null && effectivePluginId != null && effectivePluginId.isNotEmpty) {
+                _runUiCallback(effectivePluginId, callback);
+              }
+            },
+            onEditingComplete: () {
+              final callback = int.tryParse(node['focus_lost_callback_ref']?.toString() ?? '');
+              if (callback != null && effectivePluginId != null && effectivePluginId.isNotEmpty) {
+                _runUiCallback(effectivePluginId, callback);
+              }
             },
             obscureText: node['input_type']?.toString() == 'password',
             maxLength: int.tryParse(node['max_length']?.toString() ?? ''),
@@ -125,7 +137,7 @@ class _CipPageState extends State<CipPage> {
             onSubmitted: (_) => _runUiAction({
               ...node,
               'action': node['action'] ?? 'submit',
-              if (pluginId != null) 'plugin_id': pluginId,
+              if (effectivePluginId != null) 'plugin_id': effectivePluginId,
             }),
             decoration: InputDecoration(
               labelText: context.tr.t(node['label']?.toString() ?? ''),
@@ -143,7 +155,11 @@ class _CipPageState extends State<CipPage> {
           onChanged: (value) {
             final next = value ?? false;
             setState(() => _checkboxValues[nodeId] = next);
-            _service.setUiCheckedValue(pluginId ?? '', nodeId, next);
+            _service.setUiCheckedValue(effectivePluginId ?? '', nodeId, next);
+            final callback = int.tryParse(node['change_callback_ref']?.toString() ?? '');
+            if (callback != null && effectivePluginId != null && effectivePluginId.isNotEmpty) {
+              _runUiCallback(effectivePluginId, callback);
+            }
           },
           title: Text(
             context.tr.t(
@@ -174,9 +190,25 @@ class _CipPageState extends State<CipPage> {
     }
   }
 
+  Future<void> _runUiCallback(String pluginId, int callbackRef) async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      await _service.executeCipCallback(pluginId, callbackRef);
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${context.tr.t('CIP 执行失败')}：$error')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   Future<void> _runUiAction(Map<String, dynamic> node) async {
     final action = node['action']?.toString() ?? 'submit';
-    final pluginId = node['plugin_id']?.toString();
+    final pluginId = node['plugin_id']?.toString() ?? _activePluginId;
     final nodeId = node['id']?.toString() ?? '';
     final values = <String, dynamic>{
       for (final entry in _inputControllers.entries) entry.key: entry.value.text,
@@ -269,7 +301,7 @@ class _CipPageState extends State<CipPage> {
     final id = plugin['id']?.toString() ?? '';
     final script = plugin['cip_main']?.toString();
     if (id.isEmpty || script == null || script.isEmpty) return;
-    setState(() => _busy = true);
+    setState(() { _busy = true; _activePluginId = id; });
     try {
       await _service.executeCip(id, script);
       final uiResult = _service.uiResult(id);

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:webview_flutter/webview_flutter.dart';
 import '../services/app_localizations.dart';
 import '../utils/user_error.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 class GeeTestCaptchaPage extends StatefulWidget {
   final String pageUrl;
@@ -13,26 +13,23 @@ class GeeTestCaptchaPage extends StatefulWidget {
 }
 
 class _GeeTestCaptchaPageState extends State<GeeTestCaptchaPage> {
+  late final WebViewController _controller;
   String? _error;
 
   @override
   void initState() {
     super.initState();
-    _initialize();
-  }
-
-  Future<void> _initialize() async {
-    try {
-      final uri = Uri.tryParse(widget.pageUrl);
-      if (uri == null) throw const FormatException('invalid captcha URL');
-      final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
-      if (!opened) throw StateError('unable to open system browser');
-      if (mounted) {
-        setState(() => _error = AppLocalizations.current.t('验证页面已在系统浏览器打开，完成后返回注册页'));
-      }
-    } catch (error) {
-      if (mounted) setState(() => _error = '${AppLocalizations.current.t('人机验证加载失败')}：${safeErrorMessage(error)}');
-    }
+    _controller = WebViewController()
+      ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..setNavigationDelegate(
+        NavigationDelegate(
+          onWebResourceError: (error) {
+            if (mounted) setState(() => _error = '${AppLocalizations.current.t('人机验证加载失败')}：${error.description}');
+          },
+          onNavigationRequest: (_) => NavigationDecision.navigate,
+        ),
+      )
+      ..loadRequest(Uri.parse(widget.pageUrl));
   }
 
   @override
@@ -40,14 +37,11 @@ class _GeeTestCaptchaPageState extends State<GeeTestCaptchaPage> {
     return AlertDialog(
       title: Text(AppLocalizations.current.t('人机验证')),
       content: SizedBox(
-        width: 430,
-        height: 180,
-        child: Center(
-          child: Text(
-            _error ?? AppLocalizations.current.t('正在打开人机验证页面，请在系统浏览器中完成验证后返回'),
-            textAlign: TextAlign.center,
-          ),
-        ),
+        width: 520,
+        height: 620,
+        child: _error == null
+            ? WebViewWidget(controller: _controller)
+            : Center(child: Text(_error!, textAlign: TextAlign.center)),
       ),
       actions: [
         TextButton(
