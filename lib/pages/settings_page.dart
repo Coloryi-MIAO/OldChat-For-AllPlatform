@@ -734,9 +734,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   (server) => DropdownMenuItem(
                     value: server,
                     child: Text(
-                      server == Constants.hiddenFallbackServer
-                          ? '******'
-                          : server,
+                      server,
                     ),
                   ),
                 )

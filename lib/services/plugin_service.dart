@@ -88,7 +88,6 @@ class PluginService extends ChangeNotifier {
     final root = _uiResults[id];
     if (root == null || nodeId.isEmpty) return;
     _setUiFieldValue(root, nodeId, 'value', value);
-    _setUiFieldValue(root, nodeId, 'text', value);
     notifyListeners();
   }
 
