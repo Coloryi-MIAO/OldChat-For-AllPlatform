@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+import 'package:universal_io/io.dart';
 
 import 'package:file_picker/file_picker.dart' as picker;
 
@@ -54,8 +55,10 @@ List<picker.PlatformFile> filePickerFiles(Object? result) {
 
 Future<Uint8List?> filePickerBytes(picker.PlatformFile file) async {
   if (file.bytes != null) return file.bytes;
+  final path = file.path;
+  if (path == null || path.isEmpty) return null;
   try {
-    return await file.readAsBytes();
+    return await File(path).readAsBytes();
   } catch (_) {
     return null;
   }
