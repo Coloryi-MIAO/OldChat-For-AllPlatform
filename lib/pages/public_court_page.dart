@@ -406,7 +406,7 @@ class _PublicCourtCasePageState extends State<PublicCourtCasePage> {
   }
 
   Future<void> _pickEvidence() async {
-    final result = await FilePicker.pickFiles(
+    final result = await pickFilesCompat(
       type: FileType.image,
       allowMultiple: false,
     );

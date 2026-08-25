@@ -134,7 +134,7 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Future<void> _chooseCacheLocation() async {
-    final result = await FilePicker.getDirectoryPath();
+    final result = await getDirectoryPathCompat();
     if (result != null) {
       await CacheService().setLocation(result);
       if (mounted) {

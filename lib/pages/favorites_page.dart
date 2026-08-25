@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/app_localizations.dart';
-import 'package:webview_flutter/webview_flutter.dart';
+import 'package:webview_windows/webview_windows.dart';
 import '../services/api_service.dart';
 import '../utils/url_helper.dart';
 import '../widgets/image_viewer.dart';
