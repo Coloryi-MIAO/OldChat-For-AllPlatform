@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/app_localizations.dart';
-import 'package:webview_windows/webview_windows.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../services/api_service.dart';
 import '../utils/url_helper.dart';
 import '../widgets/image_viewer.dart';
@@ -302,14 +302,10 @@ class WebViewPage extends StatefulWidget {
 }
 
 class _WebViewPageState extends State<WebViewPage> {
-  late final WebViewController _controller;
-
   @override
   void initState() {
     super.initState();
-    _controller = WebViewController()
-      ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..loadRequest(Uri.parse(widget.url));
+    launchUrl(Uri.parse(widget.url), mode: LaunchMode.externalApplication);
   }
 
   @override
@@ -320,7 +316,7 @@ class _WebViewPageState extends State<WebViewPage> {
         backgroundColor: Theme.of(context).primaryColor,
         foregroundColor: Colors.white,
       ),
-      body: WebViewWidget(controller: _controller),
+      body: Center(child: Text(AppLocalizations.current.t('已在系统浏览器打开'))),
     );
   }
 }

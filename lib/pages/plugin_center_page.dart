@@ -355,7 +355,6 @@ class _PluginCenterPageState extends State<PluginCenterPage> {
           type: FileType.custom,
           allowedExtensions: [extension],
           bytes: bytes,
-          lockParentWindow: true,
         ),
       );
       if (path != null && mounted) _show('${context.tr.t('插件已导出：')}$path');

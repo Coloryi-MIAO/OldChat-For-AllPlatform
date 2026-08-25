@@ -101,7 +101,6 @@ class DownloadService {
         dialogTitle: '保存文件',
         fileName: fileNameFromMessage(fileName, path),
         bytes: await source.readAsBytes(),
-        lockParentWindow: true,
       ),
     );
     if (selectedPath == null || selectedPath.isEmpty) return null;
