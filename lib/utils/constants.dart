@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 
 import '../services/account_storage.dart';
 
@@ -10,7 +11,8 @@ class Constants {
   static const String hiddenFallbackServer = fallbackBaseUrl;
   static const String backupServer = fallbackBaseUrl;
   static const String mediaFallbackServer = fallbackBaseUrl;
-  static const String resourceBaseUrl = defaultBaseUrl;
+
+  static String get resourceBaseUrl => defaultBaseUrl;
   static const String appName = 'OldChat For AllPlatform';
   static const String appAumid = 'ColoryiOldChatForAllPlatform';
   static const String appClsid = '936C39FC-6BBC-4A57-B8F8-7C627E401B2F';
@@ -26,7 +28,7 @@ class Constants {
     return '/v1/${normalized.substring(4)}';
   }
 
-  static String get baseUrl => _baseUrl;
+  static String get baseUrl => kIsWeb ? Uri.base.origin : _baseUrl;
 
   static List<String> _customServers = <String>[];
 
@@ -91,11 +93,13 @@ class Constants {
     final storage = AccountStorage.instance;
     await storage.load();
     final savedBaseUrl = storage.getString(baseUrlKey)?.trim();
-    _baseUrl = savedBaseUrl == null ||
-            savedBaseUrl.isEmpty ||
-            savedBaseUrl.contains('60.205.94.101')
-        ? defaultBaseUrl
-        : savedBaseUrl;
+    _baseUrl = kIsWeb
+        ? Uri.base.origin
+        : savedBaseUrl == null ||
+                savedBaseUrl.isEmpty ||
+                savedBaseUrl.contains('60.205.94.101')
+            ? defaultBaseUrl
+            : savedBaseUrl;
     await loadServers();
     _apiVersion = 'v2';
     await storage.setString(apiVersionKey, 'v2');

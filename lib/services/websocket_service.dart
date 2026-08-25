@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:web_socket_channel/status.dart' as status;
 import '../utils/constants.dart';
@@ -79,7 +80,7 @@ class WebSocketService {
       }
       print('WebSocket: sessionId = ${session.sessionId}');
 
-      final baseUri = Uri.parse(Constants.baseUrl);
+      final baseUri = kIsWeb ? Uri.base : Uri.parse(Constants.baseUrl);
       final wsUri = baseUri.replace(
         scheme: baseUri.scheme == 'https' ? 'wss' : 'ws',
         path: Constants.wsPath,

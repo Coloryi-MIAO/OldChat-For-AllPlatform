@@ -1302,6 +1302,12 @@ class PluginService extends ChangeNotifier {
       if (normalized != null) children.add(normalized);
     }
     final result = <String, dynamic>{'type': normalizedType};
+    if (normalizedType == 'page' || normalizedType == 'column' || normalizedType == 'row' || normalizedType == 'list') {
+      result['id'] = raw['id']?.toString() ?? path;
+    }
+    if (raw['on_click'] is Map && (raw['on_click'] as Map)['__lua_callback_ref'] is num) {
+      result['callback_ref'] = ((raw['on_click'] as Map)['__lua_callback_ref'] as num).toInt();
+    }
     if ((normalizedType == 'button' || normalizedType == 'input' || normalizedType == 'checkbox') &&
         (raw['id'] == null || raw['id'].toString().isEmpty)) {
       final label = (raw['label'] ?? raw['text'] ?? normalizedType).toString();
@@ -1567,7 +1573,8 @@ class PluginService extends ChangeNotifier {
 
     String? getUiText(String nodeId) {
       final node = _findUiNode(_uiResults[id], nodeId);
-      return node?['text']?.toString();
+      if (node == null) return null;
+      return (node['value'] ?? node['text'])?.toString();
     }
 
     int getText(LuaState ls) {
@@ -1651,9 +1658,10 @@ class PluginService extends ChangeNotifier {
 
     int setUiField(LuaState ls, String field) {
       final nodeId = ls.optString(1, '') ?? '';
-      final value = luaArgument(ls, 2)?.toString() ?? '';
+      final rawValue = luaArgument(ls, 2);
+      final value = rawValue is bool ? rawValue : rawValue?.toString() ?? '';
       final root = _uiResults[id];
-      if (root != null) _setUiField(root, nodeId, field, value);
+      if (root != null) _setUiFieldValue(root, nodeId, field, value);
       notifyListeners();
       return 0;
     }
@@ -1700,7 +1708,11 @@ class PluginService extends ChangeNotifier {
             ? await ApiService().getRaw(target)
             : await Dio().get<dynamic>(
                 target,
-                options: Options(responseType: ResponseType.json),
+                options: Options(
+                  responseType: ResponseType.json,
+                  followRedirects: false,
+                  validateStatus: (status) => status != null && status >= 200 && status < 300,
+                ),
               ).then((response) => response.data);
       } catch (e) {
         error = e.toString();

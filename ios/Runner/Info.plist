@@ -24,6 +24,10 @@
 	<string>????</string>
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
+	<key>NSCameraUsageDescription</key>
+	<string>OldChat 需要使用相机完成拍照和 CIP 相机功能。</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>OldChat 需要访问照片库以选择要发送的图片。</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>UIApplicationSceneManifest</key>
