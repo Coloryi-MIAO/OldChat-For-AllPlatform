@@ -5,10 +5,10 @@ import '../services/account_storage.dart';
 class Constants {
   static const String baseUrlKey = 'base_url';
   static const String apiVersionKey = 'api_version';
-  static const String defaultBaseUrl = 'http://154.9.24.232:8080';
-  static const String hiddenFallbackServer = 'http://154.9.24.232:8080';
-  static const String backupServer = hiddenFallbackServer;
-  static const String mediaFallbackServer = hiddenFallbackServer;
+  static const String defaultBaseUrl = 'https://oc.mcl0.dpdns.org';
+  static const String fallbackBaseUrl = 'http://154.9.24.232:8080';
+  static const String backupServer = fallbackBaseUrl;
+  static const String mediaFallbackServer = fallbackBaseUrl;
   static const String resourceBaseUrl = defaultBaseUrl;
   static const String appName = 'OldChat For AllPlatform';
   static const String appAumid = 'ColoryiOldChatForAllPlatform';
@@ -31,12 +31,13 @@ class Constants {
 
   static List<String> get visibleServers => {
     defaultBaseUrl,
+    fallbackBaseUrl,
     ..._customServers,
   }.toList(growable: false);
 
   static List<String> get mediaServers => {
     defaultBaseUrl,
-    hiddenFallbackServer,
+    fallbackBaseUrl,
   }.toList(growable: false);
 
   static bool _isServerUrl(String value) {
@@ -88,7 +89,12 @@ class Constants {
   static Future<void> loadBaseUrl() async {
     final storage = AccountStorage.instance;
     await storage.load();
-    _baseUrl = storage.getString(baseUrlKey) ?? defaultBaseUrl;
+    final savedBaseUrl = storage.getString(baseUrlKey)?.trim();
+    _baseUrl = savedBaseUrl == null ||
+            savedBaseUrl.isEmpty ||
+            savedBaseUrl.contains('60.205.94.101')
+        ? defaultBaseUrl
+        : savedBaseUrl;
     await loadServers();
     _apiVersion = 'v2';
     await storage.setString(apiVersionKey, 'v2');
@@ -119,11 +125,11 @@ class Constants {
     if (value.isEmpty) return '';
     if (value.startsWith('cip://')) return value;
     if (value.startsWith('channel-private:')) {
-      return '$defaultBaseUrl/channel-media/${value.substring('channel-private:'.length)}';
+      return '$baseUrl/channel-media/${value.substring('channel-private:'.length)}';
     }
     if (value.contains('/channel-media/')) return value;
     if (value.startsWith('http://') || value.startsWith('https://')) return value;
-    return '$defaultBaseUrl${value.startsWith('/') ? '' : '/'}$value';
+    return '$baseUrl${value.startsWith('/') ? '' : '/'}$value';
   }
 
   static const String geetestCaptchaId = '769d069177e132e46eeba07a6210cf3a';

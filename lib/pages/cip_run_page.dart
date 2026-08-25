@@ -44,10 +44,36 @@ class _CipRunPageState extends State<CipRunPage> {
 
   Future<void> _action(Map<String, dynamic> node) async {
     final callback = int.tryParse(node['callback_ref']?.toString() ?? '');
-    if (callback == null) return;
+    final action = node['action']?.toString();
+    if (callback == null && action != 'submit' && action != 'run') return;
     setState(() => _busy = true);
     try {
-      await _service.executeCipCallback(widget.pluginId, callback);
+      if (callback != null) {
+        await _service.executeCipCallback(widget.pluginId, callback);
+      } else {
+        final plugin = _service.plugins.firstWhere(
+          (item) => item['id']?.toString() == widget.pluginId,
+          orElse: () => <String, dynamic>{},
+        );
+        final script = plugin['cip_main']?.toString();
+        if (script == null || script.isEmpty || plugin['enabled'] != true) {
+          throw Exception('CIP 未启用或脚本不存在');
+        }
+        await _service.executeCip(
+          widget.pluginId,
+          script,
+          event: {
+            'type': 'ui.action',
+            'action': action,
+            'node_id': node['id'],
+            'value': _inputs[node['id']?.toString()]?.text,
+            'values': {
+              for (final entry in _inputs.entries) entry.key: entry.value.text,
+              for (final entry in _checks.entries) entry.key: entry.value,
+            },
+          },
+        );
+      }
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -57,6 +83,21 @@ class _CipRunPageState extends State<CipRunPage> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  void _syncInput(String id, String value) {
+    _service.setUiTextValue(widget.pluginId, id, value);
+  }
+
+  Future<void> _submitInput(Map<String, dynamic> node) async {
+    final callback = int.tryParse(node['submit_callback_ref']?.toString() ?? '');
+    if (callback != null) {
+      await _action({...node, 'callback_ref': callback});
+    }
+  }
+
+  void _syncCheck(String id, bool value) {
+    _service.setUiCheckedValue(widget.pluginId, id, value);
   }
 
   Widget _node(Map<String, dynamic> node) {
@@ -98,7 +139,9 @@ class _CipRunPageState extends State<CipRunPage> {
         return Padding(
           padding: EdgeInsets.symmetric(vertical: margin),
           child: FilledButton(
-            onPressed: _busy ? null : () => _action(node),
+            onPressed: _busy || node['enabled']?.toString().toLowerCase() == 'false'
+                ? null
+                : () => _action(node),
             child: Text(context.tr.t(node['label']?.toString() ?? node['text']?.toString() ?? '操作')),
           ),
         );
@@ -108,9 +151,11 @@ class _CipRunPageState extends State<CipRunPage> {
           padding: EdgeInsets.symmetric(vertical: margin),
           child: TextField(
             controller: controller,
+            onChanged: (value) => _syncInput(id, value),
             obscureText: node['input_type']?.toString() == 'password',
             maxLength: int.tryParse(node['max_length']?.toString() ?? ''),
             maxLines: node['single_line']?.toString().toLowerCase() == 'false' ? null : 1,
+            onSubmitted: (_) => _submitInput(node),
             decoration: InputDecoration(
               labelText: context.tr.t(node['label']?.toString() ?? ''),
               hintText: context.tr.t(node['placeholder']?.toString() ?? node['hint']?.toString() ?? ''),
@@ -122,7 +167,11 @@ class _CipRunPageState extends State<CipRunPage> {
         return CheckboxListTile(
           contentPadding: EdgeInsets.zero,
           value: checked,
-          onChanged: (value) => setState(() => _checks[id] = value ?? false),
+          onChanged: (value) {
+            final next = value ?? false;
+            setState(() => _checks[id] = next);
+            _syncCheck(id, next);
+          },
           title: Text(context.tr.t(node['label']?.toString() ?? node['text']?.toString() ?? '选项')),
         );
       case 'image':

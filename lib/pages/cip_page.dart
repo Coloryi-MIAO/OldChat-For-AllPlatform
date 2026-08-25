@@ -91,7 +91,7 @@ class _CipPageState extends State<CipPage> {
         return Padding(
           padding: EdgeInsets.symmetric(vertical: margin),
           child: FilledButton(
-            onPressed: _busy
+            onPressed: _busy || node['enabled']?.toString().toLowerCase() == 'false'
                 ? null
                 : () => _runUiAction({
                     ...node,
@@ -113,13 +113,21 @@ class _CipPageState extends State<CipPage> {
           padding: const EdgeInsets.symmetric(vertical: 4),
           child: TextField(
             controller: controller,
+            onChanged: (value) {
+              _service.setUiTextValue(pluginId ?? '', nodeId, value);
+              setState(() {});
+            },
             obscureText: node['input_type']?.toString() == 'password',
             maxLength: int.tryParse(node['max_length']?.toString() ?? ''),
-            onChanged: (_) => setState(() {}),
             maxLines: node['single_line']?.toString().toLowerCase() == 'false' ? null : 1,
+            onSubmitted: (_) => _runUiAction({
+              ...node,
+              'action': node['action'] ?? 'submit',
+              if (pluginId != null) 'plugin_id': pluginId,
+            }),
             decoration: InputDecoration(
               labelText: context.tr.t(node['label']?.toString() ?? ''),
-              hintText: context.tr.t(node['placeholder']?.toString() ?? ''),
+              hintText: context.tr.t(node['placeholder']?.toString() ?? node['hint']?.toString() ?? ''),
             ),
           ),
         );
@@ -130,8 +138,11 @@ class _CipPageState extends State<CipPage> {
         );
         return CheckboxListTile(
           value: checked,
-          onChanged: (value) =>
-              setState(() => _checkboxValues[nodeId] = value ?? false),
+          onChanged: (value) {
+            final next = value ?? false;
+            setState(() => _checkboxValues[nodeId] = next);
+            _service.setUiCheckedValue(pluginId ?? '', nodeId, next);
+          },
           title: Text(
             context.tr.t(
               node['label']?.toString() ?? node['text']?.toString() ?? '选项',
@@ -162,9 +173,13 @@ class _CipPageState extends State<CipPage> {
   }
 
   Future<void> _runUiAction(Map<String, dynamic> node) async {
-    final action = node['action']?.toString();
+    final action = node['action']?.toString() ?? 'submit';
     final pluginId = node['plugin_id']?.toString();
     final nodeId = node['id']?.toString() ?? '';
+    final values = <String, dynamic>{
+      for (final entry in _inputControllers.entries) entry.key: entry.value.text,
+      for (final entry in _checkboxValues.entries) entry.key: entry.value,
+    };
     if (action == 'clear') {
       if (pluginId != null && pluginId.isNotEmpty) {
         _service.clearUiResult(pluginId);
@@ -204,11 +219,8 @@ class _CipPageState extends State<CipPage> {
           'type': 'ui.action',
           'action': node['action'],
           'node_id': node['id'],
-          'value': nodeId.isEmpty ? null : _inputControllers[nodeId]?.text,
-          'values': {
-            for (final entry in _inputControllers.entries) entry.key: entry.value.text,
-            for (final entry in _checkboxValues.entries) entry.key: entry.value,
-          },
+          'value': nodeId.isEmpty ? null : (_inputControllers[nodeId]?.text ?? values[nodeId]),
+          'values': values,
         },
       );
     } catch (error) {
@@ -223,7 +235,7 @@ class _CipPageState extends State<CipPage> {
   }
 
   Future<void> _import() async {
-    final result = await FilePicker.pickFiles(
+    final result = await pickFilesCompat(
       type: FileType.custom,
       allowedExtensions: const ['cip'],
       withData: false,

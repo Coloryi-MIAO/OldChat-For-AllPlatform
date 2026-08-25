@@ -200,7 +200,7 @@ class _LoginPageState extends State<LoginPage>
       return context.tr.text('登录接口不存在，请检查服务器地址', 'The login endpoint was not found. Check the server address.');
     }
     if (value.contains('(400)')) {
-      return context.tr.text('登录请求无效，请检查输入内容', 'The login request was invalid. Check your input.');
+      return context.tr.text('服务器开小差了', 'The server is having a hiccup.');
     }
     if (value.contains('(401)')) {
       return context.tr.text('登录凭据无效，请重新输入', 'The login credentials are invalid. Please try again.');
@@ -390,7 +390,7 @@ class _LoginPageState extends State<LoginPage>
               controller: controller,
               decoration: InputDecoration(
                 hintText: AppLocalizations.current.t(
-                  'http://60.205.94.101:8080',
+                  'https://oc.mcl0.dpdns.org',
                 ),
                 border: OutlineInputBorder(),
                 prefixIcon: Icon(Icons.link),
