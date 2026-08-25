@@ -48,7 +48,7 @@ dependencies:
 
   # 音频（Windows 7 构建不加载 Media Foundation 音频插件）
   flutter_local_notifications: ^17.0.0
-  audioplayers: ^6.5.1
+  audioplayers: ^6.4.0
   win_toast: ^0.4.0
   flutter_desktop_notifications: ^1.1.2
   windows_single_instance: ^1.1.0
