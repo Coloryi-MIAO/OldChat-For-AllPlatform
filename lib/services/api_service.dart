@@ -439,13 +439,7 @@ class ApiService {
 
   String? _v1FallbackPath(String v2Path) {
     const mappings = <String, String>{
-      '/v2/auth/login': '/v2/auth/login',
-      '/v2/auth/register': '/v2/auth/register',
-      '/v2/auth/refresh': '/v2/auth/refresh',
       '/v2/auth/logout': '/v1/auth/logout',
-      '/v2/auth/password/reset': '/v2/auth/password/reset',
-      '/v2/auth/email/send': '/v2/auth/email/send',
-      '/v2/auth/captcha': '/v2/auth/captcha',
       '/v2/auth/handshake': '/v1/auth/handshake',
       '/v2/direct/messages/v2': '/v1/direct/messages/v2',
       '/v2/groups/messages/v2': '/v1/groups/messages/v2',
@@ -882,7 +876,7 @@ class ApiService {
     try {
       final deviceId = await WsSessionService(http: true).getDeviceId();
       final response = await _dio.post(
-        '/v1/auth/login',
+        '/v2/auth/login',
         data: {
           'identifier': username,
           'username': username,
@@ -936,7 +930,7 @@ class ApiService {
   }) async {
     try {
       final response = await _dio.post(
-        '/v1/auth/register',
+        '/v2/auth/register',
         data: {
           'email': email,
           'username': username,
@@ -967,7 +961,7 @@ class ApiService {
   Future<Map<String, dynamic>> refreshToken(String refreshToken) async {
     try {
       final response = await _dio.post(
-        '/v1/auth/refresh',
+        '/v2/auth/refresh',
         data: {'refresh_token': refreshToken},
       );
       return _unwrapEnvelopeMap(response.data);
@@ -978,7 +972,7 @@ class ApiService {
 
   Future<void> logout() async {
     try {
-      await _dio.post(Constants.apiPath('/v1/auth/logout'));
+      await _dio.post('/v2/auth/logout');
     } on DioException catch (e) {
       throw _apiError('请求失败', e);
     }
@@ -989,7 +983,7 @@ class ApiService {
   Future<Map<String, dynamic>> getCaptcha() async {
     try {
       final response = await _dio.get(
-        '/v1/auth/captcha',
+        '/v2/auth/captcha',
         options: Options(responseType: ResponseType.bytes),
       );
       final captchaId = response.headers.value('x-captcha-id') ?? '';
@@ -1010,7 +1004,7 @@ class ApiService {
   ) async {
     try {
       await _dio.post(
-        '/v1/auth/email/send',
+        '/v2/auth/email/send',
         data: {
           'email': email,
           'purpose': 'register',
@@ -1033,7 +1027,7 @@ class ApiService {
   ) async {
     try {
       final response = await _dio.post(
-        '/v1/auth/password/reset',
+        '/v2/auth/password/reset',
         data: {'email': email, 'code': code, 'new_password': newPassword},
       );
       return response.data;

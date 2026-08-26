@@ -304,7 +304,8 @@ class WsSessionService {
     return {
       'X-Session': sid,
       'X-Ts': ts,
-      'X-Auth': await _encryptedAuthHeader(),
+      if (await _encryptedAuthHeader() case final auth? when auth.isNotEmpty)
+        'X-Auth': auth,
       'X-Sign-Time': ts,
       'X-Nonce': nonce,
       'X-Sign-Nonce': nonce,
