@@ -10,7 +10,7 @@ Future<picker.FilePickerResult?> pickFilesCompat({
   List<String>? allowedExtensions,
   bool allowMultiple = false,
   bool withData = false,
-}) => picker.FilePicker.platform.pickFiles(
+}) => picker.FilePicker.pickFiles(
       type: type,
       allowedExtensions: allowedExtensions,
       allowMultiple: allowMultiple,
@@ -24,7 +24,7 @@ Future<String?> saveFileCompat({
   picker.FileType type = picker.FileType.any,
   List<String>? allowedExtensions,
   Uint8List? bytes,
-}) => picker.FilePicker.platform.saveFile(
+}) => picker.FilePicker.saveFile(
       dialogTitle: dialogTitle,
       fileName: fileName,
       initialDirectory: initialDirectory,
@@ -36,7 +36,7 @@ Future<String?> saveFileCompat({
 Future<String?> getDirectoryPathCompat({
   String? dialogTitle,
   String? initialDirectory,
-}) => picker.FilePicker.platform.getDirectoryPath(
+}) => picker.FilePicker.getDirectoryPath(
       dialogTitle: dialogTitle,
       initialDirectory: initialDirectory,
     );
