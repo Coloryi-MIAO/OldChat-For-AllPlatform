@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../services/app_localizations.dart';
 import '../services/plugin_service.dart';
 import '../services/api_service.dart';
+import '../widgets/cached_image.dart';
 import 'cip_run_page.dart';
 
 class CipPage extends StatefulWidget {
@@ -173,7 +174,7 @@ class _CipPageState extends State<CipPage> {
             ? const SizedBox.shrink()
             : Padding(
                 padding: EdgeInsets.symmetric(vertical: margin),
-                child: Image.network(url, height: height ?? 160, fit: BoxFit.contain),
+                child: CachedImage(url, height: height ?? 160, fit: BoxFit.contain),
               );
       case 'spacer':
         return SizedBox(height: height ?? 12);

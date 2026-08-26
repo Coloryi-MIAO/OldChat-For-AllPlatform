@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../services/app_localizations.dart';
 import '../services/plugin_service.dart';
+import '../widgets/cached_image.dart';
 
 class CipRunPage extends StatefulWidget {
   final String pluginId;
@@ -122,7 +123,10 @@ class _CipRunPageState extends State<CipRunPage> {
       case 'list':
         return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: children);
       case 'row':
-        return SingleChildScrollView(scrollDirection: Axis.horizontal, child: Row(children: children));
+        return SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(children: children),
+        );
       case 'button':
         return Padding(
           padding: EdgeInsets.symmetric(vertical: margin),
@@ -176,7 +180,7 @@ class _CipRunPageState extends State<CipRunPage> {
         final url = node['src']?.toString() ?? node['url']?.toString() ?? '';
         return url.isEmpty ? const SizedBox.shrink() : Padding(
           padding: EdgeInsets.symmetric(vertical: margin),
-          child: Image.network(url, height: height ?? 180, fit: BoxFit.contain),
+          child: CachedImage(url, height: height ?? 180, fit: BoxFit.contain),
         );
       case 'spacer':
         return SizedBox(height: height ?? 12);

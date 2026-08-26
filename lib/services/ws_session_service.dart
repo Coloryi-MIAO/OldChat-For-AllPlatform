@@ -304,12 +304,20 @@ class WsSessionService {
     return {
       'X-Session': sid,
       'X-Ts': ts,
+      'X-Auth': await _encryptedAuthHeader(),
       'X-Sign-Time': ts,
       'X-Nonce': nonce,
       'X-Sign-Nonce': nonce,
       'X-Sign': base64Encode(mac.bytes).replaceAll('=', ''),
+      'X-Mac': base64Encode(mac.bytes).replaceAll('=', ''),
       if (deviceId != null && deviceId.isNotEmpty) 'X-Device-Id': deviceId,
     };
+  }
+
+  Future<String?> _encryptedAuthHeader() async {
+    final token = AuthService().token;
+    if (token == null || token.isEmpty) return null;
+    return encrypt('Bearer $token');
   }
 
   bool _constantTimeEqual(List<int> left, List<int> right) {
