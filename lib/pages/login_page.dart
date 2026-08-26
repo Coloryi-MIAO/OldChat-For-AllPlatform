@@ -537,10 +537,7 @@ class _LoginPageState extends State<LoginPage>
                         controller: _tabController,
                         children: [
                           _buildLoginForm(),
-                          SingleChildScrollView(
-                            padding: const EdgeInsets.only(top: 12),
-                            child: _buildRegisterForm(),
-                          ),
+                          _buildRegisterForm(),
                         ],
                       ),
                     ),
@@ -656,9 +653,10 @@ class _LoginPageState extends State<LoginPage>
 
   Widget _buildRegisterForm() {
     final primaryColor = Theme.of(context).primaryColor;
-    return Column(
+    return ListView(
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+      padding: const EdgeInsets.only(top: 12),
       children: [
-        SizedBox(height: 16),
         TextFormField(
           controller: _regUsernameController,
           decoration: InputDecoration(

@@ -2838,7 +2838,6 @@ class _ChatPageState extends State<ChatPage>
                               );
                             },
                               ),
-                            ),
                         ),
                 ),
                 _buildQuotePreview(),
