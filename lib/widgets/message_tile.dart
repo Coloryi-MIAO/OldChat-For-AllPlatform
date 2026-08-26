@@ -136,6 +136,9 @@ class _MessageTileState extends State<MessageTile> {
     final uid = msg.fromUid;
     final roleOverride = _roleLabel(widget.groupRole ?? msg.groupRole);
     if (uid.isEmpty) return;
+    if (msg.fromAvatarUrl != null && msg.fromAvatarUrl!.trim().isNotEmpty && !widget.isMe) {
+      if (mounted) setState(() => _avatarUrl = msg.fromAvatarUrl);
+    }
     final auth = context.read<AuthService>();
     final currentUserId = auth.userId;
     if (uid == currentUserId) {

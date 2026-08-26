@@ -10,6 +10,8 @@ class Message {
   final String msgType;
   final String? mediaUrl;
   final String? thumbUrl;
+  final String? originalUrl;
+  final String? fromAvatarUrl;
   final int durationMs;
   final int burnAfterSeconds;
   final int? burnStartAt;
@@ -34,6 +36,8 @@ class Message {
     required this.msgType,
     this.mediaUrl,
     this.thumbUrl,
+    this.originalUrl,
+    this.fromAvatarUrl,
     this.durationMs = 0,
     this.burnAfterSeconds = 0,
     this.burnStartAt,
@@ -53,6 +57,7 @@ class Message {
     final rawDurationMs = json['duration_ms'];
     final rawDuration = json['duration'];
     final durationMs = _parseDurationMs(rawDurationMs, rawDuration);
+    final sender = json['sender'] is Map ? Map<String, dynamic>.from(json['sender'] as Map) : const <String, dynamic>{};
     final media = json['media'] ?? json['attachment'] ?? json['file'];
     String? mediaValue(dynamic value) {
       if (value is String && value.trim().isNotEmpty) return value.trim();
@@ -78,9 +83,17 @@ class Message {
     final thumbUrl = mediaValue(json['thumb_url']) ?? mediaValue(json['thumbnail_url']) ??
         (media is Map ? mediaValue(media['thumbnail']) : null) ??
         mediaValue(bodyMap?['thumb_url']) ?? mediaValue(bodyMap?['thumbnail_url']);
+    final originalUrl = mediaValue(json['original_url']) ?? mediaValue(bodyMap?['original_url']);
+    final fromAvatarUrl = mediaValue(
+      json['from_avatar'] ??
+          json['sender_avatar'] ??
+          json['avatar_url'] ??
+          sender['avatar_url'] ??
+          sender['avatar'],
+    );
     return Message(
       id: (json['id'] ?? json['message_id'] ?? json['msg_id'] ?? '').toString(),
-      fromUid: (json['from_uid'] ?? json['sender_uid'] ?? json['from_ncuid'] ?? '').toString(),
+      fromUid: (json['from_uid'] ?? json['sender_uid'] ?? sender['uid'] ?? json['from_ncuid'] ?? '').toString(),
       fromNcuid: json['from_ncuid']?.toString(),
       body: json['body'] is String
           ? json['body'] as String
@@ -91,6 +104,8 @@ class Message {
           .toString(),
       mediaUrl: mediaUrl,
       thumbUrl: thumbUrl,
+      originalUrl: originalUrl,
+      fromAvatarUrl: fromAvatarUrl,
       durationMs: durationMs,
       burnAfterSeconds: _toInt(json['burn_after_seconds']),
       burnStartAt: _toNullableInt(json['burn_start_at']),
@@ -174,6 +189,8 @@ class Message {
         'msg_type': msgType,
         'media_url': mediaUrl,
         'thumb_url': thumbUrl,
+        'original_url': originalUrl,
+        'from_avatar': fromAvatarUrl,
         'duration_ms': durationMs,
         'burn_after_seconds': burnAfterSeconds,
         'burn_start_at': burnStartAt,

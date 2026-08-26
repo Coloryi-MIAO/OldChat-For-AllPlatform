@@ -81,6 +81,11 @@ class _CipPageState extends State<CipPage> {
     final margin = double.tryParse(node['margin']?.toString() ?? '') ?? 4;
     switch (type) {
       case 'page':
+        return ListView(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          children: children,
+        );
       case 'column':
       case 'list':
         return Column(
@@ -174,7 +179,15 @@ class _CipPageState extends State<CipPage> {
             ? const SizedBox.shrink()
             : Padding(
                 padding: EdgeInsets.symmetric(vertical: margin),
-                child: CachedImage(url, height: height ?? 160, fit: BoxFit.contain),
+                child: CachedImage(
+                  url,
+                  height: height ?? 160,
+                  fit: BoxFit.contain,
+                  errorBuilder: (context, error, stack) => Text(
+                    context.tr.t('图片不存在'),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
               );
       case 'spacer':
         return SizedBox(height: height ?? 12);

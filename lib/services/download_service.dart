@@ -97,11 +97,10 @@ class DownloadService {
     final source = File(path);
     if (!await source.exists()) throw Exception('下载文件不存在');
     final selectedPath = filePickerPath(
-      await FilePicker.saveFile(
+      await saveFileCompat(
         dialogTitle: '保存文件',
         fileName: fileNameFromMessage(fileName, path),
         bytes: await source.readAsBytes(),
-        lockParentWindow: true,
       ),
     );
     if (selectedPath == null || selectedPath.isEmpty) return null;

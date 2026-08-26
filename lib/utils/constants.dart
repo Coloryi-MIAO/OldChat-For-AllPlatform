@@ -123,7 +123,7 @@ class Constants {
   static String get directMessagesPath => '/v2/direct/messages/v2';
   static String get groupMessagesPath => '/v2/groups/messages/v2';
   static String get momentsPath => '/v2/moments/feed';
-  static String get wsPath => '/v2/ws';
+  static String get wsPath => '/v1/ws';
 
   static String resolveMediaUrl(String? raw) {
     final value = raw?.trim() ?? '';

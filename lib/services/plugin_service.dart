@@ -436,7 +436,7 @@ class PluginService extends ChangeNotifier {
       ..add(ArchiveFile('manifest.json', manifestBytes.length, manifestBytes));
     final bytes = ZipEncoder().encodeBytes(archive);
     final selected = filePickerPath(
-      await FilePicker.saveFile(
+      await saveFileCompat(
         dialogTitle: '导出插件',
         fileName: '${plugin['id']}.oldchat-plugin',
         type: FileType.custom,
@@ -1341,6 +1341,8 @@ class PluginService extends ChangeNotifier {
       'title', 'text', 'label', 'value', 'placeholder', 'hint', 'src', 'url',
       'action', 'id', 'plugin_id', 'size', 'color', 'height', 'margin',
       'visible', 'enabled', 'single_line', 'input_type', 'max_length',
+      'center', 'background', 'gravity', 'padding', 'padding_vertical',
+      'width', 'weight', 'corner', 'stroke', 'stroke_color',
     ]) {
       final value = raw[key];
       if (value != null) result[key] = value;
@@ -1857,7 +1859,7 @@ class PluginService extends ChangeNotifier {
     state.registerAsync('app_file_pick', (LuaState ls) async {
       if (!permissions.contains('files.local')) return deniedCapability(ls);
       try {
-        final result = await FilePicker.pickFiles(
+        final result = await pickFilesCompat(
           withData: false,
           allowMultiple: false,
         );

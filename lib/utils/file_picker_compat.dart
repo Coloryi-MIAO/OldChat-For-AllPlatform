@@ -5,26 +5,26 @@ import 'package:file_picker/file_picker.dart' as picker;
 export 'package:file_picker/file_picker.dart'
     show FilePicker, FileType, PlatformFile;
 
-Future<List<picker.PlatformFile>> pickFilesCompat({
+Future<picker.FilePickerResult?> pickFilesCompat({
   picker.FileType type = picker.FileType.any,
   List<String>? allowedExtensions,
   bool allowMultiple = false,
   bool withData = false,
-}) => picker.FilePicker.pickFiles(
+}) => picker.FilePicker.platform.pickFiles(
       type: type,
       allowedExtensions: allowedExtensions,
       allowMultiple: allowMultiple,
       withData: withData,
     );
 
-Future<Uri?> saveFileCompat({
+Future<String?> saveFileCompat({
   String? dialogTitle,
-  required String fileName,
+  String? fileName,
   String? initialDirectory,
   picker.FileType type = picker.FileType.any,
   List<String>? allowedExtensions,
-  required Uint8List bytes,
-}) => picker.FilePicker.saveFile(
+  Uint8List? bytes,
+}) => picker.FilePicker.platform.saveFile(
       dialogTitle: dialogTitle,
       fileName: fileName,
       initialDirectory: initialDirectory,
@@ -36,7 +36,7 @@ Future<Uri?> saveFileCompat({
 Future<String?> getDirectoryPathCompat({
   String? dialogTitle,
   String? initialDirectory,
-}) => picker.FilePicker.getDirectoryPath(
+}) => picker.FilePicker.platform.getDirectoryPath(
       dialogTitle: dialogTitle,
       initialDirectory: initialDirectory,
     );

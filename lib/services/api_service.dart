@@ -58,12 +58,20 @@ class ApiService {
       String path, {
       required bool v2,
     }) async {
+      final headers = <String, dynamic>{};
+      if (!v2) {
+        final session = WsSessionService(http: true);
+        try {
+          await session.ensureReady();
+          headers.addAll(await session.signHeaders(path, method));
+        } catch (_) {}
+      }
       return _dio.request<dynamic>(
         path,
         options: Options(
           method: method,
-          extra: {'_v2Attempt': v2, '_skipV2Signing': !v2},
-          headers: v2 ? null : _cleanV2Headers(),
+          extra: {'_v2Attempt': v2, '_skipV2Signing': v2 ? false : true},
+          headers: headers,
         ),
         data: data,
         queryParameters: queryParameters,
@@ -875,7 +883,8 @@ class ApiService {
   Future<Map<String, dynamic>> login(String username, String password) async {
     try {
       final deviceId = await WsSessionService(http: true).getDeviceId();
-      final response = await _dio.post(
+      final response = await _v2Request(
+        'POST',
         '/v2/auth/login',
         data: {
           'identifier': username,
@@ -887,29 +896,22 @@ class ApiService {
           'platform': _clientPlatformName(),
           'app_version': await _appVersion(),
         },
-        options: Options(extra: {'_skipAuthRecovery': true}),
       );
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        final data = _unwrapEnvelopeMap(response.data);
-        final token = data['access_token'] ?? data['token'];
-        final user = data['user'];
-        final userId =
-            data['user_id'] ??
-            data['uid'] ??
-            (user is Map ? user['uid'] ?? user['user_id'] : null);
-        final refreshToken = data['refresh_token'];
-        if (token == null || token.toString().trim().isEmpty) {
-          throw Exception('服务器未返回登录令牌');
-        }
-        ApiService._loginRedirectScheduled = false;
-        return {
-          'token': token.toString(),
-          'userId': userId,
-          'refresh_token': refreshToken,
-        };
-      } else {
-        throw Exception('Login failed: ${response.data}');
+      final data = _unwrapEnvelopeMap(response.data);
+      final token = data['access_token'] ?? data['token'];
+      final user = data['user'];
+      final userId = data['user_id'] ?? data['uid'] ??
+          (user is Map ? user['uid'] ?? user['user_id'] : null);
+      final refreshToken = data['refresh_token'];
+      if (token == null || token.toString().trim().isEmpty) {
+        throw Exception('服务器未返回登录令牌');
       }
+      ApiService._loginRedirectScheduled = false;
+      return {
+        'token': token.toString(),
+        'userId': userId,
+        'refresh_token': refreshToken,
+      };
     } on DioException catch (e) {
       throw _apiError('登录失败', e);
     }
@@ -929,7 +931,8 @@ class ApiService {
     Map<String, dynamic>? captchaResult,
   }) async {
     try {
-      final response = await _dio.post(
+      final response = await _v2Request(
+        'POST',
         '/v2/auth/register',
         data: {
           'email': email,
@@ -960,7 +963,8 @@ class ApiService {
 
   Future<Map<String, dynamic>> refreshToken(String refreshToken) async {
     try {
-      final response = await _dio.post(
+      final response = await _v2Request(
+        'POST',
         '/v2/auth/refresh',
         data: {'refresh_token': refreshToken},
       );
@@ -972,7 +976,7 @@ class ApiService {
 
   Future<void> logout() async {
     try {
-      await _dio.post('/v2/auth/logout');
+      await _v2Request('POST', '/v2/auth/logout');
     } on DioException catch (e) {
       throw _apiError('请求失败', e);
     }
@@ -988,13 +992,11 @@ class ApiService {
       );
       final captchaId = response.headers.value('x-captcha-id') ?? '';
       final body = response.data;
-      if (body is List<int>) {
-        return {'captcha_id': captchaId, 'image_bytes': body};
-      }
+      if (body is List<int>) return {'captcha_id': captchaId, 'image_bytes': body};
       if (body is Map) return Map<String, dynamic>.from(body);
       return {'captcha_id': captchaId};
     } on DioException catch (e) {
-      throw Exception('获取验证码失败: ${e.message}');
+      throw _apiError('获取验证码失败', e);
     }
   }
 
@@ -1003,7 +1005,8 @@ class ApiService {
     Map<String, dynamic> captchaResult,
   ) async {
     try {
-      await _dio.post(
+      await _v2Request(
+        'POST',
         '/v2/auth/email/send',
         data: {
           'email': email,
@@ -1026,11 +1029,12 @@ class ApiService {
     String newPassword,
   ) async {
     try {
-      final response = await _dio.post(
+      final response = await _v2Request(
+        'POST',
         '/v2/auth/password/reset',
         data: {'email': email, 'code': code, 'new_password': newPassword},
       );
-      return response.data;
+      return _asMap(response.data);
     } on DioException catch (e) {
       throw _apiError('请求失败', e);
     }
@@ -1210,9 +1214,9 @@ class ApiService {
         '/v2/groups/create',
         data: {
           'name': groupName,
-          'avatar_url': avatarUrl.trim(),
           'member_uids': members,
-          'members': members,
+          'member_ncuids': const <String>[],
+          if (avatarUrl.trim().isNotEmpty) 'avatar_url': avatarUrl.trim(),
         },
       );
       final value = response.data;
@@ -1330,53 +1334,46 @@ class ApiService {
     }
   }
 
-  Future<dynamic> getCipStoreItem(String path) async {
-    if (!path.startsWith('/') || path.contains('..') || path.contains('://')) {
-      throw ArgumentError.value(path, 'path', 'Invalid CIP store path');
-    }
-    final response = await _requestV2WithV1Fallback('GET', path);
-    return response.data;
-  }
-
   Future<Uint8List> downloadCipStoreItem(Map<String, dynamic> item) async {
-    final rawUrl = (item['download_url'] ??
-            item['downloadUrl'] ??
-            item['url'] ??
-            item['path'] ??
-            item['cip_file_url'])
-        ?.toString()
-        .trim();
-    if (rawUrl == null || rawUrl.isEmpty) {
-      throw Exception('CIP 商店条目没有下载地址');
-    }
+    final rawUrl = (item['download_url'] ?? item['downloadUrl'] ?? item['url'] ?? item['path'] ?? item['cip_file_url'])?.toString().trim();
+    if (rawUrl == null || rawUrl.isEmpty) throw Exception('CIP 商店条目没有下载地址');
     final uri = Uri.tryParse(rawUrl);
-    if (uri == null ||
-        (uri.scheme != 'http' && uri.scheme != 'https') &&
-            !rawUrl.startsWith('/')) {
+    if (uri == null || ((uri.scheme != 'http' && uri.scheme != 'https') && !rawUrl.startsWith('/'))) {
       throw Exception('CIP 下载地址无效');
     }
     final response = rawUrl.startsWith('/')
-        ? await _dio.get<List<int>>(
-            rawUrl,
-            options: Options(
-              responseType: ResponseType.bytes,
-              headers: {'Accept': 'application/zip, application/octet-stream'},
-              extra: {'_skipV2Signing': true, '_skipAuthRecovery': true},
-            ),
-          )
-        : await _dio.get<List<int>>(
-            rawUrl,
-            options: Options(
-              responseType: ResponseType.bytes,
-              followRedirects: true,
-              validateStatus: (status) => status != null && status < 400,
-              extra: {'_skipV2Signing': true, '_skipAuthRecovery': true},
-            ),
-          );
+        ? await _requestBytesWithFallback('GET', rawUrl)
+        : await _downloadExternalBytes(rawUrl);
     final bytes = response.data;
     if (bytes == null || bytes.isEmpty) throw Exception('CIP 下载内容为空');
     if (bytes.length > 2 * 1024 * 1024) throw Exception('CIP 文件不能超过 2 MiB');
     return Uint8List.fromList(bytes);
+  }
+
+  Future<Response<List<int>>> _requestBytesWithFallback(String method, String path) async {
+    final response = await _requestV2WithV1Fallback(method, path);
+    final data = response.data;
+    if (data is List<int>) return Response<List<int>>(
+      requestOptions: response.requestOptions,
+      data: data,
+      statusCode: response.statusCode,
+      headers: response.headers,
+    );
+    throw DioException(requestOptions: response.requestOptions, response: response, error: 'CIP 下载响应不是二进制文件');
+  }
+
+  Future<Response<List<int>>> _downloadExternalBytes(String url) async {
+    final response = await _dio.get<List<int>>(
+      url,
+      options: Options(
+        responseType: ResponseType.bytes,
+        followRedirects: true,
+        validateStatus: (status) => status != null && status < 400,
+        headers: const {'Accept': 'application/zip, application/octet-stream'},
+        extra: {'_skipV2Signing': true, '_skipAuthRecovery': true},
+      ),
+    );
+    return response;
   }
 
   Future<Map<String, dynamic>> getGroupMembers(String groupId) async {
@@ -1876,9 +1873,10 @@ class ApiService {
     String type = 'direct',
   }) async {
     try {
-      await _v2Request('POST', '/v2/chats/typing',
-        data: {'target_id': targetId, 'typing': typing, 'type': type},
-      );
+      final payload = type == 'group'
+          ? {'chat_type': 'group', 'group_id': targetId, 'typing': typing}
+          : {'chat_type': 'direct', 'peer_uid': targetId, 'typing': typing};
+      await _v2Request('POST', '/v2/chats/typing', data: payload);
     } on DioException catch (e) {
       throw _apiError('请求失败', e);
     }
@@ -2086,8 +2084,10 @@ class ApiService {
 
   Future<void> sendGroupTyping(String groupId, bool typing) async {
     try {
-      await _v2Request('POST', '/v2/groups/typing',
-        data: {'group_id': groupId, 'typing': typing},
+      await _v2Request(
+        'POST',
+        '/v2/chats/typing',
+        data: {'chat_type': 'group', 'group_id': groupId, 'typing': typing},
       );
     } on DioException catch (e) {
       throw _apiError('请求失败', e);
@@ -2665,12 +2665,17 @@ class ApiService {
   }
 
   Future<String> getExternalText(String url) async {
+    final uri = Uri.tryParse(url.trim());
+    if (uri == null || (uri.scheme != 'http' && uri.scheme != 'https') || uri.host.isEmpty) {
+      throw Exception('外部地址无效');
+    }
     final response = await Dio(
       BaseOptions(
         connectTimeout: const Duration(seconds: 10),
         receiveTimeout: const Duration(seconds: 20),
         responseType: ResponseType.plain,
         headers: const {'Accept': 'text/plain, text/*;q=0.9, */*;q=0.1'},
+        validateStatus: (status) => status != null && status >= 200 && status < 300,
       ),
     ).get<String>(url);
     return response.data ?? '';
@@ -2698,6 +2703,10 @@ class ApiService {
   }
 
   Future<String> getMusicLyricsText(String url) async {
+    final uri = Uri.tryParse(url.trim());
+    if (uri == null || (uri.scheme != 'http' && uri.scheme != 'https') || uri.host.isEmpty) {
+      throw Exception('外部地址无效');
+    }
     try {
       final response = await _dio.get<String>(
         url,
@@ -3617,14 +3626,14 @@ class ApiService {
       throw Exception('Invalid external URL');
     }
     if (!kIsWeb) {
-      final response = await Dio().get<dynamic>(
-        url,
-        options: Options(
-          responseType: ResponseType.json,
-          followRedirects: false,
+      final response = await Dio(
+        BaseOptions(
+          connectTimeout: const Duration(seconds: 10),
+          receiveTimeout: const Duration(seconds: 20),
+          headers: const {'Accept': 'application/json'},
           validateStatus: (status) => status != null && status >= 200 && status < 300,
         ),
-      );
+      ).get<dynamic>(url);
       return response.data;
     }
     final response = await _dio.get<dynamic>(

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../utils/file_picker_compat.dart';
 import '../utils/constants.dart';
@@ -132,7 +133,7 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Future<void> _chooseCacheLocation() async {
-    final result = await FilePicker.getDirectoryPath();
+    final result = await getDirectoryPathCompat();
     if (result != null) {
       await CacheService().setLocation(result);
       if (mounted) {
@@ -543,6 +544,12 @@ class _SettingsPageState extends State<SettingsPage> {
                     context,
                   ).pushNamedAndRemoveUntil('/', (route) => false);
               },
+            ),
+            _buildInfoTile(
+              icon: Icons.key_outlined,
+              title: context.tr.t('复制当前用户 Authorization'),
+              subtitle: 'Bearer <token>',
+              onTap: _copyAuthorizationToken,
             ),
           ], 7),
           const SizedBox(height: 12),
@@ -1098,6 +1105,23 @@ class _SettingsPageState extends State<SettingsPage> {
         ],
       ),
     );
+  }
+
+  Future<void> _copyAuthorizationToken() async {
+    final token = context.read<AuthService>().token?.trim() ?? '';
+    if (token.isEmpty) {
+      _showAlert(
+        context.tr.t('复制 Token'),
+        context.tr.t('当前没有可复制的登录 Token'),
+      );
+      return;
+    }
+    await Clipboard.setData(ClipboardData(text: 'Bearer $token'));
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.tr.t('Authorization 已复制'))),
+      );
+    }
   }
 
   void _openPluginCenter() {

@@ -102,7 +102,7 @@ class _CheckinWallPageState extends State<CheckinWallPage> {
 
   Future<void> _pickMedia() async {
     if (_uploadingMedia) return;
-    final result = await FilePicker.pickFiles(
+    final result = await pickFilesCompat(
       allowMultiple: true,
       type: FileType.image,
     );

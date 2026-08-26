@@ -140,7 +140,7 @@ class _ChannelPageState extends State<ChannelPage> {
   }
 
   Future<void> _pickPostMedia() async {
-    final result = await FilePicker.pickFiles(
+    final result = await pickFilesCompat(
       type: FileType.image,
       allowMultiple: false,
       withData: true,
