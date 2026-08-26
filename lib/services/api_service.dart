@@ -58,12 +58,20 @@ class ApiService {
       String path, {
       required bool v2,
     }) async {
+      final headers = <String, dynamic>{};
+      if (!v2) {
+        final session = WsSessionService(http: true);
+        try {
+          await session.ensureReady();
+          headers.addAll(await session.signHeaders(path, method));
+        } catch (_) {}
+      }
       return _dio.request<dynamic>(
         path,
         options: Options(
           method: method,
-          extra: {'_v2Attempt': v2, '_skipV2Signing': !v2},
-          headers: v2 ? null : _cleanV2Headers(),
+          extra: {'_v2Attempt': v2, '_skipV2Signing': v2 ? false : true},
+          headers: headers,
         ),
         data: data,
         queryParameters: queryParameters,
@@ -875,7 +883,8 @@ class ApiService {
   Future<Map<String, dynamic>> login(String username, String password) async {
     try {
       final deviceId = await WsSessionService(http: true).getDeviceId();
-      final response = await _dio.post(
+      final response = await _v2Request(
+        'POST',
         '/v2/auth/login',
         data: {
           'identifier': username,
@@ -929,7 +938,8 @@ class ApiService {
     Map<String, dynamic>? captchaResult,
   }) async {
     try {
-      final response = await _dio.post(
+      final response = await _v2Request(
+        'POST',
         '/v2/auth/register',
         data: {
           'email': email,
@@ -960,7 +970,8 @@ class ApiService {
 
   Future<Map<String, dynamic>> refreshToken(String refreshToken) async {
     try {
-      final response = await _dio.post(
+      final response = await _v2Request(
+        'POST',
         '/v2/auth/refresh',
         data: {'refresh_token': refreshToken},
       );
@@ -972,7 +983,7 @@ class ApiService {
 
   Future<void> logout() async {
     try {
-      await _dio.post('/v2/auth/logout');
+      await _v2Request('POST', '/v2/auth/logout');
     } on DioException catch (e) {
       throw _apiError('请求失败', e);
     }
@@ -1003,7 +1014,8 @@ class ApiService {
     Map<String, dynamic> captchaResult,
   ) async {
     try {
-      await _dio.post(
+      await _v2Request(
+        'POST',
         '/v2/auth/email/send',
         data: {
           'email': email,
@@ -1026,11 +1038,12 @@ class ApiService {
     String newPassword,
   ) async {
     try {
-      final response = await _dio.post(
+      final response = await _v2Request(
+        'POST',
         '/v2/auth/password/reset',
         data: {'email': email, 'code': code, 'new_password': newPassword},
       );
-      return response.data;
+      return _asMap(response.data);
     } on DioException catch (e) {
       throw _apiError('请求失败', e);
     }
@@ -1210,9 +1223,9 @@ class ApiService {
         '/v2/groups/create',
         data: {
           'name': groupName,
-          'avatar_url': avatarUrl.trim(),
           'member_uids': members,
-          'members': members,
+          'member_ncuids': const <String>[],
+          if (avatarUrl.trim().isNotEmpty) 'avatar_url': avatarUrl.trim(),
         },
       );
       final value = response.data;
@@ -1876,9 +1889,10 @@ class ApiService {
     String type = 'direct',
   }) async {
     try {
-      await _v2Request('POST', '/v2/chats/typing',
-        data: {'target_id': targetId, 'typing': typing, 'type': type},
-      );
+      final payload = type == 'group'
+          ? {'chat_type': 'group', 'group_id': targetId, 'typing': typing}
+          : {'chat_type': 'direct', 'peer_uid': targetId, 'typing': typing};
+      await _v2Request('POST', '/v2/chats/typing', data: payload);
     } on DioException catch (e) {
       throw _apiError('请求失败', e);
     }
@@ -2086,8 +2100,10 @@ class ApiService {
 
   Future<void> sendGroupTyping(String groupId, bool typing) async {
     try {
-      await _v2Request('POST', '/v2/groups/typing',
-        data: {'group_id': groupId, 'typing': typing},
+      await _v2Request(
+        'POST',
+        '/v2/chats/typing',
+        data: {'chat_type': 'group', 'group_id': groupId, 'typing': typing},
       );
     } on DioException catch (e) {
       throw _apiError('请求失败', e);

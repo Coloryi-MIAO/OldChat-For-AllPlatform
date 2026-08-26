@@ -111,7 +111,11 @@ class _CachedImageState extends State<CachedImage> {
 
   Widget _fallback(BuildContext context, Object error, StackTrace? stack) {
     return widget.errorBuilder?.call(context, error, stack) ??
-        SizedBox(width: widget.width, height: widget.height);
+        SizedBox(
+          width: widget.width,
+          height: widget.height,
+          child: const Center(child: Text('图片不存在')),
+        );
   }
 
   @override

@@ -119,6 +119,10 @@ class _CipRunPageState extends State<CipRunPage> {
     final margin = double.tryParse(node['margin']?.toString() ?? '') ?? 4;
     switch (type) {
       case 'page':
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: children,
+        );
       case 'column':
       case 'list':
         return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: children);

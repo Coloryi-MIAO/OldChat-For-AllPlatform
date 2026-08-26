@@ -7,7 +7,7 @@ class Constants {
   static const String baseUrlKey = 'base_url';
   static const String apiVersionKey = 'api_version';
   static const String defaultBaseUrl = 'https://oc.mcl0.dpdns.org';
-  static const String fallbackBaseUrl = 'http://154.9.24.232:8080';
+  static const String fallbackBaseUrl = 'https://oc.mcl0.dpdns.org';
   static const String hiddenFallbackServer = fallbackBaseUrl;
   static const String backupServer = fallbackBaseUrl;
   static const String mediaFallbackServer = fallbackBaseUrl;
@@ -123,7 +123,7 @@ class Constants {
   static String get directMessagesPath => '/v2/direct/messages/v2';
   static String get groupMessagesPath => '/v2/groups/messages/v2';
   static String get momentsPath => '/v2/moments/feed';
-  static String get wsPath => '/v2/ws';
+  static String get wsPath => '/v1/ws';
 
   static String resolveMediaUrl(String? raw) {
     final value = raw?.trim() ?? '';
