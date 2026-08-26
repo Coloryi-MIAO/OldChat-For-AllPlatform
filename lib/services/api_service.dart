@@ -183,7 +183,7 @@ class ApiService {
     final encryptedBody = await session.encrypt(clearBody);
     final response = await _dio.post<dynamic>(
       '/v2/gateway',
-      data: encryptedBody == null ? payload : _decodeMap(encryptedBody),
+      data: encryptedBody == null ? payload : encryptedBody,
       options: Options(
         headers: {
           ...headers,
@@ -439,6 +439,14 @@ class ApiService {
 
   String? _v1FallbackPath(String v2Path) {
     const mappings = <String, String>{
+      '/v2/auth/login': '/v2/auth/login',
+      '/v2/auth/register': '/v2/auth/register',
+      '/v2/auth/refresh': '/v2/auth/refresh',
+      '/v2/auth/logout': '/v1/auth/logout',
+      '/v2/auth/password/reset': '/v2/auth/password/reset',
+      '/v2/auth/email/send': '/v2/auth/email/send',
+      '/v2/auth/captcha': '/v2/auth/captcha',
+      '/v2/auth/handshake': '/v1/auth/handshake',
       '/v2/direct/messages/v2': '/v1/direct/messages/v2',
       '/v2/groups/messages/v2': '/v1/groups/messages/v2',
       '/v2/groups/messages/after': '/v1/groups/messages',
@@ -874,7 +882,7 @@ class ApiService {
     try {
       final deviceId = await WsSessionService(http: true).getDeviceId();
       final response = await _dio.post(
-        Constants.loginPath,
+        '/v1/auth/login',
         data: {
           'identifier': username,
           'username': username,
@@ -928,7 +936,7 @@ class ApiService {
   }) async {
     try {
       final response = await _dio.post(
-        Constants.apiPath('/v1/auth/register'),
+        '/v1/auth/register',
         data: {
           'email': email,
           'username': username,
@@ -959,7 +967,7 @@ class ApiService {
   Future<Map<String, dynamic>> refreshToken(String refreshToken) async {
     try {
       final response = await _dio.post(
-        Constants.apiPath('/v1/auth/refresh'),
+        '/v1/auth/refresh',
         data: {'refresh_token': refreshToken},
       );
       return _unwrapEnvelopeMap(response.data);
@@ -981,7 +989,7 @@ class ApiService {
   Future<Map<String, dynamic>> getCaptcha() async {
     try {
       final response = await _dio.get(
-        Constants.apiPath('/v1/auth/captcha'),
+        '/v1/auth/captcha',
         options: Options(responseType: ResponseType.bytes),
       );
       final captchaId = response.headers.value('x-captcha-id') ?? '';
@@ -1002,7 +1010,7 @@ class ApiService {
   ) async {
     try {
       await _dio.post(
-        Constants.apiPath('/v1/auth/email/send'),
+        '/v1/auth/email/send',
         data: {
           'email': email,
           'purpose': 'register',
@@ -1025,7 +1033,7 @@ class ApiService {
   ) async {
     try {
       final response = await _dio.post(
-        Constants.apiPath('/v1/auth/password/reset'),
+        '/v1/auth/password/reset',
         data: {'email': email, 'code': code, 'new_password': newPassword},
       );
       return response.data;
@@ -1359,14 +1367,16 @@ class ApiService {
             options: Options(
               responseType: ResponseType.bytes,
               headers: {'Accept': 'application/zip, application/octet-stream'},
+              extra: {'_skipV2Signing': true, '_skipAuthRecovery': true},
             ),
           )
-        : await Dio().get<List<int>>(
+        : await _dio.get<List<int>>(
             rawUrl,
             options: Options(
               responseType: ResponseType.bytes,
               followRedirects: true,
               validateStatus: (status) => status != null && status < 400,
+              extra: {'_skipV2Signing': true, '_skipAuthRecovery': true},
             ),
           );
     final bytes = response.data;

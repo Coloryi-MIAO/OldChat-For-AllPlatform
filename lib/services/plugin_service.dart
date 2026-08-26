@@ -1326,8 +1326,11 @@ class PluginService extends ChangeNotifier {
     if (normalizedType == 'page' || normalizedType == 'column' || normalizedType == 'row' || normalizedType == 'list') {
       result['id'] = raw['id']?.toString() ?? path;
     }
-    if (raw['on_click'] is Map && (raw['on_click'] as Map)['__lua_callback_ref'] is num) {
-      result['callback_ref'] = ((raw['on_click'] as Map)['__lua_callback_ref'] as num).toInt();
+    final directClick = raw['on_click'];
+    if (directClick is Map) {
+      final ref = directClick['__lua_callback_ref'];
+      final parsed = ref is num ? ref.toInt() : int.tryParse('$ref');
+      if (parsed != null) result['callback_ref'] = parsed;
     }
     if ((normalizedType == 'button' || normalizedType == 'input' || normalizedType == 'checkbox') &&
         (raw['id'] == null || raw['id'].toString().isEmpty)) {
@@ -1350,8 +1353,10 @@ class PluginService extends ChangeNotifier {
       MapEntry('on_focus_lost', 'focus_lost_callback_ref'),
     ]) {
       final callback = raw[entry.key];
-      if (callback is Map && callback['__lua_callback_ref'] is num) {
-        result[entry.value] = (callback['__lua_callback_ref'] as num).toInt();
+      if (callback is Map) {
+        final ref = callback['__lua_callback_ref'];
+        final parsed = ref is num ? ref.toInt() : int.tryParse('$ref');
+        if (parsed != null) result[entry.value] = parsed;
       }
     }
     if (raw['callback_ref'] is num) result['callback_ref'] = (raw['callback_ref'] as num).toInt();
