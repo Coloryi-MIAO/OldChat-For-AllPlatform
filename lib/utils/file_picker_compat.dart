@@ -5,17 +5,26 @@ import 'package:file_picker/file_picker.dart';
 export 'package:file_picker/file_picker.dart'
     show FilePicker, FileType, PlatformFile;
 
-Future<FilePickerResult?> pickFilesCompat({
+Future<List<PlatformFile>> pickFilesCompat({
   FileType type = FileType.any,
   List<String>? allowedExtensions,
   bool allowMultiple = false,
   bool withData = false,
-}) => FilePicker.pickFiles(
+}) async {
+  if (!allowMultiple) {
+    final file = await FilePicker.pickFile(
       type: type,
       allowedExtensions: allowedExtensions,
-      allowMultiple: allowMultiple,
-      withData: withData,
     );
+    return file != null ? [file] : [];
+  }
+  return FilePicker.pickFiles(
+    type: type,
+    allowedExtensions: allowedExtensions,
+    allowMultiple: true,
+    withData: withData,
+  );
+}
 
 Future<String?> saveFileCompat({
   String? dialogTitle,
@@ -25,26 +34,14 @@ Future<String?> saveFileCompat({
   List<String>? allowedExtensions,
   Uint8List? bytes,
 }) async {
-  final String fileNameNonNull = fileName ?? '';
-  Uri? uri;
-  if (bytes != null) {
-    uri = await FilePicker.saveFile(
-      dialogTitle: dialogTitle,
-      fileName: fileNameNonNull,
-      initialDirectory: initialDirectory,
-      type: type,
-      allowedExtensions: allowedExtensions,
-      bytes: bytes,
-    );
-  } else {
-    uri = await FilePicker.saveFile(
-      dialogTitle: dialogTitle,
-      fileName: fileNameNonNull,
-      initialDirectory: initialDirectory,
-      type: type,
-      allowedExtensions: allowedExtensions,
-    );
-  }
+  final uri = await FilePicker.saveFile(
+    dialogTitle: dialogTitle,
+    fileName: fileName ?? '',
+    initialDirectory: initialDirectory,
+    type: type,
+    allowedExtensions: allowedExtensions,
+    bytes: bytes ?? Uint8List(0),
+  );
   return uri?.toFilePath();
 }
 
@@ -57,7 +54,7 @@ Future<String?> getDirectoryPathCompat({
     );
 
 List<PlatformFile> filePickerFiles(Object? result) {
-  if (result is FilePickerResult) return result.files;
+  if (result is List<PlatformFile>) return result;
   if (result is PlatformFile) return <PlatformFile>[result];
   if (result is Iterable) {
     return List<PlatformFile>.unmodifiable(
@@ -68,9 +65,6 @@ List<PlatformFile> filePickerFiles(Object? result) {
 }
 
 Future<Uint8List?> filePickerBytes(PlatformFile file) async {
-  if (file.bytes != null) return file.bytes;
-  final path = file.path;
-  if (path == null || path.isEmpty) return null;
   try {
     return await file.readAsBytes();
   } catch (_) {
@@ -81,6 +75,9 @@ Future<Uint8List?> filePickerBytes(PlatformFile file) async {
 String? filePickerPath(Object? result) {
   if (result == null) return null;
   if (result is PlatformFile) return _clean(result.path);
+  if (result is List<PlatformFile> && result.isNotEmpty) {
+    return _clean(result.first.path);
+  }
   if (result is Uri) {
     final value = result.scheme == 'file'
         ? result.toFilePath()
