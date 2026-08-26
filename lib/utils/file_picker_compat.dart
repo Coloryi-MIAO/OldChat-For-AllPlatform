@@ -42,6 +42,7 @@ Future<String?> getDirectoryPathCompat({
     );
 
 List<picker.PlatformFile> filePickerFiles(Object? result) {
+  if (result is picker.FilePickerResult) return result.files;
   if (result is picker.PlatformFile) return <picker.PlatformFile>[result];
   if (result is Iterable) {
     return List<picker.PlatformFile>.unmodifiable(
@@ -52,6 +53,9 @@ List<picker.PlatformFile> filePickerFiles(Object? result) {
 }
 
 Future<Uint8List?> filePickerBytes(picker.PlatformFile file) async {
+  if (file.bytes != null) return file.bytes;
+  final path = file.path;
+  if (path == null || path.isEmpty) return null;
   try {
     return await file.readAsBytes();
   } catch (_) {
