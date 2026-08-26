@@ -896,7 +896,6 @@ class ApiService {
           'platform': _clientPlatformName(),
           'app_version': await _appVersion(),
         },
-        options: Options(extra: {'_skipAuthRecovery': true}),
       );
       if (response.statusCode == 200 || response.statusCode == 201) {
         final data = _unwrapEnvelopeMap(response.data);

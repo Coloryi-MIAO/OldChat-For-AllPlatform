@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+import 'package:universal_io/io.dart';
 
 import 'package:file_picker/file_picker.dart' as picker;
 
@@ -42,6 +43,7 @@ Future<String?> getDirectoryPathCompat({
     );
 
 List<picker.PlatformFile> filePickerFiles(Object? result) {
+  if (result is picker.FilePickerResult) return result.files;
   if (result is picker.PlatformFile) return <picker.PlatformFile>[result];
   if (result is Iterable) {
     return List<picker.PlatformFile>.unmodifiable(
@@ -52,8 +54,11 @@ List<picker.PlatformFile> filePickerFiles(Object? result) {
 }
 
 Future<Uint8List?> filePickerBytes(picker.PlatformFile file) async {
+  if (file.bytes != null) return file.bytes;
+  final path = file.path;
+  if (path == null || path.isEmpty) return null;
   try {
-    return await file.readAsBytes();
+    return await File(path).readAsBytes();
   } catch (_) {
     return null;
   }
@@ -61,6 +66,9 @@ Future<Uint8List?> filePickerBytes(picker.PlatformFile file) async {
 
 String? filePickerPath(Object? result) {
   if (result == null) return null;
+  if (result is picker.FilePickerResult) {
+    return result.files.isEmpty ? null : _clean(result.files.first.path);
+  }
   if (result is picker.PlatformFile) return _clean(result.path);
   if (result is Uri) {
     final value = result.scheme == 'file'
